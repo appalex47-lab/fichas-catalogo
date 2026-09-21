@@ -1,5 +1,0 @@
-# Datos del negocio: no subir archivos de carga ni exportaciones
-*.csv
-
-node_modules/
-.DS_Store
