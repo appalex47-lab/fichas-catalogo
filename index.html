@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fichas de catálogo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Fichas de catálogo</h1>
+      <p class="sub">Captura los datos del producto y obtén el título, la descripción para Merchant Center y el HTML para Magento, con las reglas de tu catálogo.</p>
+    </div>
+    <nav class="top-links" aria-label="Secciones">
+      <a class="btn" href="#masiva" style="text-decoration:none">Carga masiva</a>
+      <a class="btn" href="#exportar" style="text-decoration:none">Exportar</a>
+      <a class="btn" href="#lote" id="lote-link" style="text-decoration:none">Lote: <span id="lote-count">0</span></a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="panel input" aria-labelledby="h-prod">
+      <h2 id="h-prod">Producto</h2>
+
+      <details class="plain" id="raw-block">
+        <summary>Rellenar desde datos crudos</summary>
+        <div class="field">
+          <label for="raw">SKU sucio y notas</label>
+          <textarea id="raw" rows="3" placeholder="MOUNJARO 2.5MG/0.6ML SOL INY CAJ C/4 LILLY"></textarea>
+          <p class="hint">Reglas y diccionarios, sin IA. Copia solo lo que aparece en el texto. La marca, el laboratorio y el principio activo salen de tus diccionarios, en Ajustes.</p>
+        </div>
+        <div class="field">
+          <label for="raw-cat">Categoría</label>
+          <select id="raw-cat"></select>
+        </div>
+        <button class="btn" id="extract">Extraer campos</button>
+        <p class="status" id="extract-status" role="status" aria-live="polite"></p>
+      </details>
+
+      <fieldset class="pills" id="cats" aria-label="Categoría" style="min-width:0"></fieldset>
+
+      <div class="field">
+        <label for="sku">SKU o referencia interna</label>
+        <input type="text" id="sku" placeholder="Debe coincidir con el SKU de Magento" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="img">Archivo de imagen principal</label>
+        <input type="text" id="img" placeholder="Opcional. Ejemplo: 7501125154621.jpg" autocomplete="off">
+        <p class="hint">Opcional. El alt se exporta en base_image_label aunque este campo esté vacío. Si en la prueba no se aplica, agrega aquí la ruta que Magento ya tiene de la imagen.</p>
+      </div>
+
+      <div id="form"></div>
+
+      <details class="plain" style="margin-top:14px">
+        <summary>Ajustes</summary>
+        <div class="field" style="margin:0">
+          <label for="keep">Marcas y siglas que se mantienen en mayúsculas</label>
+          <input type="text" id="keep" autocomplete="off">
+          <p class="hint">Separadas por comas. El resto de textos en mayúsculas sostenidas se convierte a formato de título.</p>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <label for="dic-marcas">Marcas conocidas</label>
+          <textarea id="dic-marcas" rows="3" spellcheck="false" placeholder="Una por línea. Alias=Nombre. Ejemplo: MOUNJARO=Mounjaro"></textarea>
+        </div>
+        <div class="field">
+          <label for="dic-principios">Principios activos conocidos</label>
+          <textarea id="dic-principios" rows="3" spellcheck="false" placeholder="Una por línea. Ejemplo: ESCITALOPRAM=Escitalopram"></textarea>
+        </div>
+        <div class="field">
+          <label for="dic-labs">Laboratorios y fabricantes conocidos</label>
+          <textarea id="dic-labs" rows="3" spellcheck="false" placeholder="Una por línea. Ejemplo: LILLY=Eli Lilly"></textarea>
+          <p class="hint">Si el alias aparece en el texto crudo, se copia el nombre de la derecha. Los diccionarios se guardan solo en este navegador.</p>
+        </div>
+        <label class="check"><input type="checkbox" id="dic-pos"><span>Sugerir como marca el texto que aparece antes de la primera dosis</span></label>
+        <div class="actions"><button class="btn" id="dic-learn">Agregar al diccionario los valores del lote</button></div>
+      </details>
+
+      <div class="actions">
+        <button class="btn btn--primary" id="add">Agregar al lote</button>
+        <button class="btn btn--quiet" id="clear">Limpiar formulario</button>
+      </div>
+    </section>
+
+    <section class="panel output" aria-labelledby="h-out">
+      <h2 id="h-out" class="sr" style="position:absolute;left:-9999px">Resultado</h2>
+      <div id="alerts"></div>
+      <div class="tabs" role="tablist" aria-label="Resultado">
+        <button class="tab" role="tab" id="tab-titulo" aria-controls="panel-titulo" aria-selected="true" data-tab="titulo">Título</button>
+        <button class="tab" role="tab" id="tab-mc" aria-controls="panel-mc" aria-selected="false" data-tab="mc">Merchant Center</button>
+        <button class="tab" role="tab" id="tab-mg" aria-controls="panel-mg" aria-selected="false" data-tab="mg">Magento</button>
+        <button class="tab" role="tab" id="tab-meta" aria-controls="panel-meta" aria-selected="false" data-tab="meta">Meta y alt</button>
+      </div>
+      <div id="panel-titulo" role="tabpanel" aria-labelledby="tab-titulo"></div>
+      <div id="panel-mc" role="tabpanel" aria-labelledby="tab-mc" hidden></div>
+      <div id="panel-mg" role="tabpanel" aria-labelledby="tab-mg" hidden></div>
+      <div id="panel-meta" role="tabpanel" aria-labelledby="tab-meta" hidden></div>
+    </section>
+  </main>
+
+  <section class="panel bulk" id="masiva" aria-labelledby="h-bulk">
+    <h2 id="h-bulk">Carga masiva por CSV</h2>
+    <p class="sub" style="margin:0 0 14px">Sube un CSV con una fila por producto. Usa las columnas SKU y Categoría, más los campos de la categoría. Si solo tienes el SKU sucio, ponlo en una columna de datos crudos y las reglas de extracción llenan los campos.</p>
+    <div class="bulk-tools">
+      <div class="field">
+        <label for="bulk-tpl-cat">Plantilla de</label>
+        <select id="bulk-tpl-cat"></select>
+      </div>
+      <button class="btn" id="bulk-tpl">Descargar plantilla</button>
+      <div class="field">
+        <label for="bulk-def">Categoría por defecto</label>
+        <select id="bulk-def"></select>
+        <p class="hint">Se usa en las filas sin valor en la columna Categoría.</p>
+      </div>
+      <input type="file" id="bulk-file" accept=".csv,text/csv,text/plain" hidden>
+      <button class="btn btn--primary" id="bulk-pick">Elegir archivo CSV</button>
+    </div>
+    <p class="status" id="bulk-status" role="status" aria-live="polite">También puedes arrastrar el archivo a esta sección.</p>
+    <div id="bulk-preview"></div>
+  </section>
+
+  <section class="panel lote" id="lote" aria-labelledby="h-lote">
+    <div class="lote-head">
+      <h2 id="h-lote">Lote</h2>
+      <div class="actions" style="margin:0">
+        <button class="btn" id="lote-copy">Copiar para hoja de cálculo</button>
+        <button class="btn" id="lote-dl">Descargar CSV</button>
+        <button class="btn btn--quiet" id="lote-clear">Vaciar lote</button>
+      </div>
+    </div>
+    <div id="lote-body"></div>
+  </section>
+
+  <section class="panel exp" id="exportar" aria-labelledby="h-exp">
+    <h2 id="h-exp">Exportar a Magento</h2>
+    <p class="sub" style="margin:0 0 14px">Genera el CSV con el mismo formato de tu archivo de carga: 104 columnas, en el mismo orden. Prueba primero con 2 o 3 SKU.</p>
+    <div class="exp-grid">
+      <div>
+        <h3 style="margin-top:0">Cómo se llena cada fila</h3>
+        <dl class="comp">
+          <dt>sku</dt><dd>SKU del lote</dd>
+          <dt>description</dt><dd>HTML de Magento</dd>
+          <dt>meta_title</dt><dd>Meta title</dd>
+          <dt>meta_description</dt><dd>Meta description</dd>
+          <dt>short_description</dt><dd>Mismo texto que la meta description</dd>
+          <dt>additional_attributes</dt><dd><code>categoria_prod=</code> más el título optimizado</dd>
+          <dt>base_image_label</dt><dd>Alt de la imagen principal</dd>
+          <dt>base_image</dt><dd>Archivo de imagen, si lo capturas</dd>
+          <dt>product_online</dt><dd>1</dd>
+          <dt>use_config_*</dt><dd>1 en min_qty, min_sale_qty, max_sale_qty, notify_stock_qty y manage_stock</dd>
+          <dt>Resto de columnas</dt><dd>Vacías, incluida name y meta_keywords</dd>
+        </dl>
+        <div class="row2" style="margin-top:14px">
+          <div class="field"><label for="exp-attr">Código del atributo del título</label><input type="text" id="exp-attr" autocomplete="off"></div>
+          <div class="field"><label for="exp-enc">Codificación del archivo</label>
+            <select id="exp-enc"><option value="cp1252">Windows-1252, como tu archivo</option><option value="utf8">UTF-8</option></select></div>
+        </div>
+      </div>
+      <div>
+        <h3 style="margin-top:0">Qué filas se exportan</h3>
+        <label class="check"><input type="checkbox" id="exp-incf"><span>Incluir filas con datos faltantes</span></label>
+        <label class="check"><input type="checkbox" id="exp-excl"><span>Excluir filas con avisos de lenguaje</span></label>
+        <div id="exp-summary"></div>
+        <div class="actions"><button class="btn btn--primary" id="exp-dl">Descargar CSV para Magento</button><button class="btn" id="exp-copy">Copiar CSV</button></div>
+        <p class="hint">Saltos de línea CRLF y comillas solo donde hay comas, igual que tu archivo. En Magento: Sistema, Transferencia de datos, Importar, entidad Productos, comportamiento Añadir/Actualizar.</p>
+      </div>
+    </div>
+    <details class="plain" style="margin-top:16px"><summary>Estructura de meta etiquetas y alt</summary><div id="meta-body"></div></details>
+  </section>
+</div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<noscript>Esta herramienta necesita JavaScript.</noscript>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
