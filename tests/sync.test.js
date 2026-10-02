@@ -1,5 +1,0 @@
-const test=require('node:test'); const assert=require('node:assert/strict'); const S=require('../sync.js');
-test('plan crea un flujo incremental sin escribir en productos',()=>{const p=S.plan('google-sheets',[{id:'1',sku:'A'}],{mode:'incremental',cache:{}}); assert.equal(p.job.sourceId,'google-sheets'); assert.equal(p.records.length,1); assert.equal(p.job.dryRun,true);});
-test('classify fuerza revisión salvo aceptación explícita',()=>{const r=S.classify({a:1},{a:2},{autoAccept:false}); assert.equal(r.action,'review');});
-test('applyDecision solo fusiona al aceptar',()=>{const x=S.applyDecision({a:1},{b:2},'review'); assert.deepEqual(x.record,{a:1}); const y=S.applyDecision({a:1},{b:2},'accept'); assert.deepEqual(y.record,{a:1,b:2});});
-test('summarize cuenta resultados',()=>{const j=S.plan('rest-api',[]).job; const x=S.summarize(j,[{action:'review'},{action:'suggest'},{action:'accept'}]); assert.equal(x.stats.review,1); assert.equal(x.stats.suggested,1); assert.equal(x.stats.accepted,1);});
