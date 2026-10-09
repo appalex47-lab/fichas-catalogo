@@ -6,7 +6,7 @@
 <title>Fichas de catálogo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles/styles.css">
 </head>
 <body>
@@ -152,9 +152,9 @@
     <div class="lote-head">
       <h2 id="h-lote"><span class="section-num">4</span> Lote</h2>
       <div class="actions" style="margin:0">
-        <button class="btn" id="lote-copy">Copiar para hoja de cálculo</button>
-        <button class="btn" id="lote-dl">Descargar CSV</button>
-        <button class="btn" id="lote-backup">Respaldar lote</button><label class="btn btn--quiet" for="lote-restore">Restaurar lote</label><input type="file" id="lote-restore" accept="application/json,.json" hidden><button class="btn btn--quiet" id="lote-clear">Vaciar lote</button>
+        <button class="btn btn--quiet" id="lote-copy">Copiar para hoja de cálculo</button>
+        <button class="btn btn--primary" id="lote-dl">Descargar CSV</button>
+        <button class="btn btn--quiet" id="lote-backup">Respaldar lote</button><label class="btn btn--risk" for="lote-restore">Restaurar lote</label><input type="file" id="lote-restore" accept="application/json,.json" hidden><button class="btn btn--risk" id="lote-clear">Vaciar lote</button>
       </div>
     </div>
     <div id="persistence-status" class="hint persistence-status" role="status"></div><div id="lote-body"></div>
@@ -221,14 +221,14 @@
       <div class="actions"><button type="button" class="btn" id="k-dict-add">Importar</button></div>
     </details>
     <div class="actions">
-      <button type="button" class="btn" id="k-learn">Aprender del lote actual</button>
+      <button type="button" class="btn btn--quiet" id="k-learn">Aprender del lote actual</button>
       <button type="button" class="btn btn--ai" id="k-ai">Pedir alias a la IA</button>
-      <button type="button" class="btn" id="k-integrity">Verificar integridad</button>
-      <button type="button" class="btn" id="k-backup">Respaldar conocimiento</button>
-      <button type="button" class="btn" id="k-restore-pick">Restaurar conocimiento</button>
+      <button type="button" class="btn btn--quiet" id="k-integrity">Verificar integridad</button>
+      <button type="button" class="btn btn--quiet" id="k-backup">Respaldar conocimiento</button>
+      <button type="button" class="btn btn--quiet" id="k-restore-pick">Restaurar conocimiento</button>
       <input type="file" id="k-restore" accept="application/json,.json" hidden>
       <label class="check"><input type="checkbox" id="k-auto"> Aplicar correcciones seguras al guardar</label>
-      <button type="button" class="btn btn--quiet" id="k-reset">Reiniciar conocimiento</button>
+      <button type="button" class="btn btn--risk" id="k-reset">Reiniciar conocimiento</button>
     </div>
   </section>
 

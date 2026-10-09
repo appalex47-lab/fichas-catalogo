@@ -575,11 +575,22 @@ function renderLote() {
       + (e.ux.canApprove ? `<button type="button" class="btn btn--quiet" data-approve="${esc(it.id)}">Aprobar</button>` : '')
       + `<button type="button" class="btn btn--quiet" data-del="${it.id}">Eliminar</button></td></tr>` + (open ? detail(x) : '');
   };
+  const kpi = (label, value) => `<div class="kpi"><span class="kpi-l">${esc(label)}</span><span class="kpi-v">${value == null ? '—' : value}</span></div>`;
+  const summaryPanel =
+    `<div class="summary-panel" aria-label="Resumen de calidad del lote">` +
+    `<div class="kpi-row">` +
+      kpi('Health', healthSummary.average) +
+      kpi('SEO', seoSum.average) +
+      kpi('Contenido', contentSum.average) +
+      kpi('Score 360°', s360Sum.average) +
+    `</div>` +
+    `<p class="mag-line"><strong>Magento:</strong> ${magSum.ready} listo(s), ${magSum.readyWithWarnings} con advertencias, ${magSum.blocked} bloqueado(s)${s360Sum.magento == null ? '' : ` · promedio de diagnóstico ${s360Sum.magento}`}</p>` +
+    `<p class="hint seo-health" aria-label="SEO del lote">${healthSummary.total ? `Health: rango ${healthSummary.min}–${healthSummary.max}. ${healthSummary.bands.critica} crítica(s), ${healthSummary.bands.revisar} para revisar, ${healthSummary.bands.buena + healthSummary.bands.excelente} en buen estado. ` : 'Health: sin productos evaluados. '}SEO: ${seoSum.average == null ? '—' : `promedio ${seoSum.average}/100`}. ${seoSum.evaluados ? `Mínimo ${seoSum.min}, máximo ${seoSum.max}. ` : 'Sin productos evaluados. '}${seoSum.byStatus.critico} crítico(s), ${seoSum.byStatus.revisar} por revisar, ${seoSum.byStatus.pendiente} pendiente(s), ${seoSum.byStatus.sin_evaluar} sin evaluar.</p>` +
+    `<p class="hint">Contenido: ${contentSum.average == null ? '—' : `promedio ${contentSum.average}/100`}, ${contentSum.byStatus.critico} con contenido crítico. Score 360°: ${s360Sum.average == null ? '—' : `promedio ${s360Sum.average}/100`}, ${s360Sum.bands.critica || 0} con 360 crítico.</p>` +
+    `</div>`;
   body.innerHTML =
     `<details class="plain audit-box"><summary>Trazabilidad del lote (${state.audit.length} eventos guardados)</summary><p class="hint">La trazabilidad registra cambios relevantes sin almacenar valores sensibles adicionales.</p>${auditRows ? `<ul>${auditRows}</ul>` : '<p class="hint">Todavía no hay eventos.</p>'}</details>` +
-    `<div class="quality-health" aria-label="Salud de calidad del lote"><div><strong>Health Score</strong> ${healthSummary.average == null ? '—' : healthSummary.average + '/100'}</div><div class="hint">${healthSummary.total ? `Rango ${healthSummary.min}–${healthSummary.max}. ${healthSummary.bands.critica} crítica(s), ${healthSummary.bands.revisar} para revisar, ${healthSummary.bands.buena + healthSummary.bands.excelente} en buen estado.` : 'Sin productos evaluados.'}</div></div>` +
-    `<div class="quality-health seo-health" aria-label="SEO del lote"><div><strong>SEO</strong> ${seoSum.average == null ? '—' : `promedio ${seoSum.average}/100`}</div><div class="hint">${seoSum.evaluados ? `Mínimo ${seoSum.min}, máximo ${seoSum.max}. ` : 'Sin productos evaluados. '}${seoSum.byStatus.critico} crítico(s), ${seoSum.byStatus.revisar} por revisar, ${seoSum.byStatus.pendiente} pendiente(s), ${seoSum.byStatus.sin_evaluar} sin evaluar.</div></div>` +
-    `<div class="quality-health seo-health" aria-label="Contenido, Magento y Score 360 del lote"><div><strong>Contenido</strong> ${contentSum.average == null ? '—' : `promedio ${contentSum.average}/100`} · <strong>Magento</strong> ${magSum.ready} listo(s), ${magSum.readyWithWarnings} con advertencias, ${magSum.blocked} bloqueado(s) · <strong>Score 360°</strong> ${s360Sum.average == null ? '—' : `promedio ${s360Sum.average}/100`}</div><div class="hint">Promedios por eje: Health ${s360Sum.health == null ? '—' : s360Sum.health}, SEO ${s360Sum.seo == null ? '—' : s360Sum.seo}, Contenido ${s360Sum.content == null ? '—' : s360Sum.content}, Magento (diagnóstico) ${s360Sum.magento == null ? '—' : s360Sum.magento}. ${contentSum.byStatus.critico} con contenido crítico, ${s360Sum.bands.critica || 0} con 360 crítico.</div></div>` +
+    summaryPanel +
     `<div class="filters" role="group" aria-label="Filtrar lote">${primary}</div>` +
     `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros del lote">${legacy}</div></details>` +
     `<p class="sr-only" id="lote-live" role="status" aria-live="polite">Mostrando ${rows.length} de ${all.length} producto(s)${state.loteFilter !== 'todos' ? `. Filtro: ${esc(filterLabel(state.loteFilter))}` : ''}.</p>` +
@@ -2151,12 +2162,14 @@ async function dismissSuggestion(s) {
 
 /* ---- Interfaz de conocimiento ---- */
 const KSTAT_ICON = { trusted: '★', confirmed: '✓', observed: '○', normalized: '≈', suggested: '?', inferred: '~', rejected: '✕', conflicted: '⚠' };
+const KSTAT_TINT = { trusted: 'ok', confirmed: 'ok', suggested: 'warn', inferred: 'warn', rejected: 'bad', conflicted: 'conflict' };
 const pct = n => Math.round((n || 0) * 100);
 function kCard(r, why) {
   const K = window.FichasKnowledge, open = state.kOpen.has(r.id), ev = r.evidenceBy || {};
   const label = r.type && K.TYPE_LABEL[r.type] ? K.TYPE_LABEL[r.type] : (r.predicate ? 'Relación' : 'Alias');
   const title = r.canonicalValue || (r.alias ? `«${r.alias}» → ${r.canonicalValue}` : r.id);
-  return `<article class="kcard${r.status === 'conflicted' ? ' kcard--conflict' : ''}" data-kid="${esc(r.id)}"><h3>${esc(label)}: ${esc(title)}</h3>`
+  const tint = KSTAT_TINT[r.status] ? ` kcard--${KSTAT_TINT[r.status]}` : '';
+  return `<article class="kcard${tint}" data-kid="${esc(r.id)}"><h3>${esc(label)}: ${esc(title)}</h3>`
     + `<div class="kmeta"><span class="kchip kchip--${esc(r.status)}"><span aria-hidden="true">${KSTAT_ICON[r.status] || ''}</span> ${esc(K.STATUS_LABEL[r.status] || r.status)}</span> · Confianza ${pct(r.confidence)} % · ${ev.confirmed || 0} confirmación(es), ${ev.rejected || 0} rechazo(s), ${ev.observed || 0} observación(es)</div>`
     + `<div class="kbar" role="img" aria-label="Confianza ${pct(r.confidence)} por ciento"><i style="width:${pct(r.confidence)}%"></i></div>`
     + (open && why ? `<div class="kwhy"><p><strong>¿Por qué la aplicación sabe esto?</strong></p><p>${esc(why.summary)}</p>`
