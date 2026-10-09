@@ -732,7 +732,7 @@ function renderFieldMeta() {
   c.fields.filter(fd => fd.type !== 'select').forEach(fd => {
     const box = document.getElementById('fm-' + fd.key); if (!box) return;
     const st = has ? states[fd.key] : null, val = String(state.v[fd.key] || '').trim();
-    let html = '';
+    let html = '', meta = '';
     if (st) {
       html += `<span class="fchip fchip--${st.key}"><span aria-hidden="true">${st.icon}</span> ${esc(st.label)}</span>`;
       if (st.issues.length) html += `<details class="fwhy" data-fopen="${fd.key}"${state.fOpen[fd.key] ? ' open' : ''}><summary>¿Por qué?</summary>${st.issues.slice(0, 3).map(explainBlock).join('')}</details>`;
@@ -743,9 +743,10 @@ function renderFieldMeta() {
       const lines = [];
       if (o.normalized) lines.push(`Interpretación: ${esc(o.normalized.from)} → ${esc(o.normalized.to)}`);
       lines.push((u.used.length ? `Usado en: ${u.items.filter(x => x.on).map(x => '✓ ' + esc(x.label)).join(' ')}` : 'Aún no alimenta ningún texto') + ` · Origen: ${esc(o.text)}`);
-      html += lines.map(l => `<span class="fline">${l}</span>`).join('');
+      meta += lines.map(l => `<span class="fline">${l}</span>`).join('');
     }
-    if (has) html += knowledgeHtml(fd.key, val);
+    if (has) { const k = knowledgeHtml(fd.key, val); meta += k.info; html += k.action; }
+    if (meta) html += `<details class="fwhy fdetail" data-fopen="${fd.key}__meta"${state.fOpen[fd.key + '__meta'] ? ' open' : ''}><summary>Detalles</summary>${meta}</details>`;
     box.innerHTML = html;
     const input = document.getElementById('f-' + fd.key);
     if (input) input.setAttribute('aria-invalid', st && st.key === 'bad' ? 'true' : 'false');
@@ -1409,10 +1410,11 @@ function renderExport(assessed) {
     if (lost) notes.push(`${lost} caracteres no existen en Windows-1252 y saldrían como "?". Usa UTF-8 o corrige esos textos.`);
   }
   const ass = assessed || assessLote();
-  const cell = (label, v, extra) => `<div${extra ? ` class="${extra}"` : ''}><span>${esc(label)}</span><strong>${v == null ? '—' : esc(v)}</strong></div>`;
-  const readiness = `<div class="exp-readiness" aria-label="Preparación para Magento">`
-    + cell('Productos', ass.magSum.total) + cell('Listos', ass.magSum.ready) + cell('Con advertencias', ass.magSum.readyWithWarnings) + cell('Bloqueados', ass.magSum.blocked, ass.magSum.blocked ? 'exp-bad' : '')
-    + cell('Health promedio', ass.s360Sum.health) + cell('SEO promedio', ass.s360Sum.seo) + cell('Content promedio', ass.s360Sum.content) + cell('Score 360° promedio', ass.s360Sum.average)
+  /* Las métricas (Health/SEO/Contenido/Magento/Score 360°) ya se muestran completas en Lote (#h-lote),
+     con los mismos números (ass.magSum / ass.s360Sum). Aquí solo se referencian, no se repiten. */
+  const readiness = `<div class="exp-compact">`
+    + `<p>${ass.magSum.blocked ? `<strong>${esc(ass.magSum.blocked)}</strong> bloqueado(s) para Magento. ` : ''}Mismas métricas de Health, SEO, Contenido, Magento y Score 360° que en Lote.</p>`
+    + `<a href="#h-lote">Ver resumen completo en Lote ↑</a>`
     + `</div>`;
   box.innerHTML = readiness + `<p><strong>${ex.rows.length} de ${ex.total}</strong> productos se exportan.${ex.rows.length ? '' : ' No hay productos listos para exportar.'}</p>`
     + (reasons.length ? `<div class="note note--warn"><p><strong>No se exportan</strong> <button class="linkbtn why" data-why="exportreasons">¿Por qué?</button></p><ul>${reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '')
@@ -1445,7 +1447,7 @@ function renderMetaCfg() {
       <div class="field"><label for="meta-tienda">Nombre de la tienda ({tienda})</label><input type="text" id="meta-tienda" value="${esc(state.meta.tienda)}" autocomplete="off"></div>
       <div class="field"><label for="meta-cat">Configurar la categoría</label><select id="meta-cat">${Object.entries(CATS).map(([k, x]) => `<option value="${k}" ${k === id ? 'selected' : ''}>${x.emoji} ${esc(x.name)}${state.meta.cats[k].confirmed ? '' : ' (sin confirmar)'}</option>`).join('')}</select></div>
     </div>
-    <p class="hint">Cada línea es un bloque. Si falta un dato, la línea se omite. {seg1} a {seg4} son los segmentos del título optimizado. Agrega <code>:lc</code> para minúscula inicial, por ejemplo <code>{contenido:lc}</code>. Agrega <code>:o</code> para que un dato opcional no elimine la línea si falta. {receta_txt} da «con receta médica» si declaraste que sí requiere receta. Tokens de esta categoría: ${tokens.map(t => `<code>${esc(t)}</code>`).join(' ')}</p>
+    <p class="hint meta-tokens-hint">Cada línea es un bloque. Si falta un dato, la línea se omite. {seg1} a {seg4} son los segmentos del título optimizado. Agrega <code>:lc</code> para minúscula inicial, por ejemplo <code>{contenido:lc}</code>. Agrega <code>:o</code> para que un dato opcional no elimine la línea si falta. {receta_txt} da «con receta médica» si declaraste que sí requiere receta. Tokens de esta categoría: ${tokens.map(t => `<code>${esc(t)}</code>`).join(' ')}</p>
     ${block('mt', 'Meta title', 'Sin líneas, no se genera.')}
     ${block('md', 'Meta description', 'Se copia también a short_description.')}
     ${block('alt', 'Alt de la imagen principal', 'Describe lo que se ve en la imagen con marca, producto y presentación. Sin "imagen de", sin promesas y sin repetir palabras. Máximo 125 caracteres.')}
@@ -2101,22 +2103,22 @@ async function runLoteKnowledge() {
 
 /* ---- Sugerencias en el formulario ---- */
 function knowledgeHtml(key, val) {
-  const a = state.kA; if (!a || state.kASig !== UX.itemSig(formItem()) && !(a.fields[key] && a.fields[key].typed === val)) return '';
-  let html = '';
+  const a = state.kA; if (!a || state.kASig !== UX.itemSig(formItem()) && !(a.fields[key] && a.fields[key].typed === val)) return { info: '', action: '' };
+  let info = '', action = '';
   const f = a.fields[key];
   if (f && f.typed === val) {
-    if (f.state === 'trusted' || f.state === 'confirmed') html += `<span class="fknow"><b>Conocido:</b> ${esc(f.entity.canonicalValue)} · ${esc(window.FichasKnowledge.STATUS_LABEL[f.entity.status])} ${Math.round(f.entity.confidence * 100)} %</span>`;
-    else if (f.state === 'known') html += `<span class="fknow"><b>Visto antes:</b> ${esc(f.entity.canonicalValue)} · observado ${Math.round(f.entity.confidence * 100)} % (aún sin confirmar)</span>`;
-    else if (f.state === 'new') html += `<span class="fknow">Nuevo para la aplicación: lo aprenderá al guardar.</span>`;
-    else if (f.state === 'unknown') html += `<span class="fknow fknow--warn">No aparece en lo aprendido. ${esc(f.note || 'Verifica el dato.')}</span>`;
-    else if (f.state === 'conflict') html += `<span class="fknow fknow--warn">Hay conocimiento en conflicto para este dato.</span>`;
-    else if (f.state === 'rejected') html += `<span class="fknow fknow--bad">Una persona rechazó este valor antes.</span>`;
+    if (f.state === 'trusted' || f.state === 'confirmed') info += `<span class="fknow"><b>Conocido:</b> ${esc(f.entity.canonicalValue)} · ${esc(window.FichasKnowledge.STATUS_LABEL[f.entity.status])} ${Math.round(f.entity.confidence * 100)} %</span>`;
+    else if (f.state === 'known') info += `<span class="fknow"><b>Visto antes:</b> ${esc(f.entity.canonicalValue)} · observado ${Math.round(f.entity.confidence * 100)} % (aún sin confirmar)</span>`;
+    else if (f.state === 'new') info += `<span class="fknow">Nuevo para la aplicación: lo aprenderá al guardar.</span>`;
+    else if (f.state === 'unknown') action += `<span class="fknow fknow--warn">No aparece en lo aprendido. ${esc(f.note || 'Verifica el dato.')}</span>`;
+    else if (f.state === 'conflict') action += `<span class="fknow fknow--warn">Hay conocimiento en conflicto para este dato.</span>`;
+    else if (f.state === 'rejected') action += `<span class="fknow fknow--bad">Una persona rechazó este valor antes.</span>`;
   }
   a.suggestions.filter(s => s.field === key && (s.from || '') === (val || '') && !state.kDismissed.has(`${s.field}|${s.from}|${s.to}`)).forEach(s => {
     const idx = state.ksugs.push(s) - 1;
-    html += `<span class="fknow fknow--${s.level >= 4 ? 'bad' : 'warn'}"><b>${esc(s.levelName)}:</b> «${esc(s.to)}». ${esc(s.why)} <button type="button" class="btn btn--quiet" data-ksug="${idx}">${s.level >= 4 ? 'Revisar y usar' : 'Usar'}</button><button type="button" class="btn btn--quiet" data-kno="${idx}">No</button></span>`;
+    action += `<span class="fknow fknow--${s.level >= 4 ? 'bad' : 'warn'}"><b>${esc(s.levelName)}:</b> «${esc(s.to)}». ${esc(s.why)} <button type="button" class="btn btn--quiet" data-ksug="${idx}">${s.level >= 4 ? 'Revisar y usar' : 'Usar'}</button><button type="button" class="btn btn--quiet" data-kno="${idx}">No</button></span>`;
   });
-  return html;
+  return { info, action };
 }
 async function applySuggestion(s) {
   try {

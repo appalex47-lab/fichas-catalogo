@@ -229,7 +229,8 @@ test('UX: el lote muestra cada eje y es una tabla accesible que se vuelve tarjet
   const labels = [...a.d.querySelectorAll('#lote-body tbody tr td[data-label]')].map(t => t.dataset.label);
   assert.deepEqual(labels, ['SKU', 'Categoría', 'Título', 'Estado', 'Evaluación', 'Avisos']);
   for (const b of a.d.querySelectorAll('#lote-body tbody button')) assert.equal(b.getAttribute('type'), 'button');
-  assert.match(a.text('.exp-readiness'), /Productos\s*1\s*Listos\s*\d\s*Con advertencias\s*\d\s*Bloqueados\s*\d\s*Health promedio\s*\d+\s*SEO promedio\s*\d+\s*Content promedio\s*\d+\s*Score 360° promedio\s*\d+/);
+  assert.match(a.text('.exp-compact'), /Mismas métricas de Health, SEO, Contenido, Magento y Score 360° que en Lote/);
+  assert.equal(a.d.querySelector('.exp-compact a').getAttribute('href'), '#h-lote');
 });
 
 test('UX: copiar muestra feedback y evita el doble clic', { skip }, async () => {
