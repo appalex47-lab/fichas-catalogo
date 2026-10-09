@@ -85,7 +85,15 @@
         </details>
       </details>
 
-      <fieldset class="pills" id="cats" aria-label="Categoría" style="min-width:0"></fieldset>
+      <div class="catstep" id="catstep">
+        <button type="button" class="catstep-summary" id="catstep-summary" aria-expanded="false">
+          <span class="catstep-label">Categoría</span>
+          <span class="catstep-current" id="catstep-current"></span>
+          <span class="catstep-change">Cambiar</span>
+        </button>
+        <fieldset class="pills" id="cats" aria-label="Categoría" style="min-width:0"></fieldset>
+        <button type="button" class="linkbtn catstep-close" id="catstep-close">Cerrar</button>
+      </div>
 
       <div class="field">
         <label for="sku">SKU o referencia interna</label>

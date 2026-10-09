@@ -211,6 +211,13 @@ function renderCats() {
   $('#cats').innerHTML = Object.entries(CATS).map(([id, c]) =>
     `<label class="pill"><input type="radio" name="cat" value="${id}" ${id === state.cat ? 'checked' : ''}><span>${c.emoji} ${esc(c.name)}</span></label>`).join('');
 }
+let catOpen = false;
+function renderCatStep() {
+  const c = CATS[state.cat];
+  $('#catstep-current').innerHTML = `${c.emoji} ${esc(c.name)}`;
+  $('#catstep').classList.toggle('catstep--open', catOpen);
+  $('#catstep-summary').setAttribute('aria-expanded', String(catOpen));
+}
 const unconfirmed = ai => Object.values(ai || {}).some(v => v === 'sugerido' || v === 'imagen');
 const aiBadge = k => state.aiFlags[k] === 'imagen'
   ? '<span class="ai-badge ai-badge--sug" title="Leído de una foto por IA. Verifícalo con el empaque. Al editar el dato, la marca desaparece.">IA foto</span>'
@@ -233,6 +240,7 @@ function fieldHTML(fd) {
 }
 function renderForm() {
   const c = CATS[state.cat];
+  renderCatStep();
   const a = c.fields.filter(x => x.g !== 'd'), b = c.fields.filter(x => x.g === 'd');
   $('#form').innerHTML =
     `<p class="legend"><span class="req">*</span> Requerido por la estructura de la categoría.</p>` +
@@ -900,8 +908,11 @@ async function confirmDelete(id) {
 $('#cats').addEventListener('change', e => {
   if (e.target.name !== 'cat') return;
   state.cat = e.target.value;
+  catOpen = false;
   renderForm(); renderOutputs();
 });
+$('#catstep-summary').addEventListener('click', () => { catOpen = true; renderCatStep(); });
+$('#catstep-close').addEventListener('click', () => { catOpen = false; renderCatStep(); });
 function clearAiFlag(e, k) {
   if (!state.aiFlags[k]) return;
   delete state.aiFlags[k];
@@ -983,6 +994,7 @@ function startEdit(id, then) {
   const it = state.lote.find(x => x.id === id);
   if (!it) { notify('No encontré ese producto en el lote.', 'warn'); return false; }
   state.cat = it.cat; state.v = { ...it.v }; state.sku = it.sku || ''; state._editingProvenance = it.provenance || {}; state._editingId = it.id; state.img = it.img || ''; state.aiFlags = { ...(it.ai || {}) }; state.aiSuggest = [];
+  catOpen = false;
   resetTracking();
   // El producto permanece en el lote hasta que se guarden los cambios: si se cierra la página o se limpia el formulario no se pierde.
   renderCats(); renderForm(); renderOutputs(); renderLote(); syncAddButton();
@@ -1814,8 +1826,9 @@ function assistantContext() {
   if (state.bulk) L.push(`Carga masiva abierta con ${state.bulk.rows.length} filas`);
   return L.join('\n');
 }
+let captVisible = true; // El asistente de uso solo se ofrece en la sección manual de captura (Producto), no en el resto de la app.
 function openAsst() { $('#asst').hidden = false; $('#asst-open').hidden = true; renderAsst(); }
-function closeAsst() { $('#asst').hidden = true; $('#asst-open').hidden = false; }
+function closeAsst() { $('#asst').hidden = true; $('#asst-open').hidden = !captVisible; }
 function runAction(id) {
   const [kind, arg] = String(id).split(':');
   const scrollTo = elId => { const el = document.getElementById(elId); if (el) el.scrollIntoView({ behavior: 'smooth' }); };
@@ -1974,6 +1987,8 @@ if (typeof IntersectionObserver !== 'undefined') {
       entries.forEach(x => { ratios[x.target.dataset.spy] = x.isIntersecting ? x.intersectionRatio : 0; });
       const top = Object.entries(ratios).sort((a, b) => b[1] - a[1])[0];
       if (top && top[1] > 0) setNav(top[0] === 'contenido' && state.tab === 'eval' ? 'validacion' : top[0]);
+      captVisible = (ratios.captura || 0) > 0;
+      if ($('#asst').hidden) $('#asst-open').hidden = !captVisible;
     }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
     [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion'], ['#conocimiento', 'conocimiento']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
   } catch (_) { /* sin scroll-spy */ }
