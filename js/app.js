@@ -2130,6 +2130,14 @@ async function applySuggestion(s) {
     notify(`Se usó «${s.to}». Quedó registrado como confirmación tuya.`, 'ok');
   } catch (e) { if (window.console) console.error(e); notify(UX.friendlyError(e, 'aplicar la sugerencia').message, 'error'); }
 }
+async function bulkConfirmKnowledge(ids) {
+  let okCount = 0, failCount = 0;
+  for (const id of ids) {
+    try { const r = await Knowledge.confirm(id, { note: 'bulk' }); if (r && r.ok === false) failCount++; else okCount++; }
+    catch (e) { failCount++; }
+  }
+  return { ok: okCount > 0 || failCount === 0, count: okCount, failCount };
+}
 async function dismissSuggestion(s) {
   try {
     state.kDismissed.add(`${s.field}|${s.from}|${s.to}`);
@@ -2180,13 +2188,26 @@ async function renderKnowledge() {
     $('#k-rules').innerHTML = rules.length ? `<h3>Correcciones tuyas por decidir (${rules.length})</h3>` + rules.map(r => `<article class="kcard"><p>Cambiaste «${esc(r.original)}» por «${esc(r.corrected)}» (${esc(fieldLabel(r.field))}).${r.critical ? ' <strong>Es un dato crítico: solo se sugerirá, nunca se aplicará sola.</strong>' : ''}</p><div class="actions"><button type="button" class="btn btn--primary" data-krule="${esc(r.id)}" data-kyes="1">Recordarlo para productos similares</button><button type="button" class="btn" data-krule="${esc(r.id)}" data-kyes="0">No</button></div></article>`).join('') : '';
     const aliases = await Knowledge.listAliases();
     $('#k-aliases').innerHTML = aliases.length ? `<h3>Alias sugeridos por revisar (${aliases.length})</h3>` + aliases.map(a => kCard(a, state.kOpen.has(a.id) ? kWhyCache.get(a.id) : null)).join('') : '';
-    /* resultados */
-    const f = state.kFilter; const rows = await Knowledge.search({ text: f.text, type: f.type, status: f.status, limit: 30 });
+    /* resultados: agrupados por tipo, con confirmación masiva por grupo y para las de alta confianza */
+    const f = state.kFilter; const filtered = !!(f.text || f.type || f.status);
+    const rows = await Knowledge.search({ text: f.text, type: f.type, status: f.status, limit: filtered ? 30 : 120 });
     const whys = {}; for (const r of rows) if (state.kOpen.has(r.id)) whys[r.id] = await Knowledge.why(r.id);
     for (const a of aliases) if (state.kOpen.has(a.id)) kWhyCache.set(a.id, await Knowledge.why(a.id));
     if (seq !== kRenderSeq) return;
-    $('#k-results').innerHTML = rows.length ? `<h3>${f.text || f.type || f.status ? 'Resultados' : 'Aprendido recientemente'} (${rows.length})</h3>` + rows.map(r => kCard(r, whys[r.id])).join('')
-      : `<p class="empty-state">${st.entities ? 'Ningún conocimiento coincide con tu búsqueda.' : 'Todavía no hay conocimiento. Se genera solo al guardar productos en el lote, o pulsa «Aprender del lote actual».'}</p>`;
+    if (!rows.length) {
+      $('#k-results').innerHTML = `<p class="empty-state">${st.entities ? 'Ningún conocimiento coincide con tu búsqueda.' : 'Todavía no hay conocimiento. Se genera solo al guardar productos en el lote, o pulsa «Aprender del lote actual».'}</p>`;
+    } else {
+      const ACTIONABLE = new Set(['observed', 'suggested', 'inferred']);
+      const highConf = rows.filter(r => ACTIONABLE.has(r.status) && r.confidence >= 0.9);
+      const bulkBar = highConf.length ? `<div class="bulkbar"><div class="bulkbar-copy"><span class="lead">${esc(highConf.length)} ficha(s) de alta confianza (&ge; 90&nbsp;%) listas para confirmar</span><span class="fine">De ${esc(rows.length)} mostradas aquí.</span></div><div class="bulkbar-actions"><button type="button" class="btn btn--primary" data-kbulk="${esc(highConf.map(r => r.id).join(','))}">Confirmar las de alta confianza (${highConf.length})</button></div></div>` : '';
+      const groups = K.TYPES.map(type => ({ type, label: K.TYPE_LABEL[type] || type, items: rows.filter(r => r.type === type) })).filter(g => g.items.length);
+      const groupHtml = groups.map(g => {
+        const actionable = g.items.filter(r => ACTIONABLE.has(r.status));
+        const bulkBtn = actionable.length ? `<button type="button" class="btn btn--quiet btn--sm" data-kbulk="${esc(actionable.map(r => r.id).join(','))}">Confirmar todas (${actionable.length})</button>` : '';
+        return `<section class="kgroup"><div class="kgroup-head"><h4>${esc(g.label)} <span class="kgroup-count">${g.items.length}</span></h4>${bulkBtn}</div><div class="kgrid">${g.items.map(r => kCard(r, whys[r.id])).join('')}</div></section>`;
+      }).join('');
+      $('#k-results').innerHTML = `<h3>${filtered ? 'Resultados' : 'Aprendido recientemente'} (${rows.length})</h3>${bulkBar}${groupHtml}`;
+    }
     /* correcciones */
     const corr = await Knowledge.listCorrections({ limit: 30 });
     $('#k-corrections').innerHTML = corr.length ? `<ul>${corr.map(c => `<li>${esc(String(c.createdAt).slice(0, 16).replace('T', ' '))} · ${esc(fieldLabel(c.field))}: «${esc(c.original)}» → «${esc(c.corrected)}» · ${c.kind === 'auto' ? 'automática' : 'manual'} (${esc(c.rule)}) · ${c.status === 'reverted' ? 'revertida' : `<button type="button" class="btn btn--quiet" data-krevert="${esc(c.id)}">Revertir</button>`}</li>`).join('')}</ul>` : '<p class="hint">Todavía no hay correcciones.</p>';
@@ -2201,6 +2222,7 @@ $('#conocimiento').addEventListener('click', async e => {
   const d = t.dataset;
   const act = async (fn, okMsg) => { try { const r = await fn(); if (r && r.ok === false) { notify(r.error || 'No se pudo completar la acción.', 'error'); return; } if (okMsg) notify(typeof okMsg === 'function' ? okMsg(r) : okMsg, 'ok'); state.kRev++; await renderKnowledge(); scheduleKnowledgeAssess(); scheduleLoteKnowledge(); } catch (err) { if (window.console) console.error(err); notify(UX.friendlyError(err, 'completar la acción').message, 'error'); } };
   if (d.kwhy) { if (state.kOpen.has(d.kwhy)) state.kOpen.delete(d.kwhy); else state.kOpen.add(d.kwhy); await renderKnowledge(); const b = document.querySelector(`#conocimiento [data-kwhy="${(typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(d.kwhy) : d.kwhy}"]`); if (b) b.focus(); }
+  else if (d.kbulk) { const ids = d.kbulk.split(',').filter(Boolean); if (ids.length) act(() => bulkConfirmKnowledge(ids), r => r.failCount ? `Se confirmaron ${r.count} ficha(s); ${r.failCount} no se pudieron confirmar.` : `Se confirmaron ${r.count} ficha(s). Quedó registrado como confirmación tuya.`); }
   else if (d.kconfirm) act(() => Knowledge.confirm(d.kconfirm, { note: 'panel' }), 'Confirmado. La confianza se actualizó con tu evidencia.');
   else if (d.kreject) act(() => Knowledge.reject(d.kreject, { note: 'panel' }), 'Rechazado. Queda como evidencia negativa; no se borró nada.');
   else if (d.kedit) { const rec = (await Knowledge.search({ text: '', limit: 1 }), await Knowledge.db.get('entities', d.kedit)); if (!rec) return; const v = await promptDialog({ title: 'Editar valor canónico', message: 'Solo puedes ajustar mayúsculas, acentos o espacios. Para otro nombre usa un alias.', value: rec.canonicalValue }); if (v != null) act(() => Knowledge.edit(d.kedit, { canonicalValue: v }), 'Valor actualizado.'); }
