@@ -1826,8 +1826,9 @@ function assistantContext() {
   if (state.bulk) L.push(`Carga masiva abierta con ${state.bulk.rows.length} filas`);
   return L.join('\n');
 }
+let captVisible = true; // El asistente de uso solo se ofrece en la sección manual de captura (Producto), no en el resto de la app.
 function openAsst() { $('#asst').hidden = false; $('#asst-open').hidden = true; renderAsst(); }
-function closeAsst() { $('#asst').hidden = true; $('#asst-open').hidden = false; }
+function closeAsst() { $('#asst').hidden = true; $('#asst-open').hidden = !captVisible; }
 function runAction(id) {
   const [kind, arg] = String(id).split(':');
   const scrollTo = elId => { const el = document.getElementById(elId); if (el) el.scrollIntoView({ behavior: 'smooth' }); };
@@ -1986,6 +1987,8 @@ if (typeof IntersectionObserver !== 'undefined') {
       entries.forEach(x => { ratios[x.target.dataset.spy] = x.isIntersecting ? x.intersectionRatio : 0; });
       const top = Object.entries(ratios).sort((a, b) => b[1] - a[1])[0];
       if (top && top[1] > 0) setNav(top[0] === 'contenido' && state.tab === 'eval' ? 'validacion' : top[0]);
+      captVisible = (ratios.captura || 0) > 0;
+      if ($('#asst').hidden) $('#asst-open').hidden = !captVisible;
     }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
     [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion'], ['#conocimiento', 'conocimiento']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
   } catch (_) { /* sin scroll-spy */ }
