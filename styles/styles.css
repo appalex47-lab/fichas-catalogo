@@ -343,6 +343,8 @@ button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .raildock .mnav-ico svg{display:block;width:17px;height:17px}
 .raildock .mnav-t{font-size:10.5px;white-space:normal;text-align:center;line-height:1.2}
 .raildock .mnav-count{position:absolute;top:4px;right:8px;background:var(--accent)}
+.raildock .mnav[disabled]{opacity:.4;cursor:not-allowed}
+.raildock .mnav[disabled]:hover{background:none;color:#9FB3BD}
 
 /* barra del producto (sticky) */
 .pbar{position:sticky;top:0;z-index:30;background:var(--surface);border-radius:14px;padding:10px 14px;margin:0 0 12px;display:grid;gap:8px;box-shadow:var(--shadow-tile)}

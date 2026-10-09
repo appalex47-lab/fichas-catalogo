@@ -337,6 +337,7 @@ function renderOutputs() {
   state.gotos = [];
   const r = computeFor(state.cat, state.v, keepSet(), state.meta);
   state.out = r;
+  updateNavAvailability();
   if (!hasAny(c)) {
     state.eval = null; state.seo = null;
     $('#alerts').innerHTML = '';
@@ -524,6 +525,7 @@ function importLoteBackup(file) {
 function renderLote() {
   $('#lote-count').textContent = state.lote.length;
   renderPersistenceStatus();
+  updateNavAvailability();
   const body = $('#lote-body');
   if (!state.lote.length) {
     renderExport();
@@ -829,6 +831,16 @@ function scrollToEl(el) {
 }
 function highlight(el, cls, ms) { if (!el) return; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), ms || 2400); }
 function setNav(name) { $$('#mainnav [data-nav]').forEach(b => b.setAttribute('aria-current', String(b.dataset.nav === name))); }
+/* Validación y Contenido solo tienen sentido con un producto capturado; Exportación, con algo en el lote.
+ * Se deshabilitan en el riel (no se ocultan) en vez de llevar a un estado vacío sin aviso previo. */
+function updateNavAvailability() {
+  const hasProduct = hasAny(CATS[state.cat]);
+  const hasLote = state.lote.length > 0;
+  const gate = (name, on, why) => { const b = document.querySelector(`#mainnav [data-nav="${name}"]`); if (!b) return; b.disabled = !on; b.title = on ? '' : why; };
+  gate('validacion', hasProduct, 'Captura un producto primero');
+  gate('contenido', hasProduct, 'Captura un producto primero');
+  gate('exportacion', hasLote, 'Agrega productos al lote primero');
+}
 function navTo(name) {
   setNav(name);
   if (name === 'config') { openSettings(); return; }
@@ -2022,6 +2034,7 @@ document.addEventListener('toggle', e => {
   if (d.dataset.histopen) state.histOpen = d.open;
 }, true);
 $('#mainnav').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav); });
+$('.railutil').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) navTo(b.dataset.nav); });
 /* Teclado en las pestañas del resultado: flechas, Inicio y Fin. */
 $('.output .tabs').addEventListener('keydown', e => {
   if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
@@ -2036,11 +2049,17 @@ if (typeof IntersectionObserver !== 'undefined') {
     const spy = new IntersectionObserver(entries => {
       entries.forEach(x => { ratios[x.target.dataset.spy] = x.isIntersecting ? x.intersectionRatio : 0; });
       const top = Object.entries(ratios).sort((a, b) => b[1] - a[1])[0];
-      if (top && top[1] > 0) setNav(top[0] === 'contenido' && state.tab === 'eval' ? 'validacion' : top[0]);
+      if (top && top[1] > 0) {
+        let name = top[0] === 'contenido' && state.tab === 'eval' ? 'validacion' : top[0];
+        /* El indicador de "sección actual" nunca debe señalar un destino deshabilitado (sin producto o sin lote). */
+        const b = document.querySelector(`#mainnav [data-nav="${name}"]`);
+        if (b && b.disabled) name = 'captura';
+        setNav(name);
+      }
       captVisible = (ratios.captura || 0) > 0;
       if ($('#asst').hidden) $('#asst-open').hidden = !captVisible;
     }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
-    [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion'], ['#conocimiento', 'conocimiento']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
+    [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
   } catch (_) { /* sin scroll-spy */ }
 }
 /* Ningún error se queda en silencio: se registra en consola y el usuario recibe un mensaje comprensible. */

@@ -9,7 +9,8 @@ const BAD = /\bundefined\b|\bNaN\b|\[object Object\]|\bnull\b/;
 test('UX: al abrir la app se ve dónde estoy, qué producto y qué hacer', { skip }, () => {
   const a = boot();
   const nav = [...a.d.querySelectorAll('#mainnav [data-nav]')].map(b => b.querySelector('.mnav-t').textContent);
-  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportación', 'Conocimiento']);
+  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportación']);
+  assert.ok(a.d.querySelector('.railutil [data-nav="conocimiento"]'), 'Conocimiento vive en la bandeja de utilidades');
   assert.equal(a.d.querySelector('#mainnav [aria-current="true"]').dataset.nav, 'captura');
   assert.match(a.text('#prod-bar'), /PRODUCTO/);
   assert.match(a.text('#prod-bar .status'), /BORRADOR/);
@@ -292,6 +293,28 @@ test('UX: restaurar un respaldo sobre un lote con productos pide confirmación y
   assert.match(a.toast(), /formato válido/);
   assert.doesNotMatch(a.toast(), BAD);
   assert.equal(a.count(), '2', 'un respaldo inválido no toca el lote');
+});
+
+test('UX: Validación, Contenido y Exportación se deshabilitan sin datos y se habilitan al capturar/agregar', { skip }, () => {
+  const a = boot();
+  const val = a.d.querySelector('[data-nav="validacion"]'), con = a.d.querySelector('[data-nav="contenido"]'), exp = a.d.querySelector('[data-nav="exportacion"]');
+  assert.equal(val.disabled, true, 'Validación empieza deshabilitada: no hay producto capturado');
+  assert.equal(con.disabled, true, 'Contenido empieza deshabilitado: no hay producto capturado');
+  assert.equal(exp.disabled, true, 'Exportación empieza deshabilitada: el lote está vacío');
+  assert.match(val.title, /Captura un producto/);
+  assert.equal(a.d.querySelector('[data-nav="captura"]').disabled, false, 'Captura siempre está disponible');
+  assert.equal(a.d.querySelector('[data-nav="lote"]').disabled, false, 'Lote siempre está disponible, incluso vacío');
+  a.fillMed('Tempra', '30', 'A1');
+  assert.equal(val.disabled, false, 'al capturar datos del producto, Validación se habilita');
+  assert.equal(con.disabled, false, 'al capturar datos del producto, Contenido se habilita');
+  assert.equal(exp.disabled, true, 'Exportación sigue deshabilitada: todavía no hay nada en el lote');
+  a.d.getElementById('add').click();
+  assert.equal(exp.disabled, false, 'al agregar el producto al lote, Exportación se habilita');
+  a.d.getElementById('clear').click();
+  assert.equal(val.disabled, true, 'al limpiar el formulario, Validación vuelve a deshabilitarse');
+  assert.equal(con.disabled, true, 'al limpiar el formulario, Contenido vuelve a deshabilitarse');
+  assert.equal(exp.disabled, false, 'Exportación sigue habilitada: el lote conserva el producto agregado');
+  assert.deepEqual(a.errors, []);
 });
 
 test('UX: la navegación principal lleva a Validación (tab de evaluación) y Configuración', { skip }, () => {
