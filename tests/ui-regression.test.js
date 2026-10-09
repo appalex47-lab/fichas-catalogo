@@ -61,5 +61,5 @@ test('Fase 9: index.html carga content, magento-readiness y score360 antes de ap
 
 test('Fase 9: app.js expone filtros 360, contenido y Magento, y el resumen de exportación', () => {
   const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'js', 'app.js'), 'utf8');
-  for (const k of ['c360_critico', 'contenido_critico', 'mag_bloqueado', 'mag_listo', 'mag_advertencias', 'EVALUACIÓN DEL PRODUCTO', 'exp-readiness', 'fichas.score360.v1']) assert.ok(src.includes(k), k);
+  for (const k of ['c360_critico', 'contenido_critico', 'mag_bloqueado', 'mag_listo', 'mag_advertencias', 'EVALUACIÓN DEL PRODUCTO', 'exp-compact', 'fichas.score360.v1']) assert.ok(src.includes(k), k);
 });

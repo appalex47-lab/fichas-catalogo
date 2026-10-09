@@ -279,10 +279,9 @@ input[type=file]{width:100%;font-size:13px}
 .eval-box .seo-sec>summary{font-weight:600}
 .eval-table{width:100%;border-collapse:collapse;font-size:13px}
 .eval-table th,.eval-table td{border-top:1px solid var(--line);padding:5px 8px;text-align:left}
-.exp-readiness{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:0 0 12px}
-.exp-readiness>div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
-.exp-readiness span{display:block;font-size:12px;color:var(--muted)}
-.exp-readiness strong{font-family:var(--mono);font-size:18px}
+.exp-compact{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:10px 13px;margin:0 0 12px}
+.exp-compact p{margin:0;font-size:13px;color:var(--ink)}
+.exp-compact a{font-size:12.5px;font-weight:600;white-space:nowrap}
 
 /* ===== Fase 10: UX/UI avanzada ===== */
 .sr-only{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
@@ -355,6 +354,7 @@ button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid 
 .fline{font-size:11.5px;color:var(--muted)}
 .fwhy{font-size:12.5px}.fwhy summary{cursor:pointer;color:var(--accent);font-weight:500}
 .fwhy p{margin:4px 0}
+.fdetail{display:block}.fdetail .fline,.fdetail .fknow{display:block;margin-top:4px}
 .field[aria-invalid-group="true"] input{border-color:var(--bad)}
 input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)}
 .field--hl{animation:hl 2.4s ease-out;border-radius:8px;box-shadow:0 0 0 3px var(--accent-soft)}
@@ -380,7 +380,6 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 .lrow-detail .nba{margin-bottom:8px}
 .filters-more{margin-top:8px}.filters-more .filters{margin-top:6px}
 .empty-state .actions{margin-top:10px}
-.exp-readiness{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
 .hist ul{margin:6px 0;padding-left:18px}.hist li{margin:3px 0;font-size:12.5px}
 
 /* móvil: tarjetas en lugar de tabla, objetivos táctiles, navegación inferior */
@@ -407,10 +406,12 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
   .lrow-detail td{padding:8px 0;background:transparent}
   #toast{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
   .asst-fab,#asst-open{bottom:calc(76px + env(safe-area-inset-bottom,0px))}
-  .exp-readiness{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .exp-compact{flex-direction:column;align-items:flex-start}
 }
 @media (min-width:980px){
   .output{top:96px;max-height:calc(100vh - 112px)}
+  .settings{width:min(760px,92vw)}
+  .meta-tokens-hint{max-width:62ch}
 }
 @media (pointer:coarse){.btn,.chip,.tab,.mnav,.pm{min-height:44px}}
 
