@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Fichas de catálogo</title>
+<title>SmartCatalog Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,26 +13,33 @@
 <a class="skip" href="#h-prod">Saltar al contenido</a>
 <div class="wrap">
   <header class="top">
-    <div>
-      <h1>Fichas de catálogo</h1>
-      <p class="sub">Captura los datos del producto y obtén el título, la descripción para Merchant Center, el HTML para Magento, las metas y el alt, con las reglas de tu catálogo.</p>
+    <div class="brand">
+      <span class="brand-mark" id="brand-mark" aria-hidden="true">
+        <svg id="brand-mark-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.59 2.59a2 2 0 0 0-2.83 0L2.59 9.76a2 2 0 0 0 0 2.83l8.83 8.82a2 2 0 0 0 2.83 0l7.17-7.17a2 2 0 0 0 0-2.83z"/><circle cx="8.5" cy="8.5" r="1.3" fill="#fff" stroke="none"/></svg>
+        <img id="brand-logo" alt="" hidden>
+      </span>
+      <div>
+        <h1>SmartCatalog Manager</h1>
+        <p class="sub">Captura los datos del producto y obtén el título, la descripción para Merchant Center, el HTML para Magento, las metas y el alt, con las reglas de tu catálogo.</p>
+      </div>
     </div>
-    <nav class="top-links" aria-label="Secciones">
-      <a class="btn" href="#masiva" style="text-decoration:none">Carga masiva</a>
-      <button class="btn gear" id="rules-open" aria-haspopup="dialog" title="Reglas de construcción de fichas" aria-label="Reglas de construcción de fichas"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg><span class="btn-txt">Reglas</span></button>
-      <button class="btn gear" id="set-open" aria-label="Ajustes" title="Ajustes" aria-haspopup="dialog"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-    </nav>
   </header>
 
-  <nav class="mainnav" id="mainnav" aria-label="Secciones principales">
-    <button class="mnav" data-nav="captura" aria-current="true"><span class="mnav-ico" aria-hidden="true">✎</span><span class="mnav-t">Captura</span></button>
-    <button class="mnav" data-nav="validacion"><span class="mnav-ico" aria-hidden="true">✓</span><span class="mnav-t">Validación</span></button>
-    <button class="mnav" data-nav="contenido"><span class="mnav-ico" aria-hidden="true">¶</span><span class="mnav-t">Contenido</span></button>
-    <button class="mnav" data-nav="lote"><span class="mnav-ico" aria-hidden="true">▤</span><span class="mnav-t">Lote</span> <span class="mnav-count" id="lote-count" aria-label="productos en el lote">0</span></button>
-    <button class="mnav" data-nav="exportacion"><span class="mnav-ico" aria-hidden="true">⇩</span><span class="mnav-t">Exportación</span></button>
-    <button class="mnav" data-nav="conocimiento"><span class="mnav-ico" aria-hidden="true">✦</span><span class="mnav-t">Conocimiento</span></button>
-    <button class="mnav" data-nav="config"><span class="mnav-ico" aria-hidden="true">⚙</span><span class="mnav-t">Configuración</span></button>
-  </nav>
+  <div class="raildock">
+    <nav class="mainnav" id="mainnav" aria-label="Secciones principales">
+      <button class="mnav" data-nav="captura" aria-current="true"><span class="mnav-ico" aria-hidden="true">✎</span><span class="mnav-t">Captura</span></button>
+      <button class="mnav" data-nav="validacion"><span class="mnav-ico" aria-hidden="true">✓</span><span class="mnav-t">Validación</span></button>
+      <button class="mnav" data-nav="contenido"><span class="mnav-ico" aria-hidden="true">¶</span><span class="mnav-t">Contenido</span></button>
+      <button class="mnav" data-nav="lote"><span class="mnav-ico" aria-hidden="true">▤</span><span class="mnav-t">Lote</span> <span class="mnav-count" id="lote-count" aria-label="productos en el lote">0</span></button>
+      <button class="mnav" data-nav="exportacion"><span class="mnav-ico" aria-hidden="true">⇩</span><span class="mnav-t">Exportación</span></button>
+      <button class="mnav" data-nav="conocimiento"><span class="mnav-ico" aria-hidden="true">✦</span><span class="mnav-t">Conocimiento</span></button>
+    </nav>
+    <nav class="railutil" aria-label="Utilidades">
+      <a class="mnav" href="#masiva"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg></span><span class="mnav-t">Carga masiva</span></a>
+      <button class="mnav" type="button" id="rules-open" aria-haspopup="dialog" aria-label="Reglas de construcción de fichas"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="mnav-t">Reglas</span></button>
+      <button class="mnav" type="button" id="set-open" aria-haspopup="dialog" aria-label="Ajustes"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="mnav-t">Configuración</span></button>
+    </nav>
+  </div>
 
   <section class="pbar" id="prod-bar" aria-label="Producto en edición"></section>
   <section class="pmetrics" id="prod-metrics" aria-label="Evaluación del producto"></section>
@@ -265,6 +272,7 @@
     <button class="stab" role="tab" data-settab="ia" aria-selected="false">IA</button>
     <button class="stab" role="tab" data-settab="conexiones" aria-selected="false">Conexiones</button>
     <button class="stab" role="tab" data-settab="magento" aria-selected="false">Magento</button>
+    <button class="stab" role="tab" data-settab="apariencia" aria-selected="false">Apariencia</button>
   </div>
   <div class="settings-body">
     <section data-setpanel="formato">
@@ -361,6 +369,21 @@
       </div>
       <h3>Estructura de meta etiquetas y alt</h3>
       <div id="meta-body"></div>
+    </section>
+    <section data-setpanel="apariencia" hidden>
+      <p class="sub" style="margin-bottom:12px">El logotipo aparece junto al nombre de la herramienta, en el encabezado.</p>
+      <div class="field">
+        <label for="logo-in">Logotipo</label>
+        <div class="logo-field">
+          <div class="logo-preview" id="logo-preview" aria-live="polite"></div>
+          <div class="logo-field-actions">
+            <input type="file" id="logo-in" accept="image/png,image/jpeg">
+            <button class="btn btn--quiet" id="logo-clear" type="button">Quitar logotipo</button>
+          </div>
+        </div>
+        <p class="hint">PNG o JPG, máximo 1000×1000&nbsp;px. Se ajusta automáticamente a un tamaño pequeño para el encabezado.</p>
+        <div id="logo-status" class="status"></div>
+      </div>
     </section>
   </div>
 </aside>

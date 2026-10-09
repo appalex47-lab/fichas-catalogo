@@ -263,7 +263,7 @@ function buildRulesDoc(opts) {
   @media print{body{padding:0}.toc{display:none}}`;
 
   const head = `<h1>Reglas de construcción de fichas de producto</h1>
-    <p class="muted">Documento para revisión de Asuntos Regulatorios. Generado automáticamente por la herramienta Fichas de catálogo.</p>
+    <p class="muted">Documento para revisión de Asuntos Regulatorios. Generado automáticamente por la herramienta SmartCatalog Manager.</p>
     ${table(['Fecha de generación', 'Versión de las reglas', 'Huella del contenido'], [[esc(fecha), esc(RULES_VERSION), `<code>${hash}</code>`]], 'narrow')}
     <div class="box"><strong>Alcance.</strong> Este documento describe cómo la herramienta construye y valida las fichas. No es asesoría legal y <strong>no está aprobado hasta que lo firme Regulatorio</strong>. Cada regla indica su origen y qué hace la herramienta con ella:
       <p>${badge('bloquea')} no genera el HTML de Magento o no exporta la fila. ${badge('avisa')} muestra un aviso; no cambia ni bloquea el texto. ${badge('corrige')} corrige el formato automáticamente. ${badge('doc')} está incorporada en las plantillas, pero la herramienta no la verifica.</p>

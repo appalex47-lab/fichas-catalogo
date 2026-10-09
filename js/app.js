@@ -124,7 +124,8 @@ const state = {
   keepText: store.get('fichas.keep.v1', 'GNC, OMRON, GSK'),
   chgOpen: false, out: null,
   aiFlags: {}, aiSuggest: [], asst: [], aiModel: store.get('fichas.aimodel.v1', ''), aiAsstModel: store.get('fichas.aiasstmodel.v1', ''), aiLimit: store.get('fichas.ailimit.v1', 1000), aiVisionModel: store.get('fichas.aivisionmodel.v1', ''), photos: [], imgResult: null,
-  loteFilter: 'todos', loteShown: 50, bulk: null, bulkText: '', bulkName: '', meta: null, exp: null, metaEditCat: 'med', seo: null, seoOpen: {}, eval: null, evalOpen: {}, s360History: store.get('fichas.score360.v1', []), anomalies: [], audit: store.get('fichas.audit.v1', [])
+  loteFilter: 'todos', loteShown: 50, bulk: null, bulkText: '', bulkName: '', meta: null, exp: null, metaEditCat: 'med', seo: null, seoOpen: {}, eval: null, evalOpen: {}, s360History: store.get('fichas.score360.v1', []), anomalies: [], audit: store.get('fichas.audit.v1', []),
+  logo: store.get('fichas.logo.v1', null)
 };
 {
   const m = store.get('fichas.meta.v2', null), d = defMeta();
@@ -1698,6 +1699,55 @@ async function addPhotos(files) {
 }
 $('#photo-in').addEventListener('change', async e => { await addPhotos(e.target.files || []); e.target.value = ''; });
 
+/* ---------- Logotipo de la herramienta (Ajustes > Apariencia) ---------- */
+function logoFileToDataUrl(file, maxUpload = 1000, maxStore = 240) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpeg)$/.test(file.type)) { reject(new Error('El logotipo debe ser una imagen PNG o JPG.')); return; }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const w0 = img.naturalWidth, h0 = img.naturalHeight;
+      if (w0 > maxUpload || h0 > maxUpload) { URL.revokeObjectURL(url); reject(new Error(`La imagen mide ${w0}×${h0}px. El tamaño máximo es ${maxUpload}×${maxUpload}px.`)); return; }
+      const { w, h } = AI.fitSize(w0, h0, maxStore);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve({ dataUrl: cv.toDataURL('image/png'), w, h });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen. Usa JPG o PNG.')); };
+    img.src = url;
+  });
+}
+function renderBrandLogo() {
+  const mark = $('#brand-mark'), def = $('#brand-mark-default'), img = $('#brand-logo'), prev = $('#logo-preview');
+  const has = !!(state.logo && state.logo.dataUrl);
+  if (img) { img.src = has ? state.logo.dataUrl : ''; img.hidden = !has; }
+  if (def) def.hidden = has;
+  if (mark) mark.classList.toggle('brand-mark--custom', has);
+  if (prev) prev.innerHTML = has ? `<img src="${state.logo.dataUrl}" alt="Logotipo actual">` : '<span class="hint">Sin logo</span>';
+}
+$('#logo-in').addEventListener('change', async e => {
+  const file = (e.target.files || [])[0]; e.target.value = '';
+  if (!file) return;
+  const st = $('#logo-status');
+  try {
+    const r = await logoFileToDataUrl(file);
+    state.logo = { dataUrl: r.dataUrl, w: r.w, h: r.h };
+    store.set('fichas.logo.v1', state.logo);
+    renderBrandLogo();
+    if (st) { st.className = 'status'; st.textContent = 'Logotipo actualizado.'; }
+    toast('Logotipo actualizado.');
+  } catch (err) {
+    const msg = UX.friendlyError(err, 'subir el logotipo').message;
+    if (st) { st.className = 'status bad'; st.textContent = msg; }
+    notify(msg, 'error');
+  }
+});
+$('#logo-clear').addEventListener('click', () => {
+  state.logo = null; store.set('fichas.logo.v1', null); renderBrandLogo();
+  const st = $('#logo-status'); if (st) { st.className = 'status'; st.textContent = 'Logotipo quitado.'; }
+  toast('Logotipo quitado.');
+});
+
 const VERBATIM_KEYS = ['inci', 'modo', 'precauciones'];
 function renderImgReview() {
   const box = $('#img-review'), r = state.imgResult;
@@ -2339,5 +2389,5 @@ document.querySelectorAll('button:not([type])').forEach(b => { b.type = 'button'
 renderConnectorCategories(); renderConnectorSource();
 $('#exp-ia').checked = !!state.exp.incIA; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL;
 renderMetaCfg();
-resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
+resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
 })();
