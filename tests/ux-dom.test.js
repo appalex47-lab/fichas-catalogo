@@ -9,7 +9,7 @@ const BAD = /\bundefined\b|\bNaN\b|\[object Object\]|\bnull\b/;
 test('UX: al abrir la app se ve dónde estoy, qué producto y qué hacer', { skip }, () => {
   const a = boot();
   const nav = [...a.d.querySelectorAll('#mainnav [data-nav]')].map(b => b.querySelector('.mnav-t').textContent);
-  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportación', 'Conocimiento', 'Configuración']);
+  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportación', 'Conocimiento']);
   assert.equal(a.d.querySelector('#mainnav [aria-current="true"]').dataset.nav, 'captura');
   assert.match(a.text('#prod-bar'), /PRODUCTO/);
   assert.match(a.text('#prod-bar .status'), /BORRADOR/);
@@ -302,7 +302,7 @@ test('UX: la navegación principal lleva a Validación (tab de evaluación) y Co
   assert.equal(a.d.querySelector('#mainnav [aria-current="true"]').dataset.nav, 'validacion');
   a.d.querySelector('[data-nav="contenido"]').click();
   assert.equal(a.d.querySelector('.tab[aria-selected="true"]').dataset.tab, 'titulo');
-  a.d.querySelector('[data-nav="config"]').click();
+  a.d.querySelector('#set-open').click();
   assert.equal(a.d.getElementById('settings').hidden, false);
 });
 

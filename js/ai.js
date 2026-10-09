@@ -242,7 +242,7 @@ async function visionExtract(o) {
 }
 
 /* ---------- Asistente de uso ---------- */
-const HELP_KB = `MANUAL DE LA HERRAMIENTA "Fichas de catálogo"
+const HELP_KB = `MANUAL DE LA HERRAMIENTA "SmartCatalog Manager"
 Qué hace: convierte los datos de un producto en título optimizado, descripción de Merchant Center, HTML de descripción para Magento, meta title, meta description y alt de la imagen principal, y arma el CSV de carga de Magento. Categorías: medicamentos, dispositivos médicos, dermocosméticos y cosméticos, suplementos alimenticios, bebidas e hidratación, cuidado personal e higiene, accesorios y generales.
 Flujo por producto: 1) elegir la categoría; 2) capturar los campos, o pegar el SKU sucio en "Rellenar desde datos crudos"; 3) revisar las pestañas Título, Merchant Center, Magento y Meta y alt; 4) pulsar "Agregar al lote".
 Campos: los marcados con asterisco son requeridos por la estructura del título. "Datos para las descripciones" son opcionales, salvo los que bloquean Magento.
@@ -263,7 +263,7 @@ Documento de reglas: el botón «Reglas» (libro, junto al engrane) abre el docu
 Conteo de llamadas: Ajustes, pestaña IA, muestra cuántas llamadas a Cohere se han hecho este mes desde este navegador y cuántas respuestas se resolvieron sin IA. Ahí se configuran el límite mensual de la llave y un modelo más ligero para el asistente.
 Límites: la herramienta no se conecta a Magento y no da asesoría regulatoria. Los textos aprobados no se modifican.`;
 
-const ASSISTANT_RULES = `Eres el asistente de uso de la herramienta "Fichas de catálogo" de una farmacia en línea. Ayudas a las personas a usarla.
+const ASSISTANT_RULES = `Eres el asistente de uso de la herramienta "SmartCatalog Manager" de una farmacia en línea. Ayudas a las personas a usarla.
 Reglas:
 1. Responde solo con lo que dice el manual y con el estado de la pantalla. Si no lo sabes o el manual no lo cubre, dilo. No inventes funciones.
 2. No des asesoría regulatoria, legal ni médica. Para eso, remite a Regulatorio. No propongas cambios a los textos aprobados.

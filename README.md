@@ -1,4 +1,4 @@
-# Fichas de catálogo
+# SmartCatalog Manager
 
 Herramienta web para catálogo de farmacia. Convierte los datos de un producto en los textos que necesita la tienda y arma el archivo CSV para cargarlo en Magento. Está hecha con HTML, CSS y JavaScript, sin dependencias, y todo se calcula con reglas en código: la misma entrada da siempre la misma salida. No usa IA ni servicios externos.
 

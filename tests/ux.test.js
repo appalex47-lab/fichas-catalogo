@@ -372,8 +372,34 @@ test('accesibilidad: foco visible, salto al contenido, reducción de movimiento 
 test('navegación: las secciones principales (las seis de la Fase 10 + Conocimiento de la Fase 11) existen y apuntan a una sección real', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const nav = [...html.matchAll(/data-nav="(\w+)"[^>]*>[\s\S]*?<span class="mnav-t">([^<]+)</g)].map(m => [m[1], m[2]]);
-  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportación'], ['conocimiento', 'Conocimiento'], ['config', 'Configuración']]);
+  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportación'], ['conocimiento', 'Conocimiento']]);
+  assert.match(html, /id="rules-open"/); assert.match(html, /id="set-open"/); assert.match(html, /href="#masiva"/);
   for (const id of ['h-prod', 'h-out', 'lote', 'exportar', 'prod-bar', 'prod-metrics', 'prod-guide', 'live', 'panel-eval']) assert.match(html, new RegExp(`id="${id}"`), id);
+});
+
+test('marca: el nombre de la herramienta es SmartCatalog Manager en el título, el encabezado y el manual del asistente', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const ai = fs.readFileSync(path.join(root, 'js', 'ai.js'), 'utf8');
+  const rules = fs.readFileSync(path.join(root, 'js', 'rules.js'), 'utf8');
+  assert.match(html, /<title>SmartCatalog Manager<\/title>/);
+  assert.match(html, /<h1>SmartCatalog Manager<\/h1>/);
+  assert.match(ai, /SmartCatalog Manager/);
+  assert.match(rules, /SmartCatalog Manager/);
+  assert.doesNotMatch(html, /Fichas de catálogo/);
+});
+
+test('marca: el logotipo se sube desde Ajustes > Apariencia, valida tamaño y aparece junto al nombre', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'styles', 'styles.css'), 'utf8');
+  assert.match(html, /data-settab="apariencia"/); assert.match(html, /data-setpanel="apariencia"/);
+  assert.match(html, /id="logo-in"[^>]*accept="image\/png,image\/jpeg"/);
+  assert.match(html, /id="brand-mark"/); assert.match(html, /id="brand-logo"/);
+  assert.match(app, /function logoFileToDataUrl/);
+  assert.match(app, /El tamaño máximo es \$\{maxUpload\}×\$\{maxUpload\}px/);
+  assert.match(app, /function renderBrandLogo/);
+  assert.match(app, /fichas\.logo\.v1/);
+  assert.match(css, /\.brand-mark\{/);
 });
 
 test('botones: todo botón del HTML tiene un handler y todo data-* generado tiene su manejador', () => {
@@ -407,12 +433,13 @@ test('botones: el lote deshabilita las acciones cuando está vacío y muestra es
 });
 
 /* ---------- Móvil ---------- */
-test('móvil: el lote se convierte en tarjetas, la navegación va abajo y los objetivos táctiles miden 44 px', () => {
+test('móvil: el lote se convierte en tarjetas, el riel de navegación se angosta a íconos y los objetivos táctiles miden 44 px', () => {
   const css = fs.readFileSync(path.join(root, 'styles', 'styles.css'), 'utf8');
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(css, /@media \(max-width:720px\)/);
   assert.match(css, /table\.lote-table td\[data-label\]::before/);
-  assert.match(css, /\.mainnav\{position:fixed;left:0;right:0;bottom:0/);
+  assert.match(css, /\.raildock\{position:fixed;top:0;right:0;bottom:0/, 'la navegación es un riel fijo a la derecha, siempre visible');
+  assert.match(css, /\.raildock\{width:64px/, 'en móvil el riel se angosta a solo íconos');
   assert.match(css, /\.btn,\.chip,\.tab,\.mnav\{min-height:44px\}/);
   assert.match(css, /font-size:16px/, 'evita el zoom automático de iOS/Android al enfocar un campo');
   assert.match(html, /name="viewport"/);
