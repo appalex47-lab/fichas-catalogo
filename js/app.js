@@ -211,6 +211,13 @@ function renderCats() {
   $('#cats').innerHTML = Object.entries(CATS).map(([id, c]) =>
     `<label class="pill"><input type="radio" name="cat" value="${id}" ${id === state.cat ? 'checked' : ''}><span>${c.emoji} ${esc(c.name)}</span></label>`).join('');
 }
+let catOpen = false;
+function renderCatStep() {
+  const c = CATS[state.cat];
+  $('#catstep-current').innerHTML = `${c.emoji} ${esc(c.name)}`;
+  $('#catstep').classList.toggle('catstep--open', catOpen);
+  $('#catstep-summary').setAttribute('aria-expanded', String(catOpen));
+}
 const unconfirmed = ai => Object.values(ai || {}).some(v => v === 'sugerido' || v === 'imagen');
 const aiBadge = k => state.aiFlags[k] === 'imagen'
   ? '<span class="ai-badge ai-badge--sug" title="Leído de una foto por IA. Verifícalo con el empaque. Al editar el dato, la marca desaparece.">IA foto</span>'
@@ -233,6 +240,7 @@ function fieldHTML(fd) {
 }
 function renderForm() {
   const c = CATS[state.cat];
+  renderCatStep();
   const a = c.fields.filter(x => x.g !== 'd'), b = c.fields.filter(x => x.g === 'd');
   $('#form').innerHTML =
     `<p class="legend"><span class="req">*</span> Requerido por la estructura de la categoría.</p>` +
@@ -900,8 +908,11 @@ async function confirmDelete(id) {
 $('#cats').addEventListener('change', e => {
   if (e.target.name !== 'cat') return;
   state.cat = e.target.value;
+  catOpen = false;
   renderForm(); renderOutputs();
 });
+$('#catstep-summary').addEventListener('click', () => { catOpen = true; renderCatStep(); });
+$('#catstep-close').addEventListener('click', () => { catOpen = false; renderCatStep(); });
 function clearAiFlag(e, k) {
   if (!state.aiFlags[k]) return;
   delete state.aiFlags[k];
@@ -983,6 +994,7 @@ function startEdit(id, then) {
   const it = state.lote.find(x => x.id === id);
   if (!it) { notify('No encontré ese producto en el lote.', 'warn'); return false; }
   state.cat = it.cat; state.v = { ...it.v }; state.sku = it.sku || ''; state._editingProvenance = it.provenance || {}; state._editingId = it.id; state.img = it.img || ''; state.aiFlags = { ...(it.ai || {}) }; state.aiSuggest = [];
+  catOpen = false;
   resetTracking();
   // El producto permanece en el lote hasta que se guarden los cambios: si se cierra la página o se limpia el formulario no se pierde.
   renderCats(); renderForm(); renderOutputs(); renderLote(); syncAddButton();
