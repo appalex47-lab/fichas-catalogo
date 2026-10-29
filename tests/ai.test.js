@@ -231,3 +231,26 @@ test('fotos: explica cuando la llave no tiene acceso al modelo de visión y exig
   await assert.rejects(AI.visionExtract({ apiKey: 'x', images: [], fetchImpl: okFetch({}) }), e => e.code === 'no_images');
   await assert.rejects(AI.visionExtract({ apiKey: 'x', images: ['data:image/jpeg;base64,AAA'], fetchImpl: errFetch(429, 'throttled') }), e => e.code === 'rate');
 });
+
+test('complementos: solo se aceptan ids de la lista, sin repetir y con motivo corto', async () => {
+  const cands = [{ id: 1, name: 'Mounjaro 2.5 mg', cat: 'med' }, { id: 2, name: 'Wegovy', cat: 'med' }];
+  const r = AI.verifyComplements({ coincidencias: [{ id: 1, motivo: 'x'.repeat(400) }, { id: 1, motivo: 'repetido' }, { id: 99, motivo: 'inventado' }, { id: '2', motivo: 'ok' }, null] }, cands);
+  assert.deepEqual(r.map(x => x.id), [1, 2]);
+  assert.ok(r[0].motivo.length <= 160);
+  assert.deepEqual(AI.verifyComplements(null, cands), []);
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push(JSON.parse(init.body)); return okFetch({ coincidencias: [{ id: 2, motivo: 'nutrición oral' }, { id: 7, motivo: 'no existe' }] })(); };
+  const out = await AI.aiComplements({ apiKey: 'k', mode: 'child', subject: { name: 'Fresubin 200 mL', cat: 'beb' }, candidates: cands, fetchImpl });
+  assert.deepEqual(out, [{ id: 2, motivo: 'nutrición oral' }]);
+  const user = JSON.parse(calls[0].messages[1].content);
+  assert.equal(user.producto.nombre, 'Fresubin 200 mL');
+  assert.deepEqual(user.candidatos.map(x => x.id), [1, 2]);
+  assert.equal(calls[0].temperature, 0);
+});
+
+test('complementos: el prompt no deja que la IA recomiende sustitutos ni consejos médicos', () => {
+  const m = AI.buildComplementMessages({ mode: 'parent', subject: { name: 'Wegovy', cat: 'med' }, candidates: [{ id: 1, name: 'Suero oral', cat: 'beb' }] });
+  assert.match(m[0].content, /No devuelvas el mismo producto con otra marca/);
+  assert.match(m[0].content, /sin consejos médicos/);
+  assert.match(JSON.parse(m[1].content).tarea, /producto principal/);
+});

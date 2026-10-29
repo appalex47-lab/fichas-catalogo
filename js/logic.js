@@ -122,6 +122,7 @@ const CATS = {
       F('via','Vía de administración',{req:1,g:'d',ph:'Subcutánea'}),
       F('receta','¿Requiere receta médica?',{req:1,g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí requiere receta'],['no','No requiere receta']],hint:'Dato regulatorio obligatorio. Sin él no se genera el HTML de Magento.'}),
       F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'}),
+      F('especialidad','¿Es de alta especialidad?',{g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí es de alta especialidad'],['no','No es de alta especialidad']],hint:'No cambia ningún texto. Un medicamento con receta, de alta especialidad o sin declarar nunca se recomienda como complemento de otro producto.'}),
       F('indicaciones','Indicaciones',{g:'d',type:'area',sentence:1,hint:'Cópialas tal cual del inserto o del registro sanitario. Aparece en una sección aparte y en las preguntas frecuentes.'}),
       F('posologia','Posología o cómo se usa',{g:'d',type:'area',sentence:1,hint:'Dosis y frecuencia tal como están en el inserto. Aparece en una sección aparte.'}),
       F('poblacion','Población a la que va dirigido',{g:'d',type:'area',sentence:1,hint:'Por ejemplo, adultos o uso pediátrico, tal como indica el inserto.'}),
@@ -788,6 +789,7 @@ function parseBulk(text, defaultCat) {
           if (x && !v[k]) v[k] = x;
         });
         if (v.receta) { const rc = parseReceta(v.receta); if (rc) v.receta = rc; else delete v.receta; }
+        if (v.especialidad) { const ae = parseReceta(v.especialidad); if (ae) v.especialidad = ae; else delete v.especialidad; }
         if (v.nivel) { const nv = { baja: 'Baja', media: 'Media', alta: 'Alta', 'muy alta': 'Muy alta' }[normHeader(v.nivel)]; if (nv) v.nivel = nv; else delete v.nivel; }
       }
       if (Object.keys(v).length) cat = mapCat;
@@ -937,19 +939,24 @@ function validateMagentoExport(ex) {
   return { ok: errors.length === 0, errors };
 }
 
+/* Quién puede recomendarse como complemento. Fuera de medicamentos cualquier producto. Un medicamento solo si declaró
+   que no requiere receta y que no es de alta especialidad; sin declarar cuenta como no elegible. */
+const complementEligible = (cat, v) => cat !== 'med' || (!!v && v.receta === 'no' && v.especialidad === 'no');
+
 /* ---------- Productos relacionados, alternativas e insumos compatibles ----------
  * Solo con productos del mismo lote y con reglas fijas:
  * - Alternativas (upsell_skus): medicamento con el mismo principio activo, concentración, forma y presentación, y la misma
  *   condición de receta, de otra marca. Una concentración o presentación distinta nunca es alternativa.
  * - Relacionados (related_skus): misma categoría y la misma marca, o el mismo laboratorio o fabricante, que no sean alternativas.
- * - Compatibles (crosssell_skus): los SKU que la persona capturó en «compat». Nunca se deducen. */
+ * - Compatibles (crosssell_skus): los SKU que la persona capturó en «compat». Nunca se deducen, y solo los productos elegibles
+ *   como complemento (ver complementEligible) pueden aparecer. */
 const REL_MAX = 4;
 const relKey = x => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const relSet = x => relKey(x).split(' ').filter(Boolean).sort().join(' ');
 function relations(entries) {
   const list = entries.filter(e => e && e.sku).map(e => {
     const v = e.v || {};
-    return { sku: e.sku, cat: e.cat, marca: relKey(v.marca), org: relKey(v.laboratorio || v.fabricante), compat: String(v.compat || ''),
+    return { sku: e.sku, cat: e.cat, elig: complementEligible(e.cat, v), marca: relKey(v.marca), org: relKey(v.laboratorio || v.fabricante), compat: String(v.compat || ''),
       alt: e.cat === 'med' && v.principio && v.concentracion && v.forma && v.contenido && v.receta
         ? [relSet(v.principio), relKey(join(' / ', v.concentracion, v.volumen)), relKey(v.forma), relKey(v.contenido), v.receta].join('|') : '' };
   });
@@ -962,7 +969,7 @@ function relations(entries) {
     const related = others.filter(o => o.cat === e.cat && !used.has(o.sku.toLowerCase()) && ((e.marca && o.marca === e.marca) || (e.org && o.org === e.org)))
       .sort((a, b) => (b.marca === e.marca) - (a.marca === e.marca));
     const cross = [...new Set(e.compat.split(/[\s,;|]+/).filter(Boolean).map(x => x.toLowerCase()))]
-      .filter(k => k !== e.sku.toLowerCase() && bySku.has(k)).map(k => bySku.get(k));
+      .filter(k => k !== e.sku.toLowerCase() && bySku.has(k) && bySku.get(k).elig).map(k => bySku.get(k));
     const by = (a, b) => a.sku.localeCompare(b.sku);
     out.set(e.sku.toLowerCase(), {
       upsell: upsell.sort(by).slice(0, REL_MAX).map(o => o.sku),
@@ -1010,8 +1017,12 @@ function magentoBatch(items, keep, metaCfg, opts) {
     for (const [key, row] of bySku) {
       const r = map.get(key);
       if (!r) continue;
+      /* Complementos confirmados en el catálogo interno: solo si el SKU va en este archivo o ya se exportó antes. */
+      const extra = ((opts.catalogCross && opts.catalogCross.get(key)) || []).filter(c => bySku.has(c.toLowerCase()) || (opts.knownSkus && opts.knownSkus.has(c.toLowerCase())));
+      const cross = [...new Set([...r.crosssell, ...extra])];
+      const vals = { upsell: r.upsell, related: r.related, crosssell: cross };
       [['upsell_skus', 'upsell'], ['related_skus', 'related'], ['crosssell_skus', 'crosssell']].forEach(([col, k]) => {
-        if (r[k].length) { row[MAG_IDX[col]] = sanitizeMagentoCell(r[k].join(','), col); rel[k]++; }
+        if (vals[k].length) { row[MAG_IDX[col]] = sanitizeMagentoCell(vals[k].join(','), col); rel[k]++; }
       });
     }
   }
@@ -1343,6 +1354,7 @@ const api = {
   buildMg,
   buildFaq,
   relations,
+  complementEligible,
   buildTitle,
   cap,
   capNouns,

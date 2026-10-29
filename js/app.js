@@ -29,6 +29,7 @@ const {
   templateRows,
   toSheet
 } = window.Fichas;
+const Catalog = window.FichasCatalog;
 const Anomalies = window.FichasAnomalies || { provenanceFor: () => ({}), detectBatch: () => [], summarize: () => ({ total:0,error:0,warning:0,info:0,byType:{} }), event: () => ({}) };
 const Normalization = window.FichasNormalization || {};
 const Canonical = window.FichasCanonical || { canonicalize: () => ({ schema: 'fichas.canonical.v1', version: '1.0', identity: {}, fields: {}, derived: {}, quality: {}, provenance: {}, anomalyTypes: [] }) };
@@ -114,14 +115,19 @@ function persist(k, v) {
 async function hydratePersistentState(){
   const lot=await idbGet('fichas.lote.v1');
   if(Array.isArray(lot) && lot.length && (!Array.isArray(state.lote) || !state.lote.length)){ state.lote=lot; persist('fichas.lote.v1',lot); }
+  const cat=await idbGet('fichas.catalog.v1');
+  if(cat && Array.isArray(cat.entries) && cat.entries.length && !state.catalog.entries.length){ state.catalog=Catalog.normalize(cat); persist('fichas.catalog.v1',state.catalog); }
   const audit=await idbGet('fichas.audit.v1');
   if(Array.isArray(audit) && audit.length && (!Array.isArray(state.audit) || !state.audit.length)){ state.audit=audit; persist('fichas.audit.v1',audit); }
+  catalogSync(state.lote.filter(x => x.sku));
+  renderCatalog();
   renderLote();
   renderPersistenceStatus();
 }
 const state = {
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
+  catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
   keepText: store.get('fichas.keep.v1', 'GNC, OMRON, GSK'),
   chgOpen: false, out: null,
   aiFlags: {}, aiSuggest: [], asst: [], aiModel: store.get('fichas.aimodel.v1', ''), aiAsstModel: store.get('fichas.aiasstmodel.v1', ''), aiLimit: store.get('fichas.ailimit.v1', 1000), aiVisionModel: store.get('fichas.aivisionmodel.v1', ''), photos: [], imgResult: null,
@@ -486,7 +492,7 @@ function renderPersistenceStatus(){
   }
 }
 async function exportLoteBackup(){
-  const payload={schema:'fichas.lote-backup.v1',createdAt:new Date().toISOString(),lote:state.lote,audit:state.audit};
+  const payload={schema:'fichas.lote-backup.v1',createdAt:new Date().toISOString(),lote:state.lote,audit:state.audit,catalog:state.catalog};
   /* Fase 11: el conocimiento aprendido viaja en el mismo respaldo (entidades, alias, relaciones, evidencia, correcciones, conflictos y versión de la base). */
   if (Knowledge) { try { const kb = await Knowledge.exportBackup(); if (kb && kb.counts && kb.counts.entities) payload.knowledge = kb; } catch (e) { if (window.console) console.error(e); } }
   return saveFile(`respaldo-lote-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(payload,null,2),'application/json;charset=utf-8');
@@ -508,6 +514,8 @@ function importLoteBackup(file) {
       state.audit = Array.isArray(p.audit) ? p.audit : state.audit;
       if (state._editingId && !state.lote.some(x => x.id === state._editingId)) { state._editingId = null; state._editingProvenance = null; syncAddButton(); }
       persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
+      if (p.catalog) { state.catalog = Catalog.normalize(p.catalog); saveCatalog(); }
+      catalogSync(state.lote.filter(x => x.sku));
       let kMsg = '', kWarn = false;
       if (Knowledge) {
         try {
@@ -855,7 +863,7 @@ function navTo(name) {
   if (name === 'config') { openSettings(); return; }
   if (name === 'validacion') setTab('eval');
   if (name === 'contenido' && state.tab === 'eval') setTab('titulo');
-  const sel = { captura: '#h-prod', validacion: '#h-out', contenido: '#h-out', lote: '#lote', exportacion: '#exportar', conocimiento: '#conocimiento' }[name];
+  const sel = { captura: '#h-prod', validacion: '#h-out', contenido: '#h-out', lote: '#lote', exportacion: '#exportar', conocimiento: '#conocimiento', catalogo: '#catalogo' }[name];
   if (name === 'conocimiento') renderKnowledge();
   scrollToEl(document.querySelector(sel));
 }
@@ -1052,6 +1060,7 @@ $('#add').addEventListener('click', () => {
   const fixMsg = autoFix.length ? ` Corrección segura: ${autoFix.map(c => `«${c.original}» → «${c.corrected}»`).join(', ')} (reversible en Conocimiento).` : '';
   if (saved) notify((wasEditing ? 'Cambios guardados en el lote.' : 'Producto guardado en el lote.') + fixMsg, 'ok');
   else notify('El producto está en el lote, pero el navegador no pudo guardarlo. Descarga un respaldo para no perderlo.', 'error');
+  queueLinking(catalogSync([newItem]));
 });
 function syncAddButton() { const b = $('#add'); if (b) b.textContent = state._editingId ? 'Guardar cambios' : 'Agregar al lote'; }
 $('#clear').addEventListener('click', async () => {
@@ -1281,6 +1290,7 @@ function bulkAdd() {
     if (idx >= 0) { item.id = state.lote[idx].id; state.lote[idx] = item; state.audit.push(Anomalies.event('producto_actualizado_masivo', item)); updated++; } else { state.lote.push(item); state.audit.push(Anomalies.event('producto_agregado_masivo', item)); added++; }
   });
   state.audit = state.audit.slice(-500); persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit); saveQualitySnapshot('carga_masiva');
+  const bulkSynced = catalogSync(learned.filter(x => x.sku));
   if (Knowledge) (async () => { for (const x of bulkFixes) await Knowledge.commitCorrections(x.fixes, x.item); await learn(learned, { source: 'csv' }); })().catch(err => { if (window.console) console.error(err); });
   b.rows = b.rows.filter(r => !(r.cat && !r.error));
   const left = b.rows.length;
@@ -1288,6 +1298,7 @@ function bulkAdd() {
   state.loteFilter = 'todos'; state.loteShown = 50;
   renderBulk(); renderLote();
   toast(`${added} agregados${updated ? `, ${updated} actualizados por SKU` : ''}${left ? `. ${left} filas siguen pendientes de revisión.` : ''}`);
+  renderCatalog(); if (bulkSynced.length) setTimeout(() => toast('Los productos nuevos ya están en el catálogo. Revisa sus complementos en Catálogo, con «Revisar pendientes».'), 1500);
 }
 $('#bulk-pick').addEventListener('click', () => $('#bulk-file').click());
 $('#bulk-file').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) loadBulk(f); e.target.value = ''; });
@@ -1433,7 +1444,7 @@ function panelMeta(r) {
     + metaBlock('Alt de la imagen principal', m.alt, 'alt', true, 'Va en base_image_label.');
 }
 
-function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false }; }
+function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog) }; }
 function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta, expOpts()); }
 function renderExport(assessed) {
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
@@ -1537,6 +1548,7 @@ $('#exp-dl').addEventListener('click', e => withBusy(e.currentTarget, async () =
   const csv = batchCsv(ex);
   try { saveQualitySnapshot('exportacion_csv'); } catch (err) { if (window.console) console.error(err); }
   await saveFile('Carga_SKU_Magento.csv', state.exp.enc === 'utf8' ? csv : encodeCp1252(csv).bytes);
+  if (Catalog.markExported(state.catalog, ex.rows.map(r => r[0]), catalogNow())) { saveCatalog(); renderCatalog(); }
 }, 'descargar el CSV para Magento'));
 
 document.addEventListener('change', e => { if (e.target && e.target.id === 'bulk-apply-sugg' && state.bulk) state.bulk.applySugg = e.target.checked; });
@@ -1828,17 +1840,17 @@ function callsState() {
   return (c && c.month === month) ? c : { month, extract: 0, vision: 0, asst: 0, local: 0 };
 }
 function renderCalls() {
-  const c = callsState(), used = (c.extract || 0) + (c.vision || 0) + (c.asst || 0), lim = Number(state.aiLimit) || 0, pct = lim ? Math.round(used * 100 / lim) : 0;
+  const c = callsState(), used = (c.extract || 0) + (c.vision || 0) + (c.asst || 0) + (c.comp || 0), lim = Number(state.aiLimit) || 0, pct = lim ? Math.round(used * 100 / lim) : 0;
   const el = $('#ai-calls');
   el.className = 'note ' + (lim && pct >= 80 ? 'note--warn' : 'note--info');
   el.innerHTML = `<p><strong>${used}</strong> llamadas a Cohere este mes desde este navegador (extracción ${c.extract || 0}, fotos ${c.vision || 0}, asistente ${c.asst || 0}).${lim ? ` Llevas <strong>${pct}%</strong> de tu límite de ${lim}.` : ''}</p><p>${c.local || 0} respuestas se resolvieron sin IA.</p>`;
   $('#asst-count').textContent = `IA este mes: ${used}${lim ? ' de ' + lim : ''}`;
 }
 function bumpCalls(kind) {
-  const c = callsState(), before = (c.extract || 0) + (c.vision || 0) + (c.asst || 0), lim = Number(state.aiLimit) || 0;
+  const c = callsState(), before = (c.extract || 0) + (c.vision || 0) + (c.asst || 0) + (c.comp || 0), lim = Number(state.aiLimit) || 0;
   c[kind] = (c[kind] || 0) + 1;
   store.set(CALLS_KEY, c);
-  const after = (c.extract || 0) + (c.vision || 0) + (c.asst || 0);
+  const after = (c.extract || 0) + (c.vision || 0) + (c.asst || 0) + (c.comp || 0);
   if (lim && before < lim * 0.8 && after >= lim * 0.8) toast('Llevas más del 80% de tu límite mensual de llamadas a Cohere.');
   renderCalls();
 }
@@ -2412,6 +2424,165 @@ window.__fichasKnowledge = () => ({ engine: Knowledge, issues: kIssues, rev: () 
 
 /* Contadores de caché (solo lectura): permiten comprobar que filtrar o expandir no recalcula el lote. */
 window.__fichasStats = () => ({ assess: { ...assessStats }, current: { ...currentMemo.stats } });
+
+/* ---------- Catálogo interno y complementos ----------
+ * Los productos guardados quedan en un catálogo aparte del lote (vaciar el lote no lo borra). Un complemento sin producto
+ * principal queda «esperando» (estado interno, no se exporta). La IA solo propone; cada vínculo lo confirma una persona. */
+const saveCatalog = () => persist('fichas.catalog.v1', state.catalog);
+const catalogNow = () => new Date().toISOString();
+const catalogTitle = it => { try { return computeFor(it.cat, it.v, keepSet(), state.meta).title.title; } catch (e) { return (it.v && it.v.marca) || it.sku; } };
+function catalogSync(items) {
+  const touched = [];
+  items.forEach(it => {
+    const r = Catalog.upsert(state.catalog, it, catalogTitle(it), catalogNow());
+    if (!r.entry) return;
+    touched.push(r.entry.sku);
+    if (r.removed.length) {
+      state.audit.push(Anomalies.event('complemento_desvinculado', it, { sku: r.entry.sku, motivo: 'dejó de ser elegible', parents: r.removed.map(l => l.p) }));
+      state.audit = state.audit.slice(-500); persist('fichas.audit.v1', state.audit);
+      setTimeout(() => toast(`${r.entry.sku} ya no puede ser complemento (receta o alta especialidad). Se quitaron sus vínculos.`, 'warn'), 0);
+    }
+  });
+  if (touched.length) saveCatalog();
+  renderCatalog();
+  return touched;
+}
+const linkQueue = []; let linking = false;
+function queueLinking(skus, force) {
+  (skus || []).forEach(s => { if (!linkQueue.some(q => q.sku === s)) linkQueue.push({ sku: s, force: !!force }); });
+  runLinkQueue();
+}
+async function runLinkQueue() {
+  if (linking) return;
+  linking = true;
+  try { while (linkQueue.length) { const q = linkQueue.shift(); try { await offerLinks(q.sku, q.force); } catch (err) { if (window.console) console.error(err); } } }
+  finally { linking = false; renderCatalog(); }
+}
+function linkDialog(o) {
+  return new Promise(resolve => {
+    const prev = document.activeElement, id = 'ld-' + Math.random().toString(36).slice(2, 7);
+    const scrim = document.createElement('div'); scrim.className = 'cdlg-scrim'; scrim.id = 'link-dlg';
+    const items = o.options.map((x, i) => `<li><label class="check"><input type="checkbox" data-sku="${esc(x.sku)}" ${x.checked ? 'checked' : ''}><span><b>${esc(x.label)}</b> <small>${esc(x.sku)}</small>${x.motivo ? `<em class="ld-why">${esc(x.motivo)}</em>` : ''}</span></label></li>`).join('');
+    scrim.innerHTML = `<div class="cdlg cdlg--wide" role="dialog" aria-modal="true" aria-labelledby="${id}-t"><h3 id="${id}-t">${esc(o.title)}</h3><p>${esc(o.intro)}</p>${o.options.length ? `<ul class="ld-list">${items}</ul>` : ''}<div class="actions">${o.buttons.map(b => `<button type="button" class="btn ${b.primary ? 'btn--primary' : ''}" data-ld="${b.id}">${esc(b.label)}</button>`).join('')}</div></div>`;
+    document.body.appendChild(scrim);
+    const done = action => { const skus = [...scrim.querySelectorAll('input[data-sku]:checked')].map(i => i.dataset.sku); document.removeEventListener('keydown', onKey, true); scrim.remove(); if (prev && prev.focus) { try { prev.focus(); } catch (_) {} } resolve({ action, skus }); };
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done('later'); } }
+    document.addEventListener('keydown', onKey, true);
+    scrim.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-ld]'); if (b) done(b.dataset.ld); });
+    const first = scrim.querySelector('[data-ld="link"]') || scrim.querySelector('button'); if (first) first.focus();
+  });
+}
+/* La IA propone sobre una lista cerrada (máx. 150 candidatos, los más recientes). Sin llave, o si falla, la persona elige a mano. */
+async function proposeLinks(mode, subject, candidates) {
+  const key = getKey();
+  if (!key) return { ai: false, matches: new Map() };
+  const limited = candidates.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 150);
+  try {
+    const res = await AI.aiComplements({ apiKey: key, model: aiModel(), mode, subject: { name: subject.nombre, cat: subject.cat }, candidates: limited.map((c, i) => ({ id: i + 1, name: c.nombre, cat: c.cat })), onCall: () => bumpCalls('comp') });
+    return { ai: true, matches: new Map(res.map(r => [limited[r.id - 1].sku, r.motivo])) };
+  } catch (err) {
+    toast('La IA no pudo proponer complementos: ' + UX.friendlyError(err, 'proponer complementos').message + ' Elige a mano.', 'warn');
+    return { ai: false, matches: new Map() };
+  }
+}
+const linkOptions = (cands, matches) => {
+  const hit = cands.filter(c => matches.has(c.sku)), rest = cands.filter(c => !matches.has(c.sku)).sort((a, b) => a.nombre.localeCompare(b.nombre)).slice(0, 25);
+  return [...hit.map(c => ({ sku: c.sku, label: c.nombre, motivo: 'Propuesto por IA: ' + (matches.get(c.sku) || 'sin motivo'), checked: true })), ...rest.map(c => ({ sku: c.sku, label: c.nombre, motivo: '', checked: false }))];
+};
+function applyLinks(parentSku, childSku, by, why) {
+  const r = Catalog.link(state.catalog, parentSku, childSku, { by, at: catalogNow(), why });
+  if (r.ok && !r.already) {
+    state.audit.push(Anomalies.event('complemento_vinculado', null, { parent: parentSku, child: childSku, por: by, motivo: why || '' }));
+    state.audit = state.audit.slice(-500); persist('fichas.audit.v1', state.audit);
+  }
+  return r;
+}
+/* Un complemento recién guardado: ¿de qué productos principales podría ser complemento? */
+async function offerParents(e) {
+  const cands = Catalog.candidateParents(state.catalog, e);
+  if (!cands.length) {
+    Catalog.setComp(state.catalog, e.sku, 'esperando'); saveCatalog(); renderCatalog();
+    toast(`«${e.nombre}» queda esperando un producto principal. Cuando guardes uno, te preguntaré si es su complemento.`);
+    return;
+  }
+  const { ai, matches } = await proposeLinks('child', e, cands);
+  if (ai && !matches.size) {
+    Catalog.setComp(state.catalog, e.sku, 'esperando'); saveCatalog(); renderCatalog();
+    toast(`La IA no encontró un producto principal para «${e.nombre}». Queda esperando.`);
+    return;
+  }
+  const r = await linkDialog({
+    title: ai ? 'Este producto puede ser complemento' : 'Asignar como complemento',
+    intro: ai ? `«${e.nombre}» podría ser complemento de estos productos. Marca los que sí.` : `«${e.nombre}»: elige de qué productos principales es complemento. La IA no está disponible, así que la lista es manual.`,
+    options: linkOptions(cands, matches),
+    buttons: [{ id: 'link', label: 'Vincular seleccionados', primary: true }, { id: 'wait', label: 'Dejar en espera' }, { id: 'indep', label: 'No es complemento' }, { id: 'later', label: 'Ahora no' }]
+  });
+  if (r.action === 'link' && r.skus.length) {
+    r.skus.forEach(p => applyLinks(p, e.sku, matches.has(p) ? 'ia' : 'manual', matches.get(p)));
+    saveCatalog(); toast(`«${e.nombre}» vinculado como complemento de ${r.skus.length} producto(s).`);
+  } else if (r.action === 'link' || r.action === 'wait') { Catalog.setComp(state.catalog, e.sku, 'esperando'); saveCatalog(); toast('Queda esperando un producto principal.'); }
+  else if (r.action === 'indep') { Catalog.setComp(state.catalog, e.sku, 'independiente'); saveCatalog(); toast('Marcado como producto que no es complemento.'); }
+  renderCatalog();
+}
+/* Un producto principal recién guardado: ¿qué complementos podrían acompañarlo? */
+async function offerChildren(p, force) {
+  const waiting = Catalog.waitingChildren(state.catalog, p), others = Catalog.otherChildren(state.catalog, p);
+  const cands = [...waiting, ...others];
+  if (!cands.length || (!waiting.length && !force)) return;
+  const { ai, matches } = await proposeLinks('parent', p, cands);
+  if (ai && !matches.size) { if (force) toast('La IA no encontró complementos para este producto.'); return; }
+  if (!ai && !waiting.length && !force) return;
+  const options = linkOptions(waiting.concat(others), matches);
+  const r = await linkDialog({
+    title: ai ? 'Hay complementos para este producto' : 'Asignar complementos',
+    intro: ai ? `«${p.nombre}» podría tener estos complementos del catálogo. Marca los que sí.` : `Hay ${waiting.length} producto(s) esperando un producto principal. Elige cuáles son complemento de «${p.nombre}».`,
+    options,
+    buttons: [{ id: 'link', label: 'Vincular seleccionados', primary: true }, { id: 'later', label: 'Ahora no' }]
+  });
+  if (r.action === 'link' && r.skus.length) {
+    r.skus.forEach(c => applyLinks(p.sku, c, matches.has(c) ? 'ia' : 'manual', matches.get(c)));
+    saveCatalog(); toast(`${r.skus.length} complemento(s) vinculado(s) a «${p.nombre}».`);
+  }
+  renderCatalog();
+}
+async function offerLinks(sku, force) {
+  let e = Catalog.find(state.catalog, sku); if (!e) return;
+  if (e.elegible && (force || Catalog.status(state.catalog, e) === 'sin_evaluar')) await offerParents(e);
+  e = Catalog.find(state.catalog, sku);
+  if (e && Catalog.isParent(e)) await offerChildren(e, force);
+}
+function renderCatalog() {
+  const box = $('#cat-body'); if (!box) return;
+  const c = state.catalog, L = Catalog.STATUS_LABEL;
+  if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en el lote se agregan aquí solos. Vaciar el lote no los borra.</p></div>'; return; }
+  const waiting = c.entries.filter(e => Catalog.status(c, e) === 'esperando').length;
+  const pend = c.entries.filter(e => e.elegible && Catalog.status(c, e) === 'sin_evaluar').length;
+  const rows = c.entries.slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))).map(e => {
+    const st = Catalog.status(c, e), kids = Catalog.childrenOf(c, e.sku), pars = Catalog.parentsOf(c, e.sku);
+    const role = !e.elegible ? 'Principal' : e.padre ? 'Complemento y principal' : 'Complemento posible';
+    const chip = (p, ch, name) => `<span class="tag tag--info">${esc(name)} <button type="button" class="linkbtn" data-cat-unlink="${esc(p)}|${esc(ch)}" aria-label="Quitar vínculo con ${esc(name)}">×</button></span>`;
+    const rel = [kids.length ? `<div><b>Complementos:</b> ${kids.map(k => chip(e.sku, k.sku, k.nombre)).join(' ')}</div>` : '', pars.length ? `<div><b>Complemento de:</b> ${pars.map(k => chip(k.sku, e.sku, k.nombre)).join(' ')}</div>` : ''].join('');
+    return `<tr data-sku="${esc(e.sku)}"><td data-label="SKU">${esc(e.sku)}</td><td class="t" data-label="Producto">${esc(e.nombre)}</td><td data-label="Rol">${esc(role)}</td><td data-label="Estado"><span class="status status--${st === 'esperando' ? 'warn' : st === 'vinculado' ? 'ok' : 'info'}">${esc(L[st])}</span></td><td data-label="Vínculos">${rel}</td>`
+      + `<td class="ops"><button type="button" class="btn btn--quiet" data-cat-find="${esc(e.sku)}">Buscar</button>${e.elegible ? `<button type="button" class="btn btn--quiet" data-cat-parent="${esc(e.sku)}" aria-pressed="${!!e.padre}">${e.padre ? 'Quitar de principales' : 'Marcar como principal'}</button>` : ''}<button type="button" class="btn btn--quiet" data-cat-del="${esc(e.sku)}">Quitar</button></td></tr>`;
+  }).join('');
+  box.innerHTML = `<p class="hint"><strong>${c.entries.length}</strong> producto(s) · <strong>${c.links.length}</strong> vínculo(s) · <strong>${waiting}</strong> esperando producto principal${pend ? ` · ${pend} sin evaluar` : ''}.</p>`
+    + `<div class="actions"><button type="button" class="btn" id="cat-review"${pend || waiting ? '' : ' disabled'}>Revisar pendientes</button></div>`
+    + `<div class="lote-wrap"><table class="lote-table"><thead><tr><th>SKU</th><th>Producto</th><th>Rol</th><th>Estado</th><th>Vínculos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+document.addEventListener('click', async e => {
+  const t = e.target.closest && e.target.closest('[data-cat-find],[data-cat-parent],[data-cat-del],[data-cat-unlink],#cat-review'); if (!t) return;
+  const c = state.catalog;
+  if (t.id === 'cat-review') { queueLinking(c.entries.filter(x => (x.elegible && Catalog.status(c, x) === 'sin_evaluar') || (Catalog.isParent(x) && Catalog.waitingChildren(c, x).length)).map(x => x.sku)); return; }
+  if (t.dataset.catFind) { queueLinking([t.dataset.catFind], true); return; }
+  if (t.dataset.catParent) { const x = Catalog.find(c, t.dataset.catParent); if (x) { Catalog.setParent(c, x.sku, !x.padre); saveCatalog(); renderCatalog(); } return; }
+  if (t.dataset.catUnlink) { const [p, ch] = t.dataset.catUnlink.split('|'); if (Catalog.unlink(c, p, ch)) { state.audit.push(Anomalies.event('complemento_desvinculado', null, { parent: p, child: ch, por: 'manual' })); persist('fichas.audit.v1', state.audit); saveCatalog(); renderCatalog(); toast('Vínculo quitado.'); } return; }
+  if (t.dataset.catDel) {
+    const x = Catalog.find(c, t.dataset.catDel); if (!x) return;
+    const ok = await confirmDialog({ title: '¿Quitar del catálogo?', message: `Se quitará «${x.nombre}» del catálogo interno y sus vínculos. El producto del lote no se borra.`, confirmLabel: 'Quitar', danger: true });
+    if (ok) { Catalog.remove(c, x.sku); saveCatalog(); renderCatalog(); toast('Quitado del catálogo.'); }
+  }
+});
+
 /* Inicio */
 // Todos los botones de esta SPA son acciones explícitas; evita comportamientos de submit
 // inesperados al abrir el HTML en navegadores móviles o WebViews.
@@ -2419,5 +2590,5 @@ document.querySelectorAll('button:not([type])').forEach(b => { b.type = 'button'
 renderConnectorCategories(); renderConnectorSource();
 $('#exp-ia').checked = !!state.exp.incIA; $('#exp-rel').checked = state.exp.incRel !== false; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL;
 renderMetaCfg();
-resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
+resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); catalogSync(state.lote.filter(x => x.sku)); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
 })();

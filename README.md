@@ -152,6 +152,19 @@ Con la opción «Llenar productos relacionados, alternativas y compatibles» (Ex
 - **Compatibles** (`crosssell_skus`): los SKU que captures en «Insumos compatibles (SKU)» de dispositivos médicos y accesorios, separados por coma. Nunca se deducen.
 - Máximo 4 alternativas y 4 relacionados por producto. En el lote, el detalle de cada producto muestra lo que se exportaría.
 
+## Catálogo interno y complementos
+
+Los productos con SKU que guardas quedan también en un **catálogo interno**, aparte del lote: vaciar el lote no lo borra. Se ve en la sección «Catálogo» (botón del riel). Se guarda en este navegador y viaja dentro del respaldo del lote.
+
+- **Quién puede ser complemento:** cualquier producto que no sea medicamento (suplementos, bebidas, dermocosméticos, cuidado personal, accesorios) y los medicamentos que declaras sin receta **y** sin alta especialidad (campo nuevo «¿Es de alta especialidad?»). Un medicamento con receta, de alta especialidad o con alguno de los dos datos sin declarar **nunca** se vincula como complemento, ni a mano ni por IA. Si un producto vinculado pasa a requerir receta, pierde sus vínculos.
+- **Quién es producto principal:** los medicamentos que no pueden ser complemento, y cualquier producto que marques como principal en el catálogo.
+- **Al guardar un complemento:** la IA (si agregaste tu llave de Cohere) propone de qué productos principales del catálogo podría serlo y se abre una ventana con las propuestas marcadas. Tú confirmas, quitas o dejas en espera. Sin llave, la ventana trae la lista para elegir a mano.
+- **Sin producto principal todavía:** el producto queda en estado interno «Esperando producto principal». No se exporta ni se ve en la web.
+- **Al guardar después un producto principal:** si hay complementos en espera, se abre otra ventana para asignarlos.
+- **«No es complemento»** saca el producto de la lista de espera. «Buscar» y «Revisar pendientes» en el catálogo repiten la búsqueda cuando quieras (por ejemplo, tras una carga masiva, que no abre ventanas).
+- **La IA solo propone** sobre una lista cerrada de productos del catálogo (máximo 150, los más recientes) y se le envían solo nombres y categorías. Nada se vincula sin tu confirmación; cada vínculo queda en la auditoría con quién lo propuso (IA o manual) y cuándo. Las llamadas cuentan en el límite mensual.
+- **Exportación:** los complementos confirmados salen en `crosssell_skus` del producto principal, sumados a los de «Insumos compatibles». Solo se escriben SKU que van en el mismo archivo o que ya exportaste antes desde esta herramienta.
+
 ## Datos crudos (extracción por reglas)
 
 Toma un SKU sucio y llena el formulario, o las filas de una carga masiva con una columna de datos crudos. Solo copia lo que aparece en el texto:
