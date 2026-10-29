@@ -121,7 +121,11 @@ const CATS = {
       F('laboratorio','Laboratorio',{req:1,ph:'Eli Lilly'}),
       F('via','Vía de administración',{req:1,g:'d',ph:'Subcutánea'}),
       F('receta','¿Requiere receta médica?',{req:1,g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí requiere receta'],['no','No requiere receta']],hint:'Dato regulatorio obligatorio. Sin él no se genera el HTML de Magento.'}),
-      F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'})
+      F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'}),
+      F('indicaciones','Indicaciones',{g:'d',type:'area',sentence:1,hint:'Cópialas tal cual del inserto o del registro sanitario. Aparece en una sección aparte y en las preguntas frecuentes.'}),
+      F('posologia','Posología o cómo se usa',{g:'d',type:'area',sentence:1,hint:'Dosis y frecuencia tal como están en el inserto. Aparece en una sección aparte.'}),
+      F('poblacion','Población a la que va dirigido',{g:'d',type:'area',sentence:1,hint:'Por ejemplo, adultos o uso pediátrico, tal como indica el inserto.'}),
+      F('contraindicaciones','Contraindicaciones y advertencias',{g:'d',type:'area',sentence:1,hint:'Tal como están en el inserto. Aparece en una sección aparte.'})
     ],
     title: [
       seg('Marca + concentración / volumen', ['marca','concentracion','volumen'], v => join(' ', v.marca, join(' / ', v.concentracion, v.volumen))),
@@ -159,6 +163,8 @@ const CATS = {
         ['Nombre Comercial', v.marca], ['Sustancia Activa', v.principio], ['Concentración', conc],
         ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio]
       ], [
+        ...[['Indicaciones:', v.indicaciones], ['Cómo se usa:', v.posologia], ['Población a la que va dirigido:', v.poblacion], ['Contraindicaciones y advertencias:', v.contraindicaciones]]
+          .filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`),
         `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.medConservacion}</p>`,
         `<h2>Aviso legal y de seguridad:</h2>\n<ul>\n${LEGEND.medAviso.map(x => `  <li>${x}</li>`).join('\n')}\n</ul>`
       ]);
@@ -516,6 +522,62 @@ function buildMC(c, v) {
 const recetaMeta = (c, v) => c.id === 'med' ? (v.receta === 'si' ? 'Sí' : v.receta === 'no' ? 'No' : '') : 'No aplica para esta categoría';
 const mgFull = g => '```html\n' + g.html + '\n```\n\n- Categoría detectada: ' + g.meta.categoria + '\n- Requiere receta médica: ' + g.meta.receta;
 
+/* Preguntas frecuentes. Cada pregunta existe solo si el dato que la responde fue capturado; las respuestas son
+   plantillas fijas o copia literal de lo capturado. No se inventa texto y no se emite JSON-LD. */
+const faqName = (c, v) => c.id === 'med' ? v.marca : join(' ', v.marca, v.producto || v.modelo || v.componente || v.tipo);
+const FAQ_MIN = 2;
+const faqPres = v => (v.forma || v.contenido) && `Se presenta ${join(', ', v.forma && 'en ' + lc(v.forma), v.contenido && lc(v.contenido))}.`;
+const FAQ_RULES = {
+  med: (v, n) => [
+    v.principio && [`¿Qué contiene ${n}?`, `${n} contiene ${join(' ', v.principio, join(' / ', v.concentracion, v.volumen))}.`],
+    v.indicaciones && [`¿Para qué se usa ${n}?`, v.indicaciones],
+    v.posologia && [`¿Cómo se usa ${n}?`, v.posologia],
+    v.via && [`¿Cómo se administra ${n}?`, `Se administra por vía ${lc(v.via)}.`],
+    v.poblacion && [`¿A quién va dirigido ${n}?`, v.poblacion],
+    v.contraindicaciones && [`¿Quién no debe usar ${n}?`, v.contraindicaciones],
+    v.receta === 'si' && [`¿Es necesaria la receta médica para ${n}?`, `Sí. ${LEGEND.medReceta}`],
+    v.receta === 'no' && [`¿Es necesaria la receta médica para ${n}?`, 'No requiere receta médica. Consulte a su médico y evite automedicarse.'],
+    faqPres(v) && [`¿En qué presentación se vende ${n}?`, faqPres(v)],
+    v.laboratorio && [`¿Quién fabrica ${n}?`, `Es desarrollado por el laboratorio ${v.laboratorio}.`],
+    [`¿Cómo se conserva ${n}?`, LEGEND.medConservacion]
+  ],
+  cos: (v, n) => [
+    (v.ingredientes || v.atributo) && [`¿Qué contiene ${n}?`, `Contiene ${lc(v.ingredientes || v.atributo)}.`],
+    v.inci && [`¿Cuál es la lista completa de ingredientes de ${n}?`, v.inci],
+    v.piel && [`¿Para qué tipo de piel o necesidad es ${n}?`, `Está formulado para ${lc(v.piel)}.`],
+    v.modo && [`¿Cómo se usa ${n}?`, v.modo],
+    v.precauciones && [`¿Qué precauciones tiene ${n}?`, v.precauciones],
+    (v.fps || v.nivel) && [`¿Qué protección solar ofrece ${n}?`, join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`)],
+    v.contenido && [`¿Qué contenido tiene ${n}?`, `Se presenta en ${lc(v.contenido)}.`],
+    v.fabricante && [`¿Quién fabrica ${n}?`, `Es desarrollado por ${v.fabricante}.`]
+  ],
+  sup: (v, n) => [
+    (v.composicion || v.componente) && [`¿Qué contiene ${n}?`, `Contiene ${lc(v.composicion || v.componente)}.`],
+    faqPres(v) && [`¿En qué presentación se vende ${n}?`, faqPres(v)],
+    v.fabricante && [`¿Quién fabrica ${n}?`, `Es elaborado por ${v.fabricante}.`],
+    [`¿${n} es un medicamento?`, LEGEND.supResp],
+    [`¿Cómo se conserva ${n}?`, LEGEND.supConservacion]
+  ],
+  dis: (v, n) => [
+    v.uso && [`¿Para qué se usa ${n}?`, `Está diseñado para el uso previsto de ${lc(v.uso)}.`],
+    v.tecnologia && [`¿Qué tecnología tiene ${n}?`, `Es de tecnología ${lc(v.tecnologia)}.`],
+    v.paquete && [`¿Qué incluye el empaque de ${n}?`, `Incluye ${lc(v.paquete)}.`],
+    v.fabricante && [`¿Quién fabrica ${n}?`, `Es fabricado por ${v.fabricante}.`],
+    [`¿Cómo se debe utilizar ${n}?`, LEGEND.disMc]
+  ]
+};
+const faqGeneric = (v, n) => [
+  v.contenido && [`¿Qué contenido tiene ${n}?`, `Se presenta en ${lc(v.contenido)}.`],
+  v.fabricante && [`¿Quién fabrica ${n}?`, `Es fabricado por ${v.fabricante}.`]
+];
+function buildFaq(c, v) {
+  const n = faqName(c, v);
+  if (!n) return { items: [], html: '' };
+  const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a]) => [q, sentence(a)]);
+  if (items.length < FAQ_MIN) return { items: [], html: '' };
+  return { items, html: '<h2>Preguntas frecuentes:</h2>\n' + items.map(([q, a]) => `<h3>${escT(q)}</h3>\n<p>${escT(a)}</p>`).join('\n') };
+}
+
 function buildMg(c, v) {
   const blocked = [];
   if (c.id === 'med' && !v.receta) blocked.push('Indica si el producto requiere receta médica. Es un dato regulatorio obligatorio.');
@@ -523,7 +585,8 @@ function buildMg(c, v) {
   const omitted = c.mgUses.filter(k => !v[k]).map(k => labelOf(c, k));
   const meta = { categoria: c.name, receta: recetaMeta(c, v) };
   if (blocked.length) return { blocked, omitted, html: '', meta };
-  return { blocked: null, omitted, html: c.mg(v), meta };
+  const faq = buildFaq(c, v);
+  return { blocked: null, omitted, html: faq.html ? c.mg(v) + '\n<br />\n' + faq.html : c.mg(v), faq: faq.items, meta };
 }
 
 function computeFor(catId, raw, keep, metaCfg) {
@@ -1215,6 +1278,7 @@ const api = {
   buildMC,
   buildMeta,
   buildMg,
+  buildFaq,
   buildTitle,
   cap,
   capNouns,

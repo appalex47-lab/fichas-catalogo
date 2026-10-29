@@ -124,10 +124,11 @@ test('revisión de lenguaje marca claims prohibidos', () => {
 const cos = { marca: 'La Roche-Posay', producto: 'Hyalu B5', tipo: 'Sérum', atributo: 'Ácido hialurónico', contenido: 'FCO 30ML', fabricante: "L'Oréal", piel: 'Piel sensible' };
 
 test('cosméticos: las secciones nuevas son opcionales y no alteran el texto aprobado', () => {
-  const base = F.computeFor('cos', cos, keep, meta).mg.html;
+  const sinFaq = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const base = sinFaq(F.computeFor('cos', cos, keep, meta).mg.html);
   assert.ok(!/Ingredientes:|Modo de uso:|Precauciones:|Protección solar:/.test(base));
   const conExtras = F.computeFor('cos', { ...cos, inci: 'AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891', modo: 'APLICAR SOBRE LA PIEL LIMPIA. USAR DOS VECES AL DÍA.', precauciones: 'Evitar el contacto con los ojos.', fps: '50+', nivel: 'Muy alta' }, keep, meta).mg.html;
-  assert.ok(conExtras.startsWith(base), 'el párrafo y la lista aprobados quedan igual');
+  assert.ok(sinFaq(conExtras).startsWith(base), 'el párrafo y la lista aprobados quedan igual');
   assert.match(conExtras, /<h2>Ingredientes:<\/h2>\n<p>AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891<\/p>/);
   assert.match(conExtras, /<h2>Modo de uso:<\/h2>\n<p>Aplicar sobre la piel limpia\. Usar dos veces al día\.<\/p>/);
   assert.match(conExtras, /<li><strong>Nivel de protección:<\/strong> Muy alta<\/li>/);
@@ -238,4 +239,40 @@ test('exportación: los datos sugeridos por IA sin confirmar no llegan a Magento
   assert.equal(sin.excluded.ia, 2, 'lo sugerido por IA y lo leído de fotos quedan sin exportar hasta confirmarlo');
   const con = F.magentoBatch(items, keep, meta, { ...F.defExp(), incIA: true });
   assert.equal(con.rows.length, 4);
+});
+
+/* ---------- Bloque de indicaciones y preguntas frecuentes ---------- */
+const medFaq = { marca: 'Mounjaro', concentracion: '2.5 mg', volumen: '0.6 mL', principio: 'Tirzepatida', forma: 'Solución inyectable', contenido: 'Caja con 4 plumas', laboratorio: 'Eli Lilly', via: 'Subcutánea', receta: 'si' };
+
+test('medicamentos: indicaciones, posología, población y contraindicaciones son opcionales y van antes de la conservación', () => {
+  const sinFaq = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const base = F.computeFor('med', medFaq, keep, meta).mg.html;
+  assert.ok(!/Indicaciones:|Cómo se usa:|Contraindicaciones/.test(sinFaq(base)));
+  const html = F.computeFor('med', { ...medFaq, indicaciones: 'Control glucémico en adultos con diabetes tipo 2', posologia: 'Una vez por semana', contraindicaciones: 'No usar en caso de hipersensibilidad' }, keep, meta).mg.html;
+  assert.match(html, /<h2>Indicaciones:<\/h2>\n<p>Control glucémico en adultos con diabetes tipo 2<\/p>/);
+  assert.match(html, /<h2>Cómo se usa:<\/h2>\n<p>Una vez por semana<\/p>/);
+  assert.ok(html.indexOf('Contraindicaciones y advertencias:') < html.indexOf('Condiciones de conservación:'));
+});
+
+test('FAQ: cada pregunta existe solo si el dato que la responde fue capturado', () => {
+  const q = r => (F.computeFor('med', r, keep, meta).mg.faq || []).map(x => x[0]);
+  const base = q(medFaq);
+  assert.ok(base.some(x => /Qué contiene Mounjaro/.test(x)) && base.some(x => /Cómo se conserva/.test(x)));
+  assert.ok(!base.some(x => /Para qué se usa|Cómo se usa|Quién no debe/.test(x)));
+  assert.ok(q({ ...medFaq, indicaciones: 'Control glucémico' }).some(x => /Para qué se usa/.test(x)));
+  assert.ok(!q({ ...medFaq, laboratorio: '' }).some(x => /Quién fabrica/.test(x)));
+});
+
+test('FAQ: texto literal escapado, sin JSON-LD y sin contradecir la receta declarada', () => {
+  const html = F.computeFor('med', { ...medFaq, receta: 'no', posologia: 'Tomar <1> tableta' }, keep, meta).mg.html;
+  assert.match(html, /<h2>Preguntas frecuentes:<\/h2>\n<h3>/);
+  assert.match(html, /<p>Tomar &lt;1&gt; tableta\.<\/p>/);
+  assert.ok(!/ld\+json|FAQPage/.test(html));
+  assert.match(html, /<h3>¿Es necesaria la receta médica para Mounjaro\?<\/h3>\n<p>No requiere receta médica\./);
+});
+
+test('FAQ: sin suficientes datos no se genera y un producto bloqueado no la tiene', () => {
+  assert.equal(F.buildFaq(F.CATS.med, {}).html, '');
+  const r = F.computeFor('med', { ...medFaq, receta: '' }, keep, meta).mg;
+  assert.ok(r.blocked && r.html === '' && !r.faq);
 });
