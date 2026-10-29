@@ -223,7 +223,7 @@ const CATS = {
       else p += (v.presentacion ? ` Se presenta en ${S(v.presentacion)}.` : '') + ' Debe utilizarse conforme al instructivo del fabricante.';
       return assemble(p, 'Especificaciones técnicas:', [
         ['Marca', v.marca], ['Modelo', v.modelo], ['Tipo de Dispositivo', v.tipo],
-        ['Tecnología / Zona de medición', v.tecnologia], ['Contenido del Paquete', v.paquete], ['Fabricante', v.fabricante]
+        ['Tecnología / Zona de medición', v.tecnologia], ['Contenido del Paquete', v.paquete], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ]);
     }
   },
@@ -281,7 +281,7 @@ const CATS = {
       if (v.fps || v.nivel) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel]])}\n</ul>`);
       return assemble(p, 'Detalles del producto:', [
         ['Marca', v.marca], ['Nombre del Producto', v.producto], ['Tipo de Producto', v.tipo],
-        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Fabricante', v.fabricante]
+        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ], extras);
     }
   },
@@ -322,7 +322,7 @@ const CATS = {
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma],
-        ['Contenido Neto/Piezas', v.contenido], ['Fabricante', v.fabricante]
+        ['Contenido Neto/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ], [NOTA_SUP]);
     }
   },
@@ -367,7 +367,7 @@ const CATS = {
       }
       return assemble(p, 'Características de la bebida:', [
         ['Marca', v.marca], ['Tipo de Bebida', v.tipo], ['Sabor', sabor],
-        ['Atributo Verificado', v.atributo], ['Contenido', v.contenido]
+        ['Atributo Verificado', v.atributo], ['Contenido', v.contenido], ['Categoría', v.categoria]
       ]);
     }
   },
@@ -412,7 +412,7 @@ const CATS = {
       }
       return assemble(p, 'Información de cuidado personal:', [
         ['Marca', v.marca], ['Producto', v.producto], ['Variante o Característica Principal', v.variante],
-        ['Contenido', v.contenido], ['Fabricante', v.fabricante]
+        ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ]);
     }
   },
@@ -454,13 +454,18 @@ const CATS = {
       }
       return assemble(p, 'Especificaciones del accesorio:', [
         ['Marca', v.marca], ['Producto/Modelo', v.producto], ['Material o Compatibilidad', v.material],
-        ['Contenido/Piezas', v.contenido], ['Fabricante', v.fabricante]
+        ['Contenido/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ]);
     }
   }
 };
 
 Object.keys(CATS).forEach(id => { CATS[id].id = id; });
+Object.keys(CATS).forEach(id => {
+  if (id === 'med') return;
+  const f = CATS[id].fields, last = f.map(x => !x.g).lastIndexOf(true);
+  f.splice(last + 1, 0, F('categoria', 'Categoría', { ph: 'Nutrición clínica', hint: 'Categoría del árbol de la tienda, por ejemplo Nutrición clínica. Opcional. Aparece en la ficha técnica de Magento.' }));
+});
 Object.keys(CATS).forEach(id => { if (id !== 'med') CATS[id].fields.push(F('area', 'Área de uso o necesidad', { g: 'i', type: 'select', opts: areaOpts(), hint: 'Dato interno, por ejemplo Hidratación o Nutrición y vitaminas. No sale en la ficha, en el CSV ni en Magento.' })); });
 const labelOf = (c, k) => (c.fields.find(x => x.key === k) || {}).label || k;
 
@@ -574,12 +579,14 @@ const FAQ_RULES = {
     v.precauciones && [[`¿Qué precauciones tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.precauciones],
     (v.fps || v.nivel) && [[`¿Qué protección solar ofrece ${n}?`, `¿Qué FPS tiene ${n}?`], join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`)],
     v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto producto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
-    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${v.fabricante}.`, `Lo desarrolla ${v.fabricante}.`]]
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${v.fabricante}.`, `Lo desarrolla ${v.fabricante}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
   ],
   sup: (v, n) => [
     (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
     faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
     v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
     [[`¿${n} es un medicamento?`, `¿${n} reemplaza a un medicamento?`], LEGEND.supResp],
     [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.supConservacion]
   ],
@@ -588,12 +595,14 @@ const FAQ_RULES = {
     v.tecnologia && [[`¿Qué tecnología tiene ${n}?`, `¿Cómo mide ${n}?`], [`Es de tecnología ${lc(v.tecnologia)}.`, `Su tecnología es ${lc(v.tecnologia)}.`]],
     v.paquete && [[`¿Qué incluye el empaque de ${n}?`, `¿Qué trae ${n} en la caja?`], [`Incluye ${lc(v.paquete)}.`, `El empaque contiene ${lc(v.paquete)}.`]],
     v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
     [[`¿Cómo se debe utilizar ${n}?`, `¿Cómo se usa ${n}?`], LEGEND.disMc]
   ]
 };
 const faqGeneric = (v, n) => [
   v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
-  v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]]
+  v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+  v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
 ];
 /* `seed` solo se pasa en pruebas para recorrer todas las variantes. */
 function buildFaq(c, v, seed) {

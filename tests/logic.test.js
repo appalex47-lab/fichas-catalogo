@@ -373,3 +373,34 @@ test('categoría del medicamento: se captura con los datos principales y sale en
   assert.equal(con.mc.text, sin.mc.text, 'no cambia Merchant Center');
   assert.deepEqual(con.meta.mt.text, sin.meta.mt.text, 'no cambia el meta title');
 });
+
+test('categoría: todas las categorías la tienen con los datos principales y la muestran en su ficha técnica', () => {
+  const muestras = {
+    dis: { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro', tecnologia: 'Automático de brazo', fabricante: 'Omron' },
+    cos: { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal" },
+    sup: { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' },
+    beb: { marca: 'Electrolit', tipo: 'Suero oral', sabor: 'Coco', atributo: 'Sin azúcar', contenido: '625 mL' },
+    hig: { marca: 'Colgate', producto: 'Pasta dental', variante: 'Total', contenido: '75 mL', fabricante: 'Colgate' },
+    acc: { marca: 'Saba', producto: 'Parches térmicos', material: 'Alivio de dolores', contenido: 'Caja con 3 piezas', fabricante: 'Essity' }
+  };
+  for (const [id, v] of Object.entries(muestras)) {
+    const fd = F.CATS[id].fields.find(x => x.key === 'categoria');
+    assert.ok(fd && !fd.g && !fd.req, `${id}: campo principal y opcional`);
+    const sin = F.computeFor(id, v, keep, meta), con = F.computeFor(id, { ...v, categoria: 'NUTRICIÓN CLÍNICA' }, keep, meta);
+    assert.ok(!/Categoría:/.test(sin.mg.html), `${id}: sin captura no aparece`);
+    assert.match(con.mg.html, /<li><strong>Categoría:<\/strong> Nutrición Clínica<\/li>/, `${id}: aparece en la ficha técnica`);
+    assert.equal(con.title.title, sin.title.title, `${id}: no cambia el título`);
+    assert.equal(con.mc.text, sin.mc.text, `${id}: no cambia Merchant Center`);
+    assert.equal(con.meta.mt.text, sin.meta.mt.text, `${id}: no cambia el meta title`);
+  }
+});
+
+test('categoría: la pregunta frecuente existe en las categorías con FAQ y solo si se capturó', () => {
+  for (const id of ['cos', 'sup', 'dis', 'beb']) {
+    const v = { marca: 'X', producto: 'Y', componente: 'Z', modelo: 'M', tipo: 'T', fabricante: 'Fab', contenido: '10 mL', tecnologia: 'Tec', atributo: 'A', sabor: 'S', categoria: 'Nutrición clínica' };
+    const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS[id], v, sd).items.map(x => x[0]));
+    assert.ok(q.some(x => /categoría/.test(x)), `${id}: tiene la pregunta`);
+    const q2 = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS[id], { ...v, categoria: '' }, sd).items.map(x => x[0]));
+    assert.ok(!q2.some(x => /categoría/.test(x)), `${id}: sin dato no hay pregunta`);
+  }
+});
