@@ -286,7 +286,7 @@ test('FAQ: la variante es estable para un mismo producto y cambia entre producto
 });
 
 test('FAQ: todas las variantes cumplen las reglas de lenguaje y no tocan textos literales ni regulatorios', () => {
-  const lleno = { ...medFaq, indicaciones: 'Control glucémico', posologia: 'Una vez por semana', poblacion: 'Adultos', contraindicaciones: 'Hipersensibilidad' };
+  const lleno = { ...medFaq, categoria: 'Endocrinología', indicaciones: 'Control glucémico', posologia: 'Una vez por semana', poblacion: 'Adultos', contraindicaciones: 'Hipersensibilidad' };
   const cosF = { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal", piel: 'Piel sensible', modo: 'Aplicar sobre la piel limpia', precauciones: 'Evitar contacto con ojos', fps: '50+', nivel: 'Muy alta', inci: 'AQUA, GLYCERIN' };
   const supF = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
   const disF = { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro', tecnologia: 'Automático de brazo', fabricante: 'Omron', uso: 'medición de presión arterial', paquete: 'Brazalete y estuche' };
@@ -359,4 +359,17 @@ test('área terapéutica y ATC: campos de medicamentos y área en las demás cat
   assert.match(F.lint(F.CATS.med, { atc: 'ZZZ' }).check.join(' '), /formato esperado/);
   ['A', 'A10', 'A10B', 'A10BX', 'A10BX16'].forEach(c => assert.ok(F.ATC_RE.test(c), c));
   ['a10', 'A1', 'A10BX1', '10A', ''].forEach(c => assert.ok(!F.ATC_RE.test(c), c));
+});
+
+test('categoría del medicamento: se captura con los datos principales y sale en la ficha técnica y en la FAQ', () => {
+  const f = F.CATS.med.fields;
+  assert.ok(!f.find(x => x.key === 'categoria').g && !f.find(x => x.key === 'categoria').req, 'va con los datos principales y es opcional');
+  const sin = F.computeFor('med', medFaq, keep, meta);
+  assert.ok(!/Categoría:/.test(sin.mg.html));
+  const con = F.computeFor('med', { ...medFaq, categoria: 'ENDOCRINOLOGÍA' }, keep, meta);
+  assert.match(con.mg.html, /<li><strong>Categoría:<\/strong> Endocrinología<\/li>\n<\/ul>/);
+  assert.ok(con.mg.faq.some(x => /categoría/i.test(x[0]) && /Endocrinología/.test(x[1])));
+  assert.equal(con.title.title, sin.title.title, 'no cambia el título');
+  assert.equal(con.mc.text, sin.mc.text, 'no cambia Merchant Center');
+  assert.deepEqual(con.meta.mt.text, sin.meta.mt.text, 'no cambia el meta title');
 });

@@ -124,6 +124,7 @@ const CATS = {
       F('forma','Forma farmacéutica',{req:1,pres:1,ph:'Solución inyectable'}),
       F('contenido','Presentación o piezas',{req:1,pres:1,ph:'30 o Caja con 4 plumas',hint:'Si capturas solo un número, se interpreta como piezas. Ejemplo: 30 → 30 piezas.'}),
       F('laboratorio','Laboratorio',{req:1,ph:'Eli Lilly'}),
+      F('categoria','Categoría',{ph:'Endocrinología',hint:'Categoría del árbol de la tienda, por ejemplo Endocrinología. Opcional. Aparece en la ficha técnica de Magento.'}),
       F('via','Vía de administración',{req:1,g:'d',ph:'Subcutánea'}),
       F('receta','¿Requiere receta médica?',{req:1,g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí requiere receta'],['no','No requiere receta']],hint:'Dato regulatorio obligatorio. Sin él no se genera el HTML de Magento.'}),
       F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'}),
@@ -170,7 +171,7 @@ const CATS = {
       if (v.receta === 'si') p += ' ' + LEGEND.medReceta;
       return assemble(p, 'Ficha técnica del producto:', [
         ['Nombre Comercial', v.marca], ['Sustancia Activa', v.principio], ['Concentración', conc],
-        ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio]
+        ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio], ['Categoría', v.categoria]
       ], [
         ...[['Indicaciones:', v.indicaciones], ['Cómo se usa:', v.posologia], ['Población a la que va dirigido:', v.poblacion], ['Contraindicaciones y advertencias:', v.contraindicaciones]]
           .filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`),
@@ -562,6 +563,7 @@ const FAQ_RULES = {
     v.receta === 'no' && [[`¿Es necesaria la receta médica para ${n}?`, `¿Se necesita receta médica para ${n}?`], 'No requiere receta médica. Consulte a su médico y evite automedicarse.'],
     faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`, `¿Qué presentación tiene ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
     v.laboratorio && [[`¿Quién fabrica ${n}?`, `¿Qué laboratorio produce ${n}?`, `¿De qué laboratorio es ${n}?`], [`Es desarrollado por el laboratorio ${v.laboratorio}.`, `Lo desarrolla el laboratorio ${v.laboratorio}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
     [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.medConservacion]
   ],
   cos: (v, n) => [
