@@ -92,13 +92,14 @@ const saborTxt = s => s && (/^sabor\b/i.test(s) ? s : 'Sabor ' + s);
  * encabezados que empieza con #: «# Nutriente | Por porción | Por 100 g | % VD». Una fila que empieza con guion es una subfila
  * («- Azúcares | 2 g»). También se entiende una fila pegada sin barras («Proteína 20 g 40 %»). La herramienta solo ordena y limpia:
  * no calcula ni corrige cantidades. Solo avisa si las calorías no cuadran con proteína, carbohidratos y grasas. */
-const NUTRI_UNIT = { g: 'g', mg: 'mg', mcg: 'mcg', 'µg': 'mcg', ug: 'mcg', kcal: 'kcal', cal: 'kcal', kj: 'kJ', ui: 'UI', iu: 'UI', ml: 'mL', l: 'L', '%': '%' };
-const NUTRI_VAL_RE = /(?<![\p{L}\d.,])([<≤~]?\s*\d+(?:[.,]\d+)?)\s*(kcal|kj|mcg|µg|ug|mg|ui|iu|ml|cal|g|l|%)(?![\p{L}])/giu;
+const NUTRI_UNIT = { g: 'g', mg: 'mg', mcg: 'mcg', 'µg': 'mcg', ug: 'mcg', kcal: 'kcal', cal: 'kcal', kj: 'kJ', ui: 'UI', iu: 'UI', ml: 'mL', l: 'L', '%': '%', mmol: 'mmol', meq: 'mEq', ufc: 'UFC', cfu: 'CFU', 'mosmol/l': 'mOsmol/L', 'mosmol/kg h2o': 'mOsmol/kg H2O', 'mosmol/kg': 'mOsmol/kg' };
+const NUTRI_VAL_RE = /(?<![\p{L}\d.,])([<≤~]?\s*\d+(?:[.,]\d+)?)\s*(mosmol\/kg(?:\s*h2o)?|mosmol\/l|kcal|kj|mcg|µg|ug|mg|mmol|meq|ufc|cfu|ui|iu|ml|cal|g|l|%)(?![\p{L}])/giu;
 function nutriCell(x) {
-  const m = String(x ?? '').trim().match(/^([<≤~]?)\s*(\d+(?:[.,]\d+)?)\s*([A-Za-zµ%]+)$/);
-  const u = m && NUTRI_UNIT[m[3].toLowerCase()];
+  const m = String(x ?? '').trim().match(/^([<≤~]?)\s*(\d+(?:[.,]\d+)?)\s*(.+)$/);
+  const u = m && NUTRI_UNIT[m[3].toLowerCase().replace(/\s+/g, ' ')];
   return u ? `${m[1]}${m[2].replace(',', '.')} ${u}` : String(x ?? '').trim();
 }
+const NUTRI_PORTION_RE = /^(por\s+)?porci[oó]n(\s+de)?$|^tama[ñn]o\s+de\s+(la\s+)?porci[oó]n$|^(porciones?\s+por\s+envase|por\s+envase)$/i;
 const nutriName = s => { s = s.trim(); return s && s === s.toUpperCase() && /\p{L}/u.test(s) ? cap(s.toLowerCase()) : s; };
 function parseNutrition(text) {
   const out = { head: null, rows: [], problems: [], explicit: false };
@@ -120,7 +121,8 @@ function parseNutrition(text) {
     }
     name = nutriName(name.replace(/[:\s]+$/, ''));
     if (!name) { out.problems.push(`Hay una fila sin nombre de nutriente: «${l}».`); return; }
-    if (!cells.length) { out.problems.push(`La fila «${name}» no tiene cantidad.`); return; }
+    if (NUTRI_PORTION_RE.test(name)) { out.problems.push(`La fila «${name}${cells.length ? ': ' + cells.join(' / ') : ''}» es la porción, no un nutriente. Captúrala en «Tamaño de porción»; se omite de la tabla.`); return; }
+    if (!cells.length) { out.problems.push(`La fila «${name}» no tiene cantidad. Si es una nota (por ejemplo «de los cuales»), quítala; si es una subfila, empieza la línea con un guion.`); return; }
     out.rows.push({ name, sub, cells: cells.map(nutriCell) });
   });
   const cols = Math.max(0, ...out.rows.map(r => r.cells.length));
@@ -153,16 +155,25 @@ function nutriConsistency(p) {
   }
   return msgs;
 }
+/* ¿El tamaño de porción es lo mismo que el contenido del envase? Compara la primera cantidad con su unidad. */
+const firstQty = t => { const m = String(t || '').match(/(\d+(?:[.,]\d+)?)\s*(kcal|mcg|µg|ug|mg|ml|ui|g|l)(?![\p{L}])/iu); return m ? `${Number(m[1].replace(',', '.'))} ${({ 'µg': 'mcg', ug: 'mcg' }[m[2].toLowerCase()] || m[2].toLowerCase())}` : ''; };
+const samePortion = (porcion, contenido) => !!firstQty(porcion) && firstQty(porcion) === firstQty(contenido);
+const isSingleServing = v => samePortion(v.porcion, v.contenido) && (!v.porciones || String(v.porciones).trim() === '1');
+/* Filas de la ficha técnica y frase de Merchant Center para porción y porciones: si el envase es de una sola porción igual al contenido, no se repite. */
+const portionRows = v => isSingleServing(v) ? (String(v.porciones).trim() === '1' ? [['Porciones por Envase', '1 (porción única)']] : []) : [['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones]];
+const portionLine = v => {
+  if (isSingleServing(v) || (!v.porcion && !v.porciones)) return '';
+  const n = String(v.porciones || '').trim(), por = n ? `${n} ${n === '1' ? 'porción' : 'porciones'} por envase` : '';
+  return v.porcion ? join(', ', `Tamaño de porción: ${lc(v.porcion)}`, por) : `Porciones por envase: ${n}`;
+};
 function nutriTableHtml(v) {
   const text = v.nutrimental;
   if (!text) return '';
   const p = parseNutrition(text);
   if (!p.rows.length) return '';
-  const cap2 = ['Información nutrimental', [v.porcion && `porción: ${v.porcion}`, v.porciones && `porciones por envase: ${v.porciones}`].filter(Boolean).join('; ')].filter(Boolean);
-  const caption = cap2.length > 1 ? `${cap2[0]} (${cap2[1]})` : cap2[0];
   const th = p.head.slice(0, p.cols + 1).map(h => `<th scope="col">${escT(h)}</th>`).join('');
   const rows = p.rows.map(r => `    <tr${r.sub ? ' class="sub"' : ''}><th scope="row">${escT(r.name)}</th>${Array.from({ length: p.cols }, (_, j) => `<td>${escT(r.cells[j] || '—')}</td>`).join('')}</tr>`).join('\n');
-  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental">\n  <caption>${escT(caption)}</caption>\n  <thead><tr>${th}</tr></thead>\n  <tbody>\n${rows}\n  </tbody>\n</table>`;
+  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental">\n  <thead><tr>${th}</tr></thead>\n  <tbody>\n${rows}\n  </tbody>\n</table>`;
 }
 /* Dato de la primera columna de valores, para las preguntas frecuentes. */
 function nutriFact(v, re) {
@@ -381,7 +392,7 @@ const CATS = {
     emoji: '🌿', name: 'Suplementos alimenticios', range: [50, 100],
     fields: [
       F('marca','Marca',{req:1,ph:'GNC'}),
-      F('componente','Componente o tipo principal',{req:1,ph:'Vitamina C'}),
+      F('componente','Tipo o componente principal',{req:1,ph:'Fórmula hipercalórica',hint:'Qué es el producto o su ingrediente principal: Fórmula hipercalórica, Vitamina C, Proteína whey. «Suplemento alimenticio» no describe el producto.'}),
       F('forma','Forma',{req:1,pres:1,ph:'Cápsulas'}),
       F('contenido','Contenido neto o piezas',{req:1,pres:1,ph:'Frasco con 100 piezas'}),
       F('fabricante','Fabricante',{req:1,ph:'GNC'}),
@@ -410,27 +421,24 @@ const CATS = {
     mgUses: ['marca','componente','forma','contenido','fabricante'],
     mc: v => [
       join(' - ', join(' ', v.marca, v.componente && `(${v.componente})`, v.contenido), v.fabricante),
-      'Suplemento alimenticio' + (v.forma ? ' en forma de ' + lc(v.forma) : '') + ((v.composicion || v.componente) ? ' que contiene ' + lc(v.composicion || v.componente) : ''),
-      v.sabor && saborTxt(v.sabor),
-      v.publico && `Dirigido a ${lc(v.publico)}`,
-      v.contenido && `Presentación de ${lc(v.contenido)}`,
-      v.porcion && `Tamaño de porción: ${lc(v.porcion)}`,
-      v.porciones && `Porciones por envase: ${v.porciones}`,
-      v.modo,
-      v.caracteristicas,
+      'Suplemento alimenticio' + (v.forma ? ' en forma de ' + lc(v.forma) : '') + (v.composicion ? ' que contiene ' + lc(v.composicion) : ''),
+      optMc('Sabor', v.sabor && saborTxt(v.sabor)),
+      optMc('Dirigido a', v.publico && `Dirigido a ${lc(v.publico)}`),
+      optMc('Porción', portionLine(v)),
+      optMc('Modo de consumo', v.modo),
+      optMc('Características', v.caracteristicas),
       LEGEND.supResp
     ],
     mg: v => {
       let p = `${S(join(' ', v.marca, v.componente && `(${v.componente})`))} es un producto alimenticio` + (v.fabricante ? ` elaborado por el fabricante ${S(v.fabricante)}` : '') + '.';
-      if (v.forma || v.componente || v.contenido) {
+      if (v.forma || v.contenido) {
         p += ' Este suplemento' + (v.forma ? ` en forma de ${S(v.forma)}` : '')
-          + (v.componente ? ` incorpora ${S(v.componente)}` : '')
-          + (v.contenido ? ` estructurado en una presentación de ${S(v.contenido)}` : '') + '.';
+          + (v.contenido ? `${v.forma ? ',' : ''} estructurado en una presentación de ${S(v.contenido)}` : '') + '.';
       }
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
-        ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
-        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones], ['Dirigido a', v.publico], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+        ['Marca', v.marca], ['Tipo o Componente Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
+        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ...portionRows(v), ['Dirigido a', v.publico], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Composición:', v.composicion], ['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP]);
     }
   },
@@ -654,11 +662,20 @@ function dupBrand(r) {
   return !!m && t.split(m).length - 1 > 1;
 }
 
+/* Pieza opcional de la descripción de Merchant Center: entra solo si cabe en el máximo de palabras de la categoría. */
+const optMc = (label, text) => text ? { opt: true, label, text } : null;
+const wordCount = t => (t ? t.trim().split(/\s+/).length : 0);
 function buildMC(c, v) {
-  const text = c.mc(v).filter(Boolean).map(sentence).filter(Boolean).join(' ');
+  const items = c.mc(v).filter(Boolean);
+  const rendered = items.map(x => (typeof x === 'string' ? sentence(x) : sentence(x.text)));
+  const max = c.range ? c.range[1] : 0, dropped = new Set();
+  if (max && items.some(x => typeof x !== 'string')) {
+    let words = items.reduce((n, x, i) => n + (typeof x === 'string' ? wordCount(rendered[i]) : 0), 0);
+    items.forEach((x, i) => { if (typeof x === 'string') return; if (words + wordCount(rendered[i]) <= max) words += wordCount(rendered[i]); else dropped.add(i); });
+  }
+  const text = rendered.filter((t, i) => t && !dropped.has(i)).join(' ');
   const omitted = c.mcUses.filter(k => !v[k]).map(k => labelOf(c, k));
-  const words = text ? text.trim().split(/\s+/).length : 0;
-  return { text, omitted, words };
+  return { text, omitted, words: wordCount(text), dropped: [...dropped].map(i => items[i].label) };
 }
 
 const recetaMeta = (c, v) => c.id === 'med' ? (v.receta === 'si' ? 'Sí' : v.receta === 'no' ? 'No' : '') : 'No aplica para esta categoría';
@@ -706,7 +723,7 @@ const FAQ_RULES = {
     v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
   ],
   sup: (v, n) => [
-    (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
+    v.composicion && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion)}.`, `Su composición incluye ${lc(v.composicion)}.`]],
     v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
     v.ingredientes && [[`¿Cuáles son los ingredientes de ${n}?`, `¿Qué ingredientes tiene ${n}?`], v.ingredientes],
     v.alergenos && [[`¿${n} contiene alérgenos?`, `¿Qué alérgenos declara ${n}?`], v.alergenos],
@@ -717,7 +734,7 @@ const FAQ_RULES = {
     nutriFact(v, NUTRI_FIND.energia) && [[`¿Cuántas calorías tiene ${n}?`, `¿Cuántas calorías aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.energia).value}${nutriFact(v, NUTRI_FIND.energia).head}.`],
     nutriFact(v, NUTRI_FIND.proteina) && [[`¿Cuánta proteína tiene ${n}?`, `¿Cuánta proteína aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.proteina).value} de proteína${nutriFact(v, NUTRI_FIND.proteina).head}.`],
     nutriFact(v, NUTRI_FIND.azucar) && [[`¿Cuánta azúcar tiene ${n}?`, `¿Cuántos azúcares aporta ${n}?`], `Según su tabla nutrimental, tiene ${nutriFact(v, NUTRI_FIND.azucar).value} de azúcares${nutriFact(v, NUTRI_FIND.azucar).head}.`],
-    v.porciones && [[`¿Cuántas porciones trae ${n}?`, `¿Cuántas porciones tiene cada envase de ${n}?`], [`Trae ${v.porciones} porciones por envase${v.porcion ? `, con un tamaño de porción de ${lc(v.porcion)}` : ''}.`]],
+    v.porciones && !isSingleServing(v) && [[`¿Cuántas porciones trae ${n}?`, `¿Cuántas porciones tiene cada envase de ${n}?`], [`Trae ${v.porciones} porciones por envase${v.porcion ? `, con un tamaño de porción de ${lc(v.porcion)}` : ''}.`]],
     faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
     v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
     v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
@@ -835,6 +852,8 @@ function lint(c, raw) {
       if (!raw.precauciones) out.check.push('Protector solar sin precauciones. Captura las leyendas del empaque.');
     } else if (nivel) out.check.push('Capturaste un nivel de protección sin FPS.');
   }
+  if (c.id === 'sup' && /^\s*(suplementos?(\s+alimenticios?)?|productos?|alimentos?)\s*$/i.test(raw.componente || '')) out.check.push(`«${String(raw.componente).trim()}» no describe el producto. Escribe qué es o su ingrediente principal, por ejemplo «Fórmula hipercalórica» o «Vitamina C».`);
+  if (c.id === 'sup' && /^\d+(?:[.,]\d+)?$/.test(String(raw.porcion || '').trim())) out.check.push(`El tamaño de porción «${String(raw.porcion).trim()}» no tiene unidad. Escríbelo como aparece en la etiqueta, por ejemplo «${String(raw.porcion).trim()} mL» o «1 cápsula».`);
   if (c.id === 'sup' && raw.nutrimental) { const np = parseNutrition(raw.nutrimental); out.check.push(...np.problems, ...nutriConsistency(np)); }
   if (raw.atc && !ATC_RE.test(String(raw.atc).toUpperCase().replace(/\s+/g, ''))) out.check.push(`El código ATC "${raw.atc}" no tiene el formato esperado. Ejemplos: A10, A10BX, A10BX16.`);
   return out;

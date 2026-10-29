@@ -195,7 +195,7 @@ Proteína | 24 g | 80 g | 48 %
 - Una fila que empieza con guion es una subfila (azúcares dentro de carbohidratos). También se entienden filas pegadas con tabulaciones desde una hoja de cálculo o sin barras («Proteína 20 g 40 %»).
 - **No se calcula ni se corrige nada.** Se limpian las unidades (`20G` → `20 g`), la coma decimal y las mayúsculas sostenidas de los nombres. Los valores como `<1 mg` o `No significativo` se muestran tal cual.
 - **Avisos** (sin bloquear): una fila sin cantidad o sin nombre, encabezados que no cuadran con las columnas, y calorías que no se parecen a 4·proteína + 4·carbohidratos + 9·grasa (tolerancia del 20 %, se revisa cada columna con valores en gramos y kcal).
-- El título de la tabla (`caption`) incluye el tamaño de porción y las porciones por envase si los capturaste.
+- La tabla lleva `aria-label="Información nutrimental"` (sin título visible repetido).
 - Las preguntas frecuentes agregan «¿Cuántas calorías tiene…?», «¿Cuánta proteína tiene…?» y «¿Cuánta azúcar tiene…?», con el valor de la primera columna de la tabla.
 - No encontré una fuente que confirme qué estructura de información nutrimental exige la normativa para suplementos (la NOM-051 se aplica a alimentos y bebidas preenvasados), por eso la tabla copia el formato de cada etiqueta. Valida con tu equipo regulatorio cualquier leyenda obligatoria.
 
@@ -208,6 +208,14 @@ Proteína | 24 g | 80 g | 48 %
   - Verás lo leído junto a la transcripción, en un cuadro editable, con el aviso «Revisa los números». Lo que apliques queda como «IA sin confirmar» y no se exporta a Magento hasta confirmarlo.
   - Una limitación honesta: si la IA pone un valor en una columna equivocada (por ejemplo, el de por 100 g bajo «Por porción»), la verificación no lo detecta, porque la cantidad sí está en la etiqueta. Por eso hay que comparar con la foto.
   - «Ingredientes» solo se lee en suplementos; en dermocosméticos sigue siendo «Ingredientes o activos destacados» y no se lee de la foto.
+
+## Sin repeticiones en suplementos
+
+- **Porción:** si el tamaño de porción es igual al contenido y hay 1 porción por envase, la ficha de Magento muestra solo `Porciones por Envase: 1 (porción única)` y Merchant Center no la menciona. Si son distintos (900 g con porciones de 30 g) salen las dos filas, y en Merchant Center una sola frase: «Tamaño de porción: 1 scoop (30 g), 30 porciones por envase».
+- **Tabla nutrimental:** el título de la tabla (`<caption>`) se cambió por `aria-label`, para no repetir el encabezado «Información nutrimental». Una fila «Por porción de 200 mL» o «Tamaño de porción» no es un nutriente: se omite de la tabla y se avisa que va en «Tamaño de porción». Se aceptan unidades como `mOsmol/L`, `mOsmol/kg H2O`, `mmol`, `mEq`, `UFC` y el formato `Osmolaridad: 435 mOsmol/L`; los avisos de filas sin cantidad explican cómo corregirlas.
+- **Merchant Center (suplementos):** ya no repite «Presentación de X» (el encabezado ya lleva el contenido) ni usa el tipo como si fuera un ingrediente («contiene Hipercalórica»). Las piezas opcionales entran por prioridad mientras quepan en el máximo de 100 palabras: sabor, dirigido a, porción, modo de consumo y características. Lo que no cabe se avisa y sigue completo en la ficha de Magento. El encabezado, la frase con la composición y la leyenda legal siempre entran.
+- **Introducción de Magento:** ya no dice «incorpora X»; el tipo o componente ya aparece entre paréntesis junto a la marca. El campo se llama «Tipo o componente principal».
+- **Avisos nuevos:** un tipo genérico («Suplemento alimenticio») y un tamaño de porción sin unidad («200»).
 
 ## Formas, tipos y campos de suplementos
 

@@ -320,6 +320,7 @@ function panelMC(r) {
   const inRange = rg ? (m.words >= rg[0] && m.words <= rg[1]) : null;
   return `
     ${m.omitted.length ? `<div class="note note--info"><p><strong>Omitido por falta de datos:</strong> ${esc(m.omitted.join(', '))}. No se agrega relleno.</p></div>` : ''}
+    ${(m.dropped || []).length ? `<div class="note note--info"><p><strong>No cupo en ${rg ? rg[1] : ''} palabras:</strong> ${esc(m.dropped.join(', '))}. Sigue completo en la ficha de Magento.</p></div>` : ''}
     <div class="desc">${esc(m.text)}</div>
     <div class="meta-row">
       <span>${m.words} palabras${rg ? ` <span class="${inRange ? 'count-ok' : 'count-off'}">(rango ${rg[0]} a ${rg[1]})</span>` : ''}</span>

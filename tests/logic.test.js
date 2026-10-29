@@ -448,7 +448,7 @@ test('suplementos: campos opcionales (sabor, porción, porciones y modo de consu
   assert.match(con.mg.html, /<li><strong>Porciones por Envase:<\/strong> 30<\/li>/);
   assert.match(con.mg.html, /<h2>Modo de consumo:<\/h2>\n<p>Tomar dos gomitas al día\.<\/p>/);
   assert.ok(con.mg.html.indexOf('Modo de consumo') < con.mg.html.indexOf('Condiciones de conservación'));
-  assert.match(con.mc.text, /Sabor Naranja\. .*Tamaño de porción: 2 gomitas\. Porciones por envase: 30\./);
+  assert.match(con.mc.text, /Sabor Naranja\. .*Tamaño de porción: 2 gomitas, 30 porciones por envase\./);
   const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...base, sabor: 'Naranja', porciones: '30', porcion: '2 gomitas', modo: 'Tomar dos gomitas al día' }, sd).items);
   assert.ok(q.some(([a]) => /consume|tomar/.test(a)) && q.some(([a]) => /sabor/.test(a)) && q.some(([a, b]) => /porciones/.test(a) && /30 porciones/.test(b)));
 });
@@ -578,8 +578,8 @@ const TABLA = '# Nutriente | Por porción (30 g) | Por 100 g | % VD\nEnergía | 
 
 test('tabla nutrimental: se arma una tabla HTML con id, encabezados y subfilas a partir de líneas', () => {
   const h = F.computeFor('sup', { ...supBase, porcion: '1 scoop (30 g)', porciones: '30', nutrimental: TABLA }, keep, meta).mg.html;
-  assert.match(h, /<h2>Información nutrimental:<\/h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental">/);
-  assert.match(h, /<caption>Información nutrimental \(porción: 1 scoop \(30 g\); porciones por envase: 30\)<\/caption>/);
+  assert.match(h, /<h2>Información nutrimental:<\/h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental">/);
+  assert.ok(!/<caption>/.test(h), 'el título de la tabla no repite el encabezado ni los datos de la ficha');
   assert.match(h, /<thead><tr><th scope="col">Nutriente<\/th><th scope="col">Por porción \(30 g\)<\/th><th scope="col">Por 100 g<\/th><th scope="col">% VD<\/th><\/tr><\/thead>/);
   assert.match(h, /<tr><th scope="row">Proteína<\/th><td>24 g<\/td><td>80 g<\/td><td>48 %<\/td><\/tr>/);
   assert.match(h, /<tr class="sub"><th scope="row">Azúcares<\/th><td>1.5 g<\/td><td>5 g<\/td><td>—<\/td><\/tr>/);
@@ -660,4 +660,70 @@ test('suplementos: los campos de ficha nuevos alimentan las preguntas frecuentes
   assert.ok(resp(/quién|dirigido/).every(b => /dirigido a adultos/i.test(b)));
   assert.ok(resp(/advertencias|precauciones/).every(b => b === 'Consulte a su médico.'));
   assert.ok(F.computeFor('sup', { ...base, publico: 'Adultos' }, keep, meta).mc.text.includes('Dirigido a adultos'));
+});
+
+/* ---------- Sin repeticiones: porción, tabla, Merchant Center y frase de la introducción ---------- */
+const hiper = { marca: 'Supportan DKN', componente: 'Fórmula hipercalórica', forma: 'Líquido', contenido: '200 mL', fabricante: 'Fresenius Kabi', sabor: 'Capuchino', porcion: '200 mL', porciones: '1', publico: 'Adultos y niños mayores de 3 años', composicion: '20 g de Proteína, 1 g de EPA (Omega-3), TCM, Inulina', modo: 'Agitar bien antes de usar. Dosificar directamente en la boca o en un vaso.', caracteristicas: 'Está formulado como una dieta polimérica especializada, diseñada principalmente para dar soporte nutricional a pacientes con altas necesidades calóricas o en estados hipercatabólicos (como en tratamientos oncológicos o EPOC).' };
+
+test('porción única: no se repite el contenido en la ficha técnica ni en Merchant Center', () => {
+  const r = F.computeFor('sup', hiper, keep, meta);
+  assert.ok(!/Tamaño de Porción/.test(r.mg.html), 'sin fila de tamaño de porción');
+  assert.match(r.mg.html, /<li><strong>Porciones por Envase:<\/strong> 1 \(porción única\)<\/li>/);
+  assert.equal((r.mg.html.split('\n<br />\n<h2>Preguntas frecuentes')[0].match(/200 ml/g) || []).length, 2, '200 ml solo en la introducción (plantilla aprobada) y en la fila de contenido');
+  assert.ok(!/Tamaño de porción|Porciones por envase/.test(r.mc.text));
+  assert.ok(!r.mg.faq.some(([q]) => /Cuántas porciones/.test(q)), 'tampoco la pregunta de porciones');
+  const sinPorciones = F.computeFor('sup', { ...hiper, porciones: '' }, keep, meta);
+  assert.ok(!/Porciones por Envase|Tamaño de Porción/.test(sinPorciones.mg.html), 'si no declara porciones, no se inventa «1»');
+});
+
+test('porción distinta del contenido: se muestran las dos filas y una sola frase en Merchant Center', () => {
+  const v = { ...hiper, contenido: 'Bote 900 g', forma: 'Polvo', porcion: '1 scoop (30 g)', porciones: '30', sabor: '' };
+  const r = F.computeFor('sup', v, keep, meta);
+  assert.match(r.mg.html, /<li><strong>Tamaño de Porción:<\/strong> 1 scoop \(30 g\)<\/li>\n  <li><strong>Porciones por Envase:<\/strong> 30<\/li>/);
+  assert.match(r.mc.text, /Tamaño de porción: 1 scoop \(30 g\), 30 porciones por envase\./);
+  assert.ok(!/Porciones por envase: 30/.test(r.mc.text));
+  assert.match(F.computeFor('sup', { ...v, porciones: '1', porcion: '30 g' }, keep, meta).mc.text, /30 g, 1 porción por envase\./);
+});
+
+test('introducción y Merchant Center: ya no dicen «incorpora X» ni «contiene X» con el tipo del producto', () => {
+  const r = F.computeFor('sup', hiper, keep, meta);
+  assert.ok(!/incorpora/.test(r.mg.html));
+  assert.match(r.mg.html, /Este suplemento en forma de <strong>Líquido<\/strong>, estructurado en una presentación de <strong>200 ml<\/strong>\./);
+  assert.match(r.mg.html, /<strong>Supportan DKN \(Fórmula hipercalórica\)<\/strong>/);
+  const sinComp = F.computeFor('sup', { ...hiper, composicion: '' }, keep, meta);
+  assert.ok(!/que contiene/.test(sinComp.mc.text), 'sin composición no hay «contiene»');
+  assert.ok(!sinComp.mg.faq.some(([q]) => /Qué contiene|composición/.test(q)));
+  assert.match(r.mc.text, /Suplemento alimenticio en forma de líquido que contiene 20 g de Proteína/);
+  assert.equal(F.CATS.sup.fields.find(f => f.key === 'componente').label, 'Tipo o componente principal');
+  assert.match(r.mg.html, /<li><strong>Tipo o Componente Principal:<\/strong> Fórmula hipercalórica<\/li>/);
+});
+
+test('Merchant Center: sin «Presentación de X» repetido y con presupuesto de palabras por prioridad', () => {
+  const r = F.computeFor('sup', hiper, keep, meta);
+  assert.ok(!/Presentación de/.test(r.mc.text), 'el encabezado ya lleva el contenido');
+  assert.ok(r.mc.words <= 100, `${r.mc.words} palabras`);
+  assert.deepEqual(r.mc.dropped, ['Características']);
+  assert.ok(/Sabor Capuchino\./.test(r.mc.text) && /Dirigido a adultos/.test(r.mc.text) && /Agitar bien antes de usar\./.test(r.mc.text) && !/dieta polimérica/.test(r.mc.text));
+  assert.ok(/El consumo de este producto es responsabilidad/.test(r.mc.text), 'la leyenda nunca se omite');
+  assert.match(r.mg.html, /<h2>Características:<\/h2>\n<p>Está formulado como una dieta polimérica/, 'sigue completa en Magento');
+  const corto = F.computeFor('sup', { ...hiper, caracteristicas: 'Dieta especializada.' }, keep, meta);
+  assert.deepEqual(corto.mc.dropped, []);
+  assert.match(corto.mc.text, /Dieta especializada\./);
+  assert.deepEqual(F.computeFor('med', { marca: 'M', concentracion: '5 mg', principio: 'P', forma: 'Tableta', contenido: 'Caja', laboratorio: 'L', via: 'Oral', receta: 'no' }, keep, meta).mc.dropped, [], 'otras categorías no cambian');
+});
+
+test('tabla nutrimental: la fila de porción se omite con aviso, se aceptan osmolaridades y «Nombre: valor» y los avisos orientan', () => {
+  const p = F.parseNutrition('Por porción de | 200 mL\nContenido energético | 300 kcal\nOsmolaridad: 435 mOsmol/L\nOsmolalidad | 575 mOsmol/kg H2O\nde los cuales\nCarbohidratos | 23.2 g');
+  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Contenido energético', '300 kcal'], ['Osmolaridad', '435 mOsmol/L'], ['Osmolalidad', '575 mOsmol/kg H2O'], ['Carbohidratos', '23.2 g']]);
+  assert.ok(p.problems.some(x => /«Por porción de: 200 mL» es la porción, no un nutriente\. Captúrala en «Tamaño de porción»/.test(x)));
+  assert.ok(p.problems.some(x => /«de los cuales» no tiene cantidad\. Si es una nota/.test(x)));
+  const h = F.computeFor('sup', { ...hiper, nutrimental: 'Por porción de | 200 mL\nProteína | 20 g' }, keep, meta).mg.html;
+  assert.ok(!/Por porción de/.test(h) && /<th scope="row">Proteína<\/th>/.test(h));
+});
+
+test('suplementos: avisa si el tipo es genérico o el tamaño de porción no tiene unidad', () => {
+  const c = F.lint(F.CATS.sup, { componente: 'Suplemento Alimenticio', porcion: '200' }).check.join(' | ');
+  assert.match(c, /«Suplemento Alimenticio» no describe el producto/);
+  assert.match(c, /tamaño de porción «200» no tiene unidad/);
+  assert.deepEqual(F.lint(F.CATS.sup, { componente: 'Fórmula hipercalórica', porcion: '200 mL' }).check, []);
 });
