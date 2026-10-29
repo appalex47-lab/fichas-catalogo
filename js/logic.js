@@ -87,6 +87,92 @@ function joinForm(forma, contenido) {
 }
 const saborTxt = s => s && (/^sabor\b/i.test(s) ? s : 'Sabor ' + s);
 
+/* ---------- Tabla nutrimental (suplementos) ----------
+ * Se captura tal cual la etiqueta, una fila por línea: «Proteína | 20 g | 40 %». Si hay más de una columna se agrega una línea de
+ * encabezados que empieza con #: «# Nutriente | Por porción | Por 100 g | % VD». Una fila que empieza con guion es una subfila
+ * («- Azúcares | 2 g»). También se entiende una fila pegada sin barras («Proteína 20 g 40 %»). La herramienta solo ordena y limpia:
+ * no calcula ni corrige cantidades. Solo avisa si las calorías no cuadran con proteína, carbohidratos y grasas. */
+const NUTRI_UNIT = { g: 'g', mg: 'mg', mcg: 'mcg', 'µg': 'mcg', ug: 'mcg', kcal: 'kcal', cal: 'kcal', kj: 'kJ', ui: 'UI', iu: 'UI', ml: 'mL', l: 'L', '%': '%' };
+const NUTRI_VAL_RE = /(?<![\p{L}\d.,])([<≤~]?\s*\d+(?:[.,]\d+)?)\s*(kcal|kj|mcg|µg|ug|mg|ui|iu|ml|cal|g|l|%)(?![\p{L}])/giu;
+function nutriCell(x) {
+  const m = String(x ?? '').trim().match(/^([<≤~]?)\s*(\d+(?:[.,]\d+)?)\s*([A-Za-zµ%]+)$/);
+  const u = m && NUTRI_UNIT[m[3].toLowerCase()];
+  return u ? `${m[1]}${m[2].replace(',', '.')} ${u}` : String(x ?? '').trim();
+}
+const nutriName = s => { s = s.trim(); return s && s === s.toUpperCase() && /\p{L}/u.test(s) ? cap(s.toLowerCase()) : s; };
+function parseNutrition(text) {
+  const out = { head: null, rows: [], problems: [], explicit: false };
+  const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const body = [];
+  lines.forEach(l => {
+    if (l.startsWith('#') && !out.explicit && !body.length) { out.head = l.replace(/^#+\s*/, '').split(/\s*[|\t]\s*/).map(x => x.trim()); out.explicit = true; }
+    else body.push(l);
+  });
+  body.forEach(l => {
+    let sub = false;
+    if (/^[-•–]\s*/.test(l)) { sub = true; l = l.replace(/^[-•–]\s*/, ''); }
+    let name, cells;
+    if (/[|\t]/.test(l)) { const p = l.split(/\s*[|\t]\s*/); name = p[0]; cells = p.slice(1).filter(x => x !== ''); }
+    else {
+      const hits = [...l.matchAll(NUTRI_VAL_RE)];
+      name = hits.length ? l.slice(0, hits[0].index) : l;
+      cells = hits.map(h => h[0]);
+    }
+    name = nutriName(name.replace(/[:\s]+$/, ''));
+    if (!name) { out.problems.push(`Hay una fila sin nombre de nutriente: «${l}».`); return; }
+    if (!cells.length) { out.problems.push(`La fila «${name}» no tiene cantidad.`); return; }
+    out.rows.push({ name, sub, cells: cells.map(nutriCell) });
+  });
+  const cols = Math.max(0, ...out.rows.map(r => r.cells.length));
+  if (!out.head) out.head = ['Nutriente', ...(cols <= 1 ? ['Cantidad'] : Array.from({ length: cols }, (_, i) => `Valor ${i + 1}`))];
+  if (out.rows.length && cols > 1 && !out.explicit) out.problems.push('La tabla tiene más de una columna. Agrega una primera línea con los encabezados, por ejemplo «# Nutriente | Por porción | % VD».');
+  if (out.explicit && out.head.length - 1 < cols) out.problems.push(`Los encabezados tienen ${out.head.length - 1} columna(s) de valores, pero hay filas con ${cols}.`);
+  if (out.explicit && !out.rows.length) out.problems.push('Hay encabezados pero ninguna fila.');
+  out.cols = Math.max(cols, out.head.length - 1);
+  return out;
+}
+const NUTRI_FIND = {
+  energia: /^(energ[ií]a|calor[ií]as|valor energ[eé]tico)/i,
+  proteina: /^prote[ií]nas?\b/i,
+  carbo: /^(carbohidratos?|hidratos de carbono)( total(?:es)?)?$/i,
+  grasa: /^(grasas?|l[ií]pidos)( total(?:es)?)?$/i,
+  azucar: /^az[uú]cares?( total(?:es)?)?$/i
+};
+const nutriNum = (cell, unit) => { const m = String(cell || '').match(/^(\d+(?:\.\d+)?) (\S+)$/); return m && m[2] === unit ? Number(m[1]) : null; };
+/* Aviso (no corrección) si las calorías declaradas no se parecen a 4·proteína + 4·carbohidratos + 9·grasa. */
+function nutriConsistency(p) {
+  const find = re => p.rows.find(r => !r.sub && re.test(r.name));
+  const e = find(NUTRI_FIND.energia), pr = find(NUTRI_FIND.proteina), ch = find(NUTRI_FIND.carbo), gr = find(NUTRI_FIND.grasa);
+  if (!e || !pr || !ch || !gr) return [];
+  const msgs = [];
+  for (let j = 0; j < p.cols; j++) {
+    const kcal = nutriNum(e.cells[j], 'kcal'), P = nutriNum(pr.cells[j], 'g'), C = nutriNum(ch.cells[j], 'g'), G = nutriNum(gr.cells[j], 'g');
+    if ([kcal, P, C, G].some(x => x === null)) continue;
+    const exp = 4 * P + 4 * C + 9 * G;
+    if (Math.abs(kcal - exp) > Math.max(10, exp * 0.2)) msgs.push(`Tabla nutrimental, columna «${p.head[j + 1] || 'Valor ' + (j + 1)}»: declara ${kcal} kcal, pero proteína, carbohidratos y grasas suman cerca de ${Math.round(exp)} kcal (4-4-9). Verifica la etiqueta.`);
+  }
+  return msgs;
+}
+function nutriTableHtml(v) {
+  const text = v.nutrimental;
+  if (!text) return '';
+  const p = parseNutrition(text);
+  if (!p.rows.length) return '';
+  const cap2 = ['Información nutrimental', [v.porcion && `porción: ${v.porcion}`, v.porciones && `porciones por envase: ${v.porciones}`].filter(Boolean).join('; ')].filter(Boolean);
+  const caption = cap2.length > 1 ? `${cap2[0]} (${cap2[1]})` : cap2[0];
+  const th = p.head.slice(0, p.cols + 1).map(h => `<th scope="col">${escT(h)}</th>`).join('');
+  const rows = p.rows.map(r => `    <tr${r.sub ? ' class="sub"' : ''}><th scope="row">${escT(r.name)}</th>${Array.from({ length: p.cols }, (_, j) => `<td>${escT(r.cells[j] || '—')}</td>`).join('')}</tr>`).join('\n');
+  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental">\n  <caption>${escT(caption)}</caption>\n  <thead><tr>${th}</tr></thead>\n  <tbody>\n${rows}\n  </tbody>\n</table>`;
+}
+/* Dato de la primera columna de valores, para las preguntas frecuentes. */
+function nutriFact(v, re) {
+  if (!v.nutrimental) return null;
+  const p = parseNutrition(v.nutrimental), r = p.rows.find(x => re.test(x.name));
+  if (!r || !r.cells[0]) return null;
+  const head = p.explicit && p.head[1] && !/^(cantidad|valor 1)$/i.test(p.head[1]) ? ` (${lc(p.head[1])})` : '';
+  return { name: r.name, value: r.cells[0], head };
+}
+
 /* ---------- Plantillas de Magento ---------- */
 const S = t => t ? `<strong>${escT(t)}</strong>` : '';
 const liRows = pairs => pairs.filter(([, v]) => v).map(([l, v]) => `  <li><strong>${l}:</strong> ${escT(v)}</li>`).join('\n');
@@ -302,6 +388,7 @@ const CATS = {
       F('sabor','Sabor',{g:'d',ph:'Naranja',hint:'Opcional. Si lo capturas, entra en el título.'}),
       F('porcion','Tamaño de porción',{g:'d',ph:'1 cápsula',hint:'Opcional. Tal como aparece en la etiqueta.'}),
       F('porciones','Porciones por envase',{g:'d',ph:'100',hint:'Opcional. Tal como aparece en la etiqueta.'}),
+      F('nutrimental','Información nutrimental',{g:'d',type:'area',raw:1,lines:1,rows:7,ph:'# Nutriente | Por porción | % VD',hint:'Opcional. Cópiala tal cual de la etiqueta, una fila por línea: Proteína | 20 g | 40 %. Si hay más de una columna (por porción, por 100 g, % VD), empieza con una línea de encabezados: # Nutriente | Por porción | Por 100 g | % VD. Un renglón dentro de otro empieza con guion: - Azúcares | 2 g. No se calcula nada: se muestra lo que captures.'}),
       F('modo','Modo de consumo',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal como aparece en el empaque. Aparece en una sección aparte.'})
     ],
     title: [
@@ -335,7 +422,7 @@ const CATS = {
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
         ['Contenido Neto/Piezas', v.contenido], ['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], [...secs([['Composición:', v.composicion], ['Características:', v.caracteristicas], ['Modo de consumo:', v.modo]]), NOTA_SUP]);
+      ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Composición:', v.composicion], ['Características:', v.caracteristicas], ['Modo de consumo:', v.modo]]), NOTA_SUP]);
     }
   },
 
@@ -480,7 +567,7 @@ Object.keys(CATS).forEach(id => { CATS[id].id = id; });
     med: [['leyenda', 'volumen'], ['volumen', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'categoria', 'leyenda']],
     dis: [['extra'], ['extra', 'categoria']],
     cos: [['comercial'], ['ingredientes', 'comercial', 'inci', 'modo', 'precauciones', 'fps', 'nivel', 'categoria']],
-    sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'categoria']],
+    sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'categoria']],
     beb: [['descripcion', 'caracteristicas', 'leyenda'], ['descripcion', 'caracteristicas', 'leyenda', 'categoria']],
     hig: [['ingredientes', 'caracteristicas'], ['ingredientes', 'caracteristicas', 'categoria']],
     acc: [['queEs', 'caracteristicas', 'paquete'], ['queEs', 'caracteristicas', 'paquete', 'categoria']]
@@ -501,6 +588,7 @@ function values(c, raw, style, keep) {
   for (const fd of c.fields) {
     const r = raw[fd.key] ?? '';
     if (fd.type === 'select') { v[fd.key] = r; continue; }
+    if (fd.lines) { v[fd.key] = String(r).split(/\r?\n/).map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n'); continue; }
     const orig = String(r).replace(/\s+/g, ' ').trim();
     let t = orig;
     if (t) {
@@ -612,6 +700,9 @@ const FAQ_RULES = {
     (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
     v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
     v.sabor && [[`¿Qué sabor tiene ${n}?`, `¿Cuál es el sabor de ${n}?`], [`Su sabor es ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`, `Es sabor ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`]],
+    nutriFact(v, NUTRI_FIND.energia) && [[`¿Cuántas calorías tiene ${n}?`, `¿Cuántas calorías aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.energia).value}${nutriFact(v, NUTRI_FIND.energia).head}.`],
+    nutriFact(v, NUTRI_FIND.proteina) && [[`¿Cuánta proteína tiene ${n}?`, `¿Cuánta proteína aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.proteina).value} de proteína${nutriFact(v, NUTRI_FIND.proteina).head}.`],
+    nutriFact(v, NUTRI_FIND.azucar) && [[`¿Cuánta azúcar tiene ${n}?`, `¿Cuántos azúcares aporta ${n}?`], `Según su tabla nutrimental, tiene ${nutriFact(v, NUTRI_FIND.azucar).value} de azúcares${nutriFact(v, NUTRI_FIND.azucar).head}.`],
     v.porciones && [[`¿Cuántas porciones trae ${n}?`, `¿Cuántas porciones tiene cada envase de ${n}?`], [`Trae ${v.porciones} porciones por envase${v.porcion ? `, con un tamaño de porción de ${lc(v.porcion)}` : ''}.`]],
     faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
     v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
@@ -730,6 +821,7 @@ function lint(c, raw) {
       if (!raw.precauciones) out.check.push('Protector solar sin precauciones. Captura las leyendas del empaque.');
     } else if (nivel) out.check.push('Capturaste un nivel de protección sin FPS.');
   }
+  if (c.id === 'sup' && raw.nutrimental) { const np = parseNutrition(raw.nutrimental); out.check.push(...np.problems, ...nutriConsistency(np)); }
   if (raw.atc && !ATC_RE.test(String(raw.atc).toUpperCase().replace(/\s+/g, ''))) out.check.push(`El código ATC "${raw.atc}" no tiene el formato esperado. Ejemplos: A10, A10BX, A10BX16.`);
   return out;
 }
@@ -1471,6 +1563,8 @@ const api = {
   buildMg,
   buildFaq,
   shortenMeta,
+  parseNutrition,
+  nutriConsistency,
   relations,
   complementEligible,
   AREAS,

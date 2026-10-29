@@ -245,7 +245,7 @@ function fieldHTML(fd) {
   if (fd.type === 'select') {
     ctl = `<select id="f-${fd.key}" data-key="${fd.key}">${fd.opts.map(([v, l]) => `<option value="${v}" ${v === val ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   } else if (fd.type === 'area') {
-    ctl = `<textarea id="f-${fd.key}" data-key="${fd.key}"${desc} rows="2" placeholder="${esc(fd.ph || '')}">${esc(val)}</textarea>`;
+    ctl = `<textarea id="f-${fd.key}" data-key="${fd.key}"${desc} rows="${fd.rows || 2}" placeholder="${esc(fd.ph || '')}">${esc(val)}</textarea>`;
   } else {
     const dl = fd.sug && fd.sug.length ? ` list="dl-${fd.key}"` : '';
     ctl = `<input type="text" id="f-${fd.key}" data-key="${fd.key}"${desc}${dl} value="${esc(val)}" placeholder="${esc(fd.ph || '')}" autocomplete="off">` + (dl ? `<datalist id="dl-${fd.key}">${fd.sug.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>` : '');

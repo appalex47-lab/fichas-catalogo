@@ -548,7 +548,7 @@ test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo
     const sinDato = F.computeFor(id, base[id], keep, meta);
     for (const fd of c.fields) {
       if (fd.type === 'select' || fd.g === 'i' || NO_TEXT.has(fd.key) || fd.key === 'atc') continue;
-      const r = F.computeFor(id, { ...base[id], [fd.key]: 'zzdatoprueba' }, keep, meta);
+      const r = F.computeFor(id, { ...base[id], [fd.key]: fd.key === 'nutrimental' ? 'zzdatoprueba | 5 g' : 'zzdatoprueba' }, keep, meta);
       const enFicha = /zzdatoprueba/i.test(strip(r.mg.html)), enTitulo = /zzdatoprueba/i.test(r.title.title);
       assert.ok(enFicha || enTitulo, `${id}.${fd.key} no llega a la ficha de Magento ni al título`);
       const usos = [...(c.mgUses || []), ...(c.mgOpt || [])];
@@ -570,4 +570,62 @@ test('Magento: los datos opcionales literales salen como secciones, escapados y 
   const cos = F.computeFor('cos', { marca: 'M', producto: 'P', tipo: 'Sérum', atributo: 'A', contenido: '30 mL', fabricante: 'F', comercial: 'Fórmula ligera de rápida absorción' }, keep, meta).mg.html;
   assert.match(cos, /<p>Fórmula ligera de rápida absorción<\/p>$/m);
   assert.ok(!/Descripción:|Características:|Composición:/.test(F.computeFor('sup', { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F' }, keep, meta).mg.html), 'sin captura no cambia nada');
+});
+
+/* ---------- Tabla nutrimental ---------- */
+const supBase = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: 'Bote 900 g', fabricante: 'GNC' };
+const TABLA = '# Nutriente | Por porción (30 g) | Por 100 g | % VD\nEnergía | 120 kcal | 400 kcal | 6 %\nProteína | 24 g | 80 g | 48 %\nCarbohidratos | 3 g | 10 g | 1 %\n- Azúcares | 1.5 g | 5 g\nGrasa total | 1.5 g | 5 g | 2 %\nSodio | 90 mg | 300 mg | 4 %';
+
+test('tabla nutrimental: se arma una tabla HTML con id, encabezados y subfilas a partir de líneas', () => {
+  const h = F.computeFor('sup', { ...supBase, porcion: '1 scoop (30 g)', porciones: '30', nutrimental: TABLA }, keep, meta).mg.html;
+  assert.match(h, /<h2>Información nutrimental:<\/h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental">/);
+  assert.match(h, /<caption>Información nutrimental \(porción: 1 scoop \(30 g\); porciones por envase: 30\)<\/caption>/);
+  assert.match(h, /<thead><tr><th scope="col">Nutriente<\/th><th scope="col">Por porción \(30 g\)<\/th><th scope="col">Por 100 g<\/th><th scope="col">% VD<\/th><\/tr><\/thead>/);
+  assert.match(h, /<tr><th scope="row">Proteína<\/th><td>24 g<\/td><td>80 g<\/td><td>48 %<\/td><\/tr>/);
+  assert.match(h, /<tr class="sub"><th scope="row">Azúcares<\/th><td>1.5 g<\/td><td>5 g<\/td><td>—<\/td><\/tr>/);
+  assert.ok(h.indexOf('Información nutrimental:') > h.indexOf('Ficha técnica') && h.indexOf('Información nutrimental:') < h.indexOf('Condiciones de conservación'));
+  assert.equal((h.match(/id="tabla-nutrimental"/g) || []).length, 1);
+});
+
+test('tabla nutrimental: limpia unidades y mayúsculas, acepta tabulaciones y filas pegadas sin barras, y escapa el HTML', () => {
+  const p = F.parseNutrition('PROTEÍNA\t20G\t40%\nCalorías 120KCAL\nSodio | <1 mg\nVitamina C | 90 MG\nHierro | No significativo & otros');
+  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Proteína', '20 g', '40 %'], ['Calorías', '120 kcal'], ['Sodio', '<1 mg'], ['Vitamina C', '90 mg'], ['Hierro', 'No significativo & otros']]);
+  assert.deepEqual(p.head, ['Nutriente', 'Valor 1', 'Valor 2'], 'sin encabezados con varias columnas usa nombres genéricos');
+  assert.ok(p.problems.some(x => /encabezados/.test(x)), 'y lo avisa');
+  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Hierro | No significativo & <b>' }, keep, meta).mg.html;
+  assert.match(h, /<td>No significativo &amp; &lt;b&gt;<\/td>/);
+  assert.match(h, /<th scope="col">Cantidad<\/th>/, 'una sola columna se llama Cantidad');
+  assert.equal(F.parseNutrition('Proteína | 20,5 g').rows[0].cells[0], '20.5 g', 'la coma decimal pasa a punto');
+});
+
+test('tabla nutrimental: avisa de filas sin cantidad o sin nombre y de columnas que no cuadran, sin tocar los datos', () => {
+  const p = F.parseNutrition('# Nutriente | Por porción\nProteína | 20 g | 40 %\nGrasa\n | 5 g');
+  assert.ok(p.problems.some(x => /Grasa/.test(x) && /no tiene cantidad/.test(x)));
+  assert.ok(p.problems.some(x => /sin nombre/.test(x)));
+  assert.ok(p.problems.some(x => /columna\(s\) de valores/.test(x)));
+  const c = F.lint(F.CATS.sup, { nutrimental: '# Nutriente | Por porción\nGrasa' }).check;
+  assert.match(c.join(' '), /Grasa/);
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: TABLA }).check, [], 'una tabla coherente no avisa');
+});
+
+test('tabla nutrimental: avisa si las calorías no cuadran con 4-4-9, por columna, y nunca corrige el número', () => {
+  const mal = '# Nutriente | Por porción | Por 100 g\nEnergía | 300 kcal | 400 kcal\nProteína | 24 g | 80 g\nCarbohidratos | 3 g | 10 g\nGrasa total | 1.5 g | 5 g';
+  const avisos = F.lint(F.CATS.sup, { nutrimental: mal }).check;
+  assert.equal(avisos.length, 1);
+  assert.match(avisos[0], /columna «Por porción»: declara 300 kcal, pero .* cerca de 122 kcal/);
+  const h = F.computeFor('sup', { ...supBase, nutrimental: mal }, keep, meta).mg.html;
+  assert.match(h, /<td>300 kcal<\/td>/, 'se muestra lo capturado');
+  const sinDatos = '# Nutriente | Por porción\nEnergía | 300 kcal\nProteína | 24 g';
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: sinDatos }).check, [], 'sin carbohidratos y grasa no puede comparar');
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: '# Nutriente | % VD\nEnergía | 6 %\nProteína | 48 %\nCarbohidratos | 1 %\nGrasa total | 2 %' }).check, [], 'las columnas de porcentaje no se comparan');
+});
+
+test('tabla nutrimental: sin captura no cambia nada y las preguntas frecuentes salen de la tabla', () => {
+  assert.equal(F.computeFor('sup', supBase, keep, meta).mg.html, F.computeFor('sup', { ...supBase, nutrimental: '   \n  ' }, keep, meta).mg.html);
+  assert.ok(!/tabla-nutrimental/.test(F.computeFor('sup', { ...supBase, nutrimental: 'solo texto sin cantidades' }, keep, meta).mg.html), 'sin filas válidas no hay tabla');
+  const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...supBase, nutrimental: TABLA }, sd).items);
+  const resp = re => q.filter(([a]) => re.test(a)).map(([, b]) => b);
+  assert.ok(resp(/calorías/).every(b => /aporta 120 kcal \(por porción \(30 g\)\)\./.test(b)) && resp(/calorías/).length);
+  assert.ok(resp(/proteína/).every(b => /aporta 24 g de proteína/.test(b)) && resp(/proteína/).length);
+  assert.ok(resp(/azúcar/).every(b => /tiene 1.5 g de azúcares/.test(b)) && resp(/azúcar/).length);
 });
