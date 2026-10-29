@@ -637,8 +637,33 @@ Object.keys(CATS).forEach(id => { if (id !== 'med') CATS[id].fields.push(F('area
 const labelOf = (c, k) => (c.fields.find(x => x.key === k) || {}).label || k;
 
 /* ---------- Cálculo ---------- */
+/* El tipo dice qué es el producto y el contenido cuánto trae. Si llegan mezclados se acomodan: una cantidad escrita en el tipo pasa a
+   «Contenido», un contenido sin cantidad pasa a ser el tipo, y si están al revés se intercambian. Las concentraciones (mg, mcg, UI)
+   no son contenido y se dejan donde están. No cambia nada que ya esté bien puesto. */
+const TIPO_KEY = { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' };
+const PACK_QTY = String.raw`(?:(?:frasco|caja|botella|bolsa|sobre|lata|tubo|bote|paquete)s?\s+(?:con|de)?\s*)?\d+(?:[.,]\d+)?\s*(?:ml|l|g|kg|piezas?|pzas?|pz|tabletas?|c[aá]psulas?|sobres?|unidades?|gomitas?|ampolletas?|tiras?)\b`;
+const PACK_END = new RegExp(`\\s*[-–,(]?\\s*(${PACK_QTY})\\s*\\)?\\s*$`, 'i'), PACK_ALL = new RegExp(`^\\s*${PACK_QTY}\\s*$`, 'i');
+const noQty = n => !/\d/.test(n) && !/\b(?:[uú]nic[oa]|par|kit|pieza|unidad)\b/i.test(n);
+function placeFields(c, raw) {
+  const tk = TIPO_KEY[c.id], out = { raw, changes: [] };
+  if (!tk) return out;
+  let t = String(raw[tk] ?? '').replace(/\s+/g, ' ').trim(), n = String(raw.contenido ?? '').replace(/\s+/g, ' ').trim();
+  const t0 = t, n0 = n;
+  if (t && PACK_ALL.test(t)) { if (!n) { n = t; t = ''; } else if (noQty(n)) [t, n] = [n, t]; }
+  else if (t && PACK_END.test(t)) {
+    const m = t.match(PACK_END), rest = t.slice(0, m.index).trim();
+    if (rest) { if (!n) n = m[1].trim(); t = rest; }
+  } else if (!t && n && noQty(n)) { t = n; n = ''; }
+  if (t === t0 && n === n0) return out;
+  const lbl = k => (c.fields.find(f => f.key === k) || {}).label || k;
+  out.raw = { ...raw, [tk]: t, contenido: n };
+  if (t !== t0) out.changes.push({ label: lbl(tk), from: t0, to: t || '(vacío)' });
+  if (n !== n0) out.changes.push({ label: lbl('contenido'), from: n0 || t0, to: n || '(vacío)' });
+  return out;
+}
 function values(c, raw, style, keep) {
-  const v = {}, changes = [];
+  const pl = placeFields(c, raw); raw = pl.raw;
+  const v = {}, changes = style === 'mL' ? [...pl.changes] : [];
   for (const fd of c.fields) {
     const r = raw[fd.key] ?? '';
     if (fd.type === 'select') { v[fd.key] = r; continue; }
@@ -879,6 +904,7 @@ const ALERGENOS = [
 ];
 const QTY_RE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|kg|ml|l|ui|piezas?|pzas?|pz|tabletas?|c[aá]psulas?|sobres?|unidades?|gomitas?|ampolletas?|tiras?)\b/i;
 function lint(c, raw) {
+  raw = placeFields(c, raw).raw;
   const out = { claim: [], vacio: [], amber: [], med: [], check: [] };
   for (const fd of c.fields) {
     if (fd.type === 'select' || fd.raw || fd.sentence) continue;
