@@ -118,3 +118,12 @@ test('CSV: los complementos del catálogo solo salen si el SKU va en el archivo 
   const compat = F.relations([{ sku: 'DIS-1', cat: 'dis', v: { marca: 'A', compat: 'MOU-1, SUE-1' } }, { sku: 'MOU-1', cat: 'med', v: { marca: 'M', receta: 'si', especialidad: 'no' } }, { sku: 'SUE-1', cat: 'beb', v: { marca: 'E' } }]);
   assert.deepEqual(compat.get('dis-1').crosssell, ['SUE-1'], 'el medicamento con receta no puede ir como compatible');
 });
+
+test('catálogo: el nombre para mostrar es corto y el título completo se conserva para la IA', () => {
+  assert.equal(C.shortName('med', { marca: 'Mounjaro', concentracion: '2.5 mg', volumen: '0.6 mL', principio: 'Tirzepatida' }), 'Mounjaro 2.5 mg / 0.6 mL');
+  assert.equal(C.shortName('beb', { marca: 'Fresubin', tipo: 'Nutrición oral', sabor: 'Vainilla', contenido: '200 mL' }), 'Fresubin Nutrición oral 200 mL');
+  const c = C.empty();
+  const e = C.upsert(c, item('FRE-1', 'beb', { marca: 'Fresubin', tipo: 'Nutrición oral', contenido: '200 mL' }), 'Fresubin Nutrición oral | Sabor Vainilla | 200 mL', AT).entry;
+  assert.equal(e.nombre, 'Fresubin Nutrición oral 200 mL');
+  assert.equal(e.titulo, 'Fresubin Nutrición oral | Sabor Vainilla | 200 mL');
+});

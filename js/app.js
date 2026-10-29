@@ -2524,7 +2524,7 @@ async function proposeLinks(mode, subject, candidates) {
   if (!key) return { ai: false, matches: new Map() };
   const limited = candidates.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 150);
   try {
-    const res = await AI.aiComplements({ apiKey: key, model: aiModel(), mode, subject: { name: subject.nombre, cat: subject.cat, area: subject.area, area2: subject.area2, atc: subject.atc }, candidates: limited.map((c, i) => ({ id: i + 1, name: c.nombre, cat: c.cat, area: c.area, area2: c.area2, atc: c.atc })), onCall: () => bumpCalls('comp') });
+    const res = await AI.aiComplements({ apiKey: key, model: aiModel(), mode, subject: { name: subject.titulo || subject.nombre, cat: subject.cat, area: subject.area, area2: subject.area2, atc: subject.atc }, candidates: limited.map((c, i) => ({ id: i + 1, name: c.titulo || c.nombre, cat: c.cat, area: c.area, area2: c.area2, atc: c.atc })), onCall: () => bumpCalls('comp') });
     return { ai: true, matches: new Map(res.map(r => [limited[r.id - 1].sku, r.motivo])) };
   } catch (err) {
     toast('La IA no pudo proponer complementos: ' + UX.friendlyError(err, 'proponer complementos').message + ' Elige a mano.', 'warn');

@@ -45,6 +45,13 @@ function status(cat, e) {
 const STATUS_LABEL = { no_aplica: 'No puede ser complemento', vinculado: 'Complemento vinculado', esperando: 'Esperando producto principal', independiente: 'No es complemento', sin_evaluar: 'Sin evaluar' };
 
 /* Crea o actualiza la ficha del catálogo a partir de un producto del lote. `title` es el título generado. */
+/* Nombre corto para mostrar: marca, producto o tipo y concentración o contenido. El título completo se conserva aparte. */
+const shortName = (catId, v) => {
+  v = v || {};
+  const id = catId === 'med' ? '' : (v.producto || v.modelo || v.componente || v.tipo || '');
+  const size = catId === 'med' ? [v.concentracion, v.volumen].filter(Boolean).join(' / ') : (v.concentracion || v.contenido || '');
+  return [v.marca, id, size].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+};
 function upsert(cat, item, title, at) {
   const sku = String(item.sku || '').trim();
   if (!sku) return { entry: null, isNew: false, removed: [] };
@@ -52,7 +59,7 @@ function upsert(cat, item, title, at) {
   const elegible = eligibleOf(item.cat, v);
   let e = find(cat, sku), isNew = !e, removed = [];
   if (!e) { e = { sku, addedAt: at, comp: 'sin_evaluar' }; cat.entries.push(e); }
-  Object.assign(e, { cat: item.cat, nombre: String(title || v.marca || sku), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at });
+  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at });
   if (!elegible) {
     /* Si dejó de ser elegible (por ejemplo, se declaró que requiere receta), pierde sus vínculos como complemento. */
     removed = cat.links.filter(l => lk(l.c) === lk(sku));
@@ -117,7 +124,7 @@ function markExported(cat, skus, at) {
   return n;
 }
 
-const api = { empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
+const api = { shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasCatalog = api;
 })(typeof self !== 'undefined' ? self : this);

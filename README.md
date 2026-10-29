@@ -173,7 +173,7 @@ Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**
 - **Medicamentos:** «Área terapéutica», «Segunda área terapéutica» (por ejemplo diabetes y control de peso) y «Código ATC». **Demás categorías:** «Área de uso o necesidad» (por ejemplo Hidratación o Nutrición y vitaminas).
 - Las áreas salen de una lista cerrada (16 opciones, definida en `AREAS` de `js/logic.js`).
 - El **código ATC** (Anatómica, Terapéutica y Química, de la OMS) tiene de 1 a 5 niveles, por ejemplo A, A10, A10B, A10BX o A10BX16. La herramienta valida el formato, lo pasa a mayúsculas y avisa si no lo cumple. No lo compara con el índice oficial, así que verifícalo allí.
-- **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe marca, principio activo, concentración, forma, vía y tipo; no recibe receta, laboratorio ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
+- **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe el título del producto (que incluye marca, principio activo, concentración, presentación y laboratorio) y esos mismos datos sueltos; no recibe receta, categoría, SKU ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
 - El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
 
 ## Datos crudos (extracción por reglas)
