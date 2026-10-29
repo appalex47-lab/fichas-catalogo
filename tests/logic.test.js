@@ -304,3 +304,45 @@ test('FAQ: todas las variantes cumplen las reglas de lenguaje y no tocan textos 
     }
   }
 });
+
+/* ---------- Relacionados, alternativas y compatibles ---------- */
+const mk = (sku, marca, over = {}) => ({ sku, cat: 'med', v: { marca, concentracion: '500 mg', principio: 'Paracetamol', forma: 'Tabletas', contenido: 'Caja con 20 tabletas', laboratorio: 'Lab Uno', via: 'Oral', receta: 'no', ...over } });
+
+test('relaciones: alternativas = mismo principio, concentración, presentación y receta, de otra marca', () => {
+  const r = F.relations([
+    mk('A1', 'Tempra'), mk('A2', 'Tylenol'), mk('A3', 'Genérico', { laboratorio: 'Lab Dos' }),
+    mk('B1', 'Tempra', { concentracion: '650 mg' }),
+    mk('C1', 'Otra', { contenido: 'Caja con 10 tabletas' }),
+    mk('D1', 'Rx', { receta: 'si' }),
+    mk('E1', 'Pomada', { principio: 'Ibuprofeno' })
+  ]);
+  assert.deepEqual(r.get('a1').upsell, ['A2', 'A3']);
+  assert.ok(!r.get('a1').upsell.includes('B1') && !r.get('a1').upsell.includes('C1') && !r.get('a1').upsell.includes('D1') && !r.get('a1').upsell.includes('E1'));
+});
+
+test('relaciones: relacionados = misma marca o laboratorio, sin repetir alternativas ni a sí mismo', () => {
+  const r = F.relations([mk('A1', 'Tempra'), mk('A2', 'Tylenol'), mk('B1', 'Tempra', { concentracion: '650 mg' }), mk('F1', 'Zeta', { principio: 'Otro', laboratorio: 'Lab Tres' })]);
+  assert.deepEqual(r.get('a1').related, ['B1', 'A2'].filter(x => x !== 'A2'));
+  assert.ok(!r.get('a1').related.includes('A1'));
+  assert.ok(!r.get('a1').related.includes('F1'));
+});
+
+test('relaciones: los compatibles solo salen de lo capturado y apuntan a SKU existentes', () => {
+  const dis = { sku: 'GLU1', cat: 'dis', v: { marca: 'Accu', compat: 'TIRA1, tira2; NOEXISTE, GLU1' } };
+  const acc = (sku) => ({ sku, cat: 'acc', v: { marca: 'Accu' } });
+  const r = F.relations([dis, acc('TIRA1'), acc('TIRA2')]);
+  assert.deepEqual(r.get('glu1').crosssell, ['TIRA1', 'TIRA2']);
+  assert.deepEqual(F.relations([dis]).get('glu1').crosssell, []);
+});
+
+test('relaciones: el CSV las llena solo con opts.relations y solo con SKU del mismo archivo', () => {
+  const items = [mk('A1', 'Tempra'), mk('A2', 'Tylenol'), mk('A3', 'Sin receta declarada', { receta: '' })];
+  const col = (ex, sku, c) => ex.rows.find(r => r[0] === sku)[ex.header.indexOf(c)];
+  const off = F.magentoBatch(items, keep, meta, {});
+  assert.equal(col(off, 'A1', 'upsell_skus'), '');
+  const on = F.magentoBatch(items, keep, meta, { relations: true });
+  assert.equal(col(on, 'A1', 'upsell_skus'), 'A2');
+  assert.equal(col(on, 'A2', 'upsell_skus'), 'A1');
+  assert.ok(on.contract.ok);
+  assert.deepEqual(on.relations, { upsell: 2, related: 0, crosssell: 0 });
+});

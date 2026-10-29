@@ -13,6 +13,7 @@ const {
   defMeta,
   defMetaCat,
   dupBrand,
+  relations,
   encodeCp1252,
   extractRaw,
   extractRows,
@@ -543,6 +544,7 @@ function renderLote() {
     return;
   }
   const all = assessed.all;
+  const relMap = relations(all.map(x => ({ sku: x.it.sku, cat: x.it.cat, v: { ...x.e.res.vt.v, compat: x.it.v.compat } })));
   state.anomalies = assessed.anomalies;
   renderExport(assessed);
   const anomalySummary = Anomalies.summarize(state.anomalies);
@@ -564,6 +566,12 @@ function renderLote() {
   const anomTags = e => state.anomalies.filter(a => a.indexes.includes(e.__index)).map(a => `<span class="tag tag--${a.severity === 'error' ? 'bad' : 'warn'}">${esc(a.type === 'duplicate-sku' ? 'SKU duplicado' : a.type === 'duplicate-title' ? 'Título duplicado' : a.type === 'near-duplicate-sku' ? 'SKU similar' : a.type === 'near-duplicate-title' ? 'Título similar' : 'Dato pendiente')}</span>`).join(' ') || '<span class="hint">—</span>';
   const num = v => (v == null ? '—' : v);
   const metrics = e => `<div class="lmetrics"><span>Health <b>${num(e.health.score)}</b></span><span>SEO <b>${num(e.seo && e.seo.score && e.seo.score.total)}</b></span><span>Contenido <b>${num(e.content && e.content.score && e.content.score.total)}</b></span><span>Magento <b>${e.magento ? esc((MAG_SHORT[e.magento.state] || [])[1] || '—') : '—'}</b></span><span>360° <b>${num(e.s360 && e.s360.global && e.s360.global.score)}</b></span></div>`;
+  const relLine = it => {
+    const r = relMap.get(String(it.sku || '').toLowerCase());
+    if (!r || !(r.upsell.length + r.related.length + r.crosssell.length)) return '';
+    const l = (t, a) => a.length ? `<li><strong>${t}:</strong> ${a.map(esc).join(', ')}</li>` : '';
+    return `<p class="hint"><strong>Productos relacionados que se exportan a Magento</strong> (solo si están en el mismo archivo):</p><ul class="seo-rules">${l('Alternativas (mismo principio activo, concentración y presentación)', r.upsell)}${l('Relacionados (misma marca o laboratorio)', r.related)}${l('Compatibles (los que capturaste)', r.crosssell)}</ul>`;
+  };
   const detail = ({ it, e }) => {
     const recs = (e.s360 && e.s360.recommendations) || [];
     const nba = UX.nextBestAction(e, { CATS, cat: it.cat, values: it.v, humanReview: humanReviewOf(it) });
@@ -573,6 +581,7 @@ function renderLote() {
       + `<p class="hint">${esc(e.s360.global.explain)}</p>`
       + (nba.kind === 'accion' ? `<div class="nba nba--${esc(nba.clase)}"><h3>Qué hacer ahora · ${esc(nba.claseLabel)}</h3><p class="nba-main">${esc(nba.texto)}</p>${nba.impacto ? `<p class="nba-sub">${esc(nba.impacto)}</p>` : ''}</div>` : '')
       + (topRecs ? `<ul class="seo-rules">${topRecs}</ul>${recs.length > 4 ? `<p class="hint">y ${recs.length - 4} más. Edita el producto para verlas todas.</p>` : ''}` : '<p class="hint">Sin recomendaciones pendientes.</p>')
+      + relLine(it)
       + (e.ux.canRevoke ? `<button type="button" class="btn" data-revoke="${esc(it.id)}">Retirar aprobación</button>` : '') + `</td></tr>`;
   };
   const rowHTML = x => {
@@ -1424,7 +1433,7 @@ function panelMeta(r) {
     + metaBlock('Alt de la imagen principal', m.alt, 'alt', true, 'Va en base_image_label.');
 }
 
-function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA }; }
+function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false }; }
 function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta, expOpts()); }
 function renderExport(assessed) {
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
@@ -1438,6 +1447,7 @@ function renderExport(assessed) {
   if (e.lenguaje) reasons.push(`${e.lenguaje} con avisos de lenguaje.`);
   if (e.ia) reasons.push(`${e.ia} con datos de IA sin confirmar (sugeridos o leídos de fotos). Confírmalos en el lote o activa la opción para incluirlos.`);
   if (e.duplicadas) reasons.push(`${e.duplicadas} SKU repetidos. Se exporta el último de cada uno.`);
+  if (ex.relations && state.exp.incRel !== false) { const r = ex.relations; if (r.upsell + r.related + r.crosssell) notes.push(`Relacionados en el CSV: ${r.upsell} con alternativas (upsell_skus), ${r.related} con relacionados (related_skus) y ${r.crosssell} con compatibles (crosssell_skus). Solo apuntan a SKU que se exportan en este mismo archivo.`); }
   if (e.sinMeta) notes.push(`${e.sinMeta} van sin meta title, meta description ni short_description porque la estructura de su categoría no está confirmada.`);
   if (e.sinImagen) notes.push(`${e.sinImagen} van con base_image vacío. El alt viaja solo en base_image_label. Si en la prueba no se aplica, agrega la ruta de la imagen.`);
   if (e.altLargos) notes.push(`${e.altLargos} alt superan el límite de caracteres.`);
@@ -1515,6 +1525,7 @@ $('#exp-enc').addEventListener('change', e => { state.exp.enc = e.target.value; 
 $('#exp-incf').addEventListener('change', e => { state.exp.incF = e.target.checked; saveExp(); renderExport(); });
 $('#exp-excl').addEventListener('change', e => { state.exp.excL = e.target.checked; saveExp(); renderExport(); });
 $('#exp-ia').addEventListener('change', e => { state.exp.incIA = e.target.checked; saveExp(); renderExport(); });
+$('#exp-rel').addEventListener('change', e => { state.exp.incRel = e.target.checked; saveExp(); renderExport(); });
 $('#exp-copy').addEventListener('click', e => withBusy(e.currentTarget, async () => {
   const ex = currentBatch();
   if (!ex.rows.length) { notify('No hay productos listos para exportar.', 'warn'); return; }
@@ -2406,7 +2417,7 @@ window.__fichasStats = () => ({ assess: { ...assessStats }, current: { ...curren
 // inesperados al abrir el HTML en navegadores móviles o WebViews.
 document.querySelectorAll('button:not([type])').forEach(b => { b.type = 'button'; });
 renderConnectorCategories(); renderConnectorSource();
-$('#exp-ia').checked = !!state.exp.incIA; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL;
+$('#exp-ia').checked = !!state.exp.incIA; $('#exp-rel').checked = state.exp.incRel !== false; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL;
 renderMetaCfg();
 resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
 })();

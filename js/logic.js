@@ -183,7 +183,8 @@ const CATS = {
       F('caracteristicas','Características técnicas verificables',{g:'d',type:'area'}),
       F('paquete','Contenido del paquete',{g:'d'}),
       F('presentacion','Presentación',{g:'d',pres:1}),
-      F('extra','Especificaciones adicionales',{g:'d',type:'area',hint:'Conectividad, memoria, muestra, etc.'})
+      F('extra','Especificaciones adicionales',{g:'d',type:'area',hint:'Conectividad, memoria, muestra, etc.'}),
+      F('compat','Insumos compatibles (SKU)',{g:'d',raw:1,hint:'SKU de los insumos o accesorios que van con este producto, separados por coma. Salen en crosssell_skus. No cambian ningún texto.'})
     ],
     title: [
       seg('Marca + modelo + tipo', ['marca','modelo','tipo']),
@@ -416,7 +417,8 @@ const CATS = {
       F('fabricante','Fabricante',{req:1,ph:'Essity'}),
       F('queEs','¿Qué es? Descripción objetiva',{g:'d',type:'area'}),
       F('caracteristicas','Características principales',{g:'d',type:'area'}),
-      F('paquete','Incluye',{g:'d'})
+      F('paquete','Incluye',{g:'d'}),
+      F('compat','Productos compatibles (SKU)',{g:'d',raw:1,hint:'SKU de los productos que van con este accesorio, separados por coma. Salen en crosssell_skus. No cambian ningún texto.'})
     ],
     title: [
       seg('Marca + producto o modelo', ['marca','producto']),
@@ -824,7 +826,7 @@ const defMetaCat = id => ({
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
 const defMeta = () => ({ tienda: '', cats: Object.fromEntries(Object.keys(CATS).map(id => [id, defMetaCat(id)])) });
-const defExp = () => ({ attr: 'categoria_prod', enc: 'cp1252', incF: false, excL: false, incIA: false });
+const defExp = () => ({ attr: 'categoria_prod', enc: 'cp1252', incF: false, excL: false, incIA: false, incRel: true });
 const TITLE_MAX = 150; // Límite del título para Google Merchant Center (criterio de la herramienta)
 const ALT_BAD_START_RE = /^(imagen|foto|fotograf[ií]a)\b/i; // El alt no debe empezar con «imagen de» o «foto de»
 const COMERCIAL_RE = /\b(compra|comprar|compre|oferta|ofertas|descuento|descuentos|promoci[oó]n|env[ií]o gratis|mejor precio|barato|econ[oó]mic[oa])\b/i;
@@ -935,9 +937,45 @@ function validateMagentoExport(ex) {
   return { ok: errors.length === 0, errors };
 }
 
+/* ---------- Productos relacionados, alternativas e insumos compatibles ----------
+ * Solo con productos del mismo lote y con reglas fijas:
+ * - Alternativas (upsell_skus): medicamento con el mismo principio activo, concentración, forma y presentación, y la misma
+ *   condición de receta, de otra marca. Una concentración o presentación distinta nunca es alternativa.
+ * - Relacionados (related_skus): misma categoría y la misma marca, o el mismo laboratorio o fabricante, que no sean alternativas.
+ * - Compatibles (crosssell_skus): los SKU que la persona capturó en «compat». Nunca se deducen. */
+const REL_MAX = 4;
+const relKey = x => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const relSet = x => relKey(x).split(' ').filter(Boolean).sort().join(' ');
+function relations(entries) {
+  const list = entries.filter(e => e && e.sku).map(e => {
+    const v = e.v || {};
+    return { sku: e.sku, cat: e.cat, marca: relKey(v.marca), org: relKey(v.laboratorio || v.fabricante), compat: String(v.compat || ''),
+      alt: e.cat === 'med' && v.principio && v.concentracion && v.forma && v.contenido && v.receta
+        ? [relSet(v.principio), relKey(join(' / ', v.concentracion, v.volumen)), relKey(v.forma), relKey(v.contenido), v.receta].join('|') : '' };
+  });
+  const bySku = new Map(list.map(e => [e.sku.toLowerCase(), e]));
+  const out = new Map();
+  for (const e of list) {
+    const others = list.filter(o => o.sku.toLowerCase() !== e.sku.toLowerCase());
+    const upsell = e.alt ? others.filter(o => o.alt === e.alt && o.marca !== e.marca) : [];
+    const used = new Set(upsell.map(o => o.sku.toLowerCase()));
+    const related = others.filter(o => o.cat === e.cat && !used.has(o.sku.toLowerCase()) && ((e.marca && o.marca === e.marca) || (e.org && o.org === e.org)))
+      .sort((a, b) => (b.marca === e.marca) - (a.marca === e.marca));
+    const cross = [...new Set(e.compat.split(/[\s,;|]+/).filter(Boolean).map(x => x.toLowerCase()))]
+      .filter(k => k !== e.sku.toLowerCase() && bySku.has(k)).map(k => bySku.get(k));
+    const by = (a, b) => a.sku.localeCompare(b.sku);
+    out.set(e.sku.toLowerCase(), {
+      upsell: upsell.sort(by).slice(0, REL_MAX).map(o => o.sku),
+      related: related.slice(0, REL_MAX).map(o => o.sku),
+      crosssell: cross.map(o => o.sku)
+    });
+  }
+  return out;
+}
+
 function magentoBatch(items, keep, metaCfg, opts) {
   const ex = { sinSku: 0, bloqueadas: 0, faltantes: 0, lenguaje: 0, duplicadas: 0, sinMeta: 0, sinImagen: 0, altLargos: 0, ia: 0 };
-  const bySku = new Map();
+  const bySku = new Map(), entries = new Map();
   const attr = String(opts.attr || '').trim() || 'categoria_prod';
   for (const it of items) {
     const sku = String(it.sku || '').trim();
@@ -964,9 +1002,21 @@ function magentoBatch(items, keep, metaCfg, opts) {
     const key = sku.toLowerCase();
     if (bySku.has(key)) ex.duplicadas++;
     bySku.set(key, row);
+    entries.set(key, { sku, cat: it.cat, v: { ...res.vt.v, compat: it.v && it.v.compat } });
+  }
+  const rel = { upsell: 0, related: 0, crosssell: 0 };
+  if (opts.relations) {
+    const map = relations([...entries.values()]);
+    for (const [key, row] of bySku) {
+      const r = map.get(key);
+      if (!r) continue;
+      [['upsell_skus', 'upsell'], ['related_skus', 'related'], ['crosssell_skus', 'crosssell']].forEach(([col, k]) => {
+        if (r[k].length) { row[MAG_IDX[col]] = sanitizeMagentoCell(r[k].join(','), col); rel[k]++; }
+      });
+    }
   }
   const rows = [...bySku.values()].map(sanitizeMagentoRow);
-  return { header: MAG_HEADER, rows, excluded: ex, total: items.length, contract: validateMagentoExport({ header: MAG_HEADER, rows }) };
+  return { header: MAG_HEADER, rows, excluded: ex, relations: rel, total: items.length, contract: validateMagentoExport({ header: MAG_HEADER, rows }) };
 }
 const batchCsv = ex => {
   const check = ex.contract || validateMagentoExport(ex);
@@ -1292,6 +1342,7 @@ const api = {
   buildMeta,
   buildMg,
   buildFaq,
+  relations,
   buildTitle,
   cap,
   capNouns,

@@ -143,6 +143,15 @@ La página solo necesita `index.html`, `styles/styles.css`, `js/logic.js`, `js/a
 - No exporta filas sin SKU, con descripción bloqueada ni con datos faltantes (se puede activar). Los SKU repetidos se exportan una sola vez.
 - Prueba siempre con 2 o 3 SKU en un ambiente de pruebas antes de una carga grande.
 
+## Productos relacionados, alternativas y compatibles
+
+Con la opción «Llenar productos relacionados, alternativas y compatibles» (Exportar, activa por defecto) el CSV llena tres columnas de Magento. Solo apuntan a SKU que se exportan en el mismo archivo y se calculan con reglas fijas:
+
+- **Alternativas** (`upsell_skus`): medicamentos con el mismo principio activo, la misma concentración, la misma forma y presentación y la misma condición de receta, de otra marca. Una concentración o presentación distinta nunca es alternativa. Se aplica también a medicamentos con receta.
+- **Relacionados** (`related_skus`): de la misma categoría y la misma marca, o el mismo laboratorio o fabricante, que no sean alternativas. Primero los de la misma marca.
+- **Compatibles** (`crosssell_skus`): los SKU que captures en «Insumos compatibles (SKU)» de dispositivos médicos y accesorios, separados por coma. Nunca se deducen.
+- Máximo 4 alternativas y 4 relacionados por producto. En el lote, el detalle de cada producto muestra lo que se exportaría.
+
 ## Datos crudos (extracción por reglas)
 
 Toma un SKU sucio y llena el formulario, o las filas de una carga masiva con una columna de datos crudos. Solo copia lo que aparece en el texto:
