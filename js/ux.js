@@ -227,8 +227,8 @@ function metaKeysOf(metaCfg, cat) {
 function usageOf(key, ctx) {
   const c = ctx.CATS[ctx.cat];
   const inTitle = asArr(ctx.titleKeys).includes(key);
-  const inMc = asArr(c.mcUses).includes(key);
-  const inMg = asArr(c.mgUses).includes(key);
+  const inMc = asArr(c.mcUses).includes(key) || asArr(c.mcOpt).includes(key);
+  const inMg = asArr(c.mgUses).includes(key) || asArr(c.mgOpt).includes(key);
   const inMeta = asArr(ctx.metaKeys).includes(key);
   const list = [
     { id: 'titulo', label: 'Título', on: inTitle },

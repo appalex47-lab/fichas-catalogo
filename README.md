@@ -176,6 +176,10 @@ Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**
 - **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe el título del producto (que incluye marca, principio activo, concentración, presentación y laboratorio) y esos mismos datos sueltos; no recibe receta, categoría, SKU ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
 - El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
 
+## Qué datos llegan a la ficha de Magento
+
+Los datos de texto opcionales («Datos para las descripciones») salen en el HTML de Magento como secciones aparte, con el texto literal que capturaste y solo si lo capturaste. Antes algunos solo llegaban a la descripción de Merchant Center. Ahora: medicamentos («Leyenda adicional»), dispositivos («Especificaciones adicionales»), dermocosméticos («Ingredientes o activos destacados» y la frase comercial al final), suplementos («Composición», «Características» y «Modo de consumo»), bebidas («Descripción», «Características» y «Leyenda»), cuidado personal («Ingredientes» y «Características») y accesorios («Descripción», «Características» e «Incluye»). El «Usado en» de cada campo del formulario indica a qué textos alimenta, y una prueba automática comprueba que todo dato capturado llegue a la ficha o al título.
+
 ## Formas, tipos y campos de suplementos
 
 - **Forma:** es un campo de texto libre; se puede escribir cualquier valor. Los campos de forma (medicamentos y suplementos) y de tipo (dispositivos, dermocosméticos, bebidas, cuidado personal y accesorios) muestran una lista de ayuda al escribir, que no limita lo que capturas.

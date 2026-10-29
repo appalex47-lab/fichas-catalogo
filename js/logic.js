@@ -105,6 +105,8 @@ const LEGEND = {
   supResp: 'El consumo de este producto es responsabilidad de quien lo recomienda y de quien lo usa. Este producto no es un medicamento.',
   supConservacion: 'Consérvese bien cerrado en un lugar fresco y seco. No se deje al alcance de los niños.'
 };
+/* Secciones de texto literal que se agregan al HTML de Magento solo si el dato fue capturado: [encabezado, texto]. */
+const secs = pairs => pairs.filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`);
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
 /* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
@@ -173,7 +175,7 @@ const CATS = {
         ['Nombre Comercial', v.marca], ['Sustancia Activa', v.principio], ['Concentración', conc],
         ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio], ['Categoría', v.categoria]
       ], [
-        ...[['Indicaciones:', v.indicaciones], ['Cómo se usa:', v.posologia], ['Población a la que va dirigido:', v.poblacion], ['Contraindicaciones y advertencias:', v.contraindicaciones]]
+        ...[['Indicaciones:', v.indicaciones], ['Cómo se usa:', v.posologia], ['Población a la que va dirigido:', v.poblacion], ['Contraindicaciones y advertencias:', v.contraindicaciones], ['Leyenda adicional:', v.leyenda]]
           .filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`),
         `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.medConservacion}</p>`,
         `<h2>Aviso legal y de seguridad:</h2>\n<ul>\n${LEGEND.medAviso.map(x => `  <li>${x}</li>`).join('\n')}\n</ul>`
@@ -224,7 +226,7 @@ const CATS = {
       return assemble(p, 'Especificaciones técnicas:', [
         ['Marca', v.marca], ['Modelo', v.modelo], ['Tipo de Dispositivo', v.tipo],
         ['Tecnología / Zona de medición', v.tecnologia], ['Contenido del Paquete', v.paquete], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ]);
+      ], secs([['Especificaciones adicionales:', v.extra]]));
     }
   },
 
@@ -278,11 +280,12 @@ const CATS = {
       if (v.inci) extras.push(`<h2>Ingredientes:</h2>\n<p>${escT(v.inci)}</p>`);
       if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
       if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escT(v.precauciones)}</p>`);
+      if (v.ingredientes) extras.push(...secs([['Ingredientes o activos destacados:', v.ingredientes]]));
       if (v.fps || v.nivel) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel]])}\n</ul>`);
       return assemble(p, 'Detalles del producto:', [
         ['Marca', v.marca], ['Nombre del Producto', v.producto], ['Tipo de Producto', v.tipo],
         ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], extras);
+      ], [...extras, ...(v.comercial ? [`<p>${escT(v.comercial)}</p>`] : [])]);
     }
   },
 
@@ -303,8 +306,8 @@ const CATS = {
     ],
     title: [
       seg('Marca + componente', ['marca','componente']),
-      seg('Sabor', ['sabor'], v => saborTxt(v.sabor)),
       seg('Forma + contenido', ['forma','contenido'], v => joinForm(v.forma, v.contenido)),
+      seg('Sabor', ['sabor'], v => saborTxt(v.sabor)),
       seg('Fabricante', ['fabricante'])
     ],
     vital: ['componente'],
@@ -332,7 +335,7 @@ const CATS = {
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
         ['Contenido Neto/Piezas', v.contenido], ['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], [...(v.modo ? [`<h2>Modo de consumo:</h2>\n<p>${escT(v.modo)}</p>`] : []), NOTA_SUP]);
+      ], [...secs([['Composición:', v.composicion], ['Características:', v.caracteristicas], ['Modo de consumo:', v.modo]]), NOTA_SUP]);
     }
   },
 
@@ -377,7 +380,7 @@ const CATS = {
       return assemble(p, 'Características de la bebida:', [
         ['Marca', v.marca], ['Tipo de Bebida', v.tipo], ['Sabor', sabor],
         ['Atributo Verificado', v.atributo], ['Contenido', v.contenido], ['Categoría', v.categoria]
-      ]);
+      ], secs([['Descripción:', v.descripcion], ['Características:', v.caracteristicas], ['Leyenda:', v.leyenda]]));
     }
   },
 
@@ -422,7 +425,7 @@ const CATS = {
       return assemble(p, 'Información de cuidado personal:', [
         ['Marca', v.marca], ['Producto', v.producto], ['Variante o Característica Principal', v.variante],
         ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ]);
+      ], secs([['Ingredientes:', v.ingredientes], ['Características:', v.caracteristicas]]));
     }
   },
 
@@ -464,12 +467,26 @@ const CATS = {
       return assemble(p, 'Especificaciones del accesorio:', [
         ['Marca', v.marca], ['Producto/Modelo', v.producto], ['Material o Compatibilidad', v.material],
         ['Contenido/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ]);
+      ], secs([['Descripción:', v.queEs], ['Características:', v.caracteristicas], ['Incluye:', v.paquete]]));
     }
   }
 };
 
 Object.keys(CATS).forEach(id => { CATS[id].id = id; });
+/* Campos opcionales que alimentan la descripción de Merchant Center (mcOpt) o el HTML de Magento (mgOpt) cuando se capturan.
+   Solo sirven para decir dónde se usa cada dato; no cambian los avisos de datos faltantes. */
+{
+  const opt = {
+    med: [['leyenda', 'volumen'], ['volumen', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'categoria', 'leyenda']],
+    dis: [['extra'], ['extra', 'categoria']],
+    cos: [['comercial'], ['ingredientes', 'comercial', 'inci', 'modo', 'precauciones', 'fps', 'nivel', 'categoria']],
+    sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'categoria']],
+    beb: [['descripcion', 'caracteristicas', 'leyenda'], ['descripcion', 'caracteristicas', 'leyenda', 'categoria']],
+    hig: [['ingredientes', 'caracteristicas'], ['ingredientes', 'caracteristicas', 'categoria']],
+    acc: [['queEs', 'caracteristicas', 'paquete'], ['queEs', 'caracteristicas', 'paquete', 'categoria']]
+  };
+  Object.entries(opt).forEach(([id, [mc, mg]]) => { CATS[id].mcOpt = mc; CATS[id].mgOpt = mg; });
+}
 Object.keys(CATS).forEach(id => {
   if (id === 'med') return;
   const f = CATS[id].fields, last = f.map(x => !x.g).lastIndexOf(true);

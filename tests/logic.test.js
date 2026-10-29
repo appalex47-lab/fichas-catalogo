@@ -433,7 +433,7 @@ test('sabor: los suplementos también lo reconocen y entra en el título solo si
   const base = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: 'Bote 900 g', fabricante: 'GNC' };
   const sin = F.computeFor('sup', base, keep, meta), con = F.computeFor('sup', { ...base, sabor: 'Chocolate' }, keep, meta);
   assert.ok(!/Sabor/.test(sin.title.title));
-  assert.match(con.title.title, /GNC Proteína whey \| Sabor Chocolate \| /);
+  assert.match(con.title.title, /GNC Proteína whey \| Polvo, Bote 900 g \| Sabor Chocolate \| GNC/);
   assert.equal(F.computeFor('sup', base, keep, meta).mg.html, sin.mg.html);
 });
 
@@ -524,9 +524,50 @@ test('meta title largo: el CSV usa la versión corta de los productos que la eli
   assert.deepEqual([ex.excluded.mtLargos, ex.excluded.mtCortos], [1, 1]);
 });
 
-test('meta: un segmento opcional vacío del título (el sabor de suplementos) no deja hueco en {seg2}', () => {
+test('meta: un segmento opcional vacío del título no deja hueco en {seg2} y el sabor no desplaza la presentación', () => {
   const m = F.defMeta(); m.tienda = 'Tienda';
   const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
   assert.equal(F.computeFor('sup', base, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda');
-  assert.equal(F.computeFor('sup', { ...base, sabor: 'Naranja' }, keep, m).meta.mt.text, 'GNC Vitamina C | Sabor Naranja | Tienda');
+  assert.equal(F.computeFor('sup', { ...base, sabor: 'Naranja' }, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda', 'el sabor no desplaza la presentación del meta title');
+});
+
+/* ---------- Todo dato capturado llega a donde dice llegar ---------- */
+test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo en la descripción de Merchant Center)', () => {
+  const strip = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const base = {
+    med: { marca: 'M', concentracion: '5 mg', principio: 'P', forma: 'Tableta', contenido: 'Caja con 10 tabletas', laboratorio: 'L', via: 'Oral', receta: 'no' },
+    dis: { marca: 'M', modelo: 'X1', tipo: 'Tensiómetro', tecnologia: 'Automático', fabricante: 'F' },
+    cos: { marca: 'M', producto: 'P', tipo: 'Sérum', atributo: 'A', contenido: '30 mL', fabricante: 'F' },
+    sup: { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F' },
+    beb: { marca: 'M', tipo: 'Suero', sabor: 'Coco', atributo: 'A', contenido: '600 mL' },
+    hig: { marca: 'M', producto: 'P', variante: 'V', contenido: '100 mL', fabricante: 'F' },
+    acc: { marca: 'M', producto: 'P', material: 'Mat', contenido: '3 piezas', fabricante: 'F' }
+  };
+  const NO_TEXT = new Set(['compat']);
+  for (const [id, c] of Object.entries(F.CATS)) {
+    const sinDato = F.computeFor(id, base[id], keep, meta);
+    for (const fd of c.fields) {
+      if (fd.type === 'select' || fd.g === 'i' || NO_TEXT.has(fd.key) || fd.key === 'atc') continue;
+      const r = F.computeFor(id, { ...base[id], [fd.key]: 'zzdatoprueba' }, keep, meta);
+      const enFicha = /zzdatoprueba/i.test(strip(r.mg.html)), enTitulo = /zzdatoprueba/i.test(r.title.title);
+      assert.ok(enFicha || enTitulo, `${id}.${fd.key} no llega a la ficha de Magento ni al título`);
+      const usos = [...(c.mgUses || []), ...(c.mgOpt || [])];
+      if (enFicha) assert.ok(usos.includes(fd.key), `${id}.${fd.key} llega a Magento pero no está en mgUses/mgOpt (la etiqueta «Usado en» sería falsa)`);
+      if (r.mc.text !== sinDato.mc.text) assert.ok([...(c.mcUses || []), ...(c.mcOpt || [])].includes(fd.key), `${id}.${fd.key} llega a Merchant Center pero no está en mcUses/mcOpt`);
+    }
+  }
+});
+
+test('Magento: los datos opcionales literales salen como secciones, escapados y antes del aviso final', () => {
+  const sup = { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F', composicion: '20 g de Proteína & TCM <b>', caracteristicas: 'Dieta polimérica especializada' };
+  const h = F.computeFor('sup', sup, keep, meta).mg.html;
+  assert.match(h, /<h2>Composición:<\/h2>\n<p>20 g de Proteína &amp; TCM &lt;b&gt;<\/p>/);
+  assert.match(h, /<h2>Características:<\/h2>\n<p>Dieta polimérica especializada<\/p>/);
+  assert.ok(h.indexOf('Características:') < h.indexOf('Condiciones de conservación'));
+  const acc = F.computeFor('acc', { marca: 'M', producto: 'P', material: 'Mat', contenido: '3 piezas', fabricante: 'F', queEs: 'Parche térmico', paquete: 'Tres parches' }, keep, meta).mg.html;
+  assert.match(acc, /<h2>Descripción:<\/h2>\n<p>Parche térmico<\/p>/);
+  assert.match(acc, /<h2>Incluye:<\/h2>\n<p>Tres parches<\/p>/);
+  const cos = F.computeFor('cos', { marca: 'M', producto: 'P', tipo: 'Sérum', atributo: 'A', contenido: '30 mL', fabricante: 'F', comercial: 'Fórmula ligera de rápida absorción' }, keep, meta).mg.html;
+  assert.match(cos, /<p>Fórmula ligera de rápida absorción<\/p>$/m);
+  assert.ok(!/Descripción:|Características:|Composición:/.test(F.computeFor('sup', { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F' }, keep, meta).mg.html), 'sin captura no cambia nada');
 });
