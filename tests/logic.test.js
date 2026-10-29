@@ -727,3 +727,13 @@ test('suplementos: avisa si el tipo es genérico o el tamaño de porción no tie
   assert.match(c, /tamaño de porción «200» no tiene unidad/);
   assert.deepEqual(F.lint(F.CATS.sup, { componente: 'Fórmula hipercalórica', porcion: '200 mL' }).check, []);
 });
+
+test('Merchant Center: medicamentos y dermocosméticos tampoco repiten «Presentación» cuando el encabezado ya lleva el contenido', () => {
+  const med = F.computeFor('med', { marca: 'Mounjaro', concentracion: '2.5 mg', volumen: '0.6 mL', principio: 'Tirzepatida', forma: 'Solución inyectable', contenido: 'Caja con 4 plumas', laboratorio: 'Eli Lilly', via: 'Subcutánea', receta: 'si' }, keep, meta).mc.text;
+  assert.ok(!/Presentación/.test(med));
+  assert.match(med, /Caja con 4 plumas - Laboratorio Eli Lilly|Caja con 4 plumas - Eli Lilly/, 'el contenido sigue en el encabezado');
+  assert.match(med, /Forma farmacéutica: Solución inyectable\. Vía de administración: Subcutánea\./);
+  const cos = F.computeFor('cos', { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal", piel: 'Piel sensible' }, keep, meta).mc.text;
+  assert.ok(!/Presentación/.test(cos));
+  assert.match(cos, /Frasco 30 mL - L'Oréal/);
+});

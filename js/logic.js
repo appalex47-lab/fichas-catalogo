@@ -255,7 +255,6 @@ const CATS = {
         v.principio && `Contiene ${join(' ', v.principio, conc)}`,
         v.forma && `Forma farmacéutica: ${v.forma}`,
         v.via && `Vía de administración: ${v.via}`,
-        v.contenido && `Presentación: ${v.contenido}`,
         LEGEND.medMc,
         v.leyenda
       ];
@@ -362,7 +361,6 @@ const CATS = {
       v.piel && `${v.tipo ? cap(v.tipo) : 'Producto'} formulado para ${lc(v.piel)}`,
       v.ingredientes && `Contiene ${lc(v.ingredientes)}`,
       v.textura,
-      v.contenido && `Presentación de ${lc(v.contenido)}`,
       LEGEND.cosMc,
       v.comercial
     ],
