@@ -63,7 +63,7 @@ const PRES_KEYS = { dis: ['paquete', 'presentacion'] };
 const labelOf = (c, k) => { try { return F.labelOf(c, k); } catch (_) { return k; } };
 
 /* Formas farmacéuticas y cosméticas reconocidas (lista cerrada; lo que no está se señala, no se corrige). */
-const FORMA_RE = /tablet|comprim|c[aá]psul|gragea|perla|gr[aá]nul|jarabe|soluci[oó]n|suspensi[oó]n|emulsi[oó]n|inyect|ampoll?eta|ampolla|vial|pluma|jeringa|cartucho|crema|gel\b|ung[uü]ento|pomada|loci[oó]n|parche|supositor|[oó]vulo|polvo|gotas|spray|aerosol|inhalad|shampoo|champ[uú]|colirio|enjuague|barra|sobre|pastilla|chicle|liofiliz|implante|aceite|espuma|toallita|mascarilla|s[eé]rum|serum|bruma|t[oó]nico|bals[aá]mico|elixir|tintura|pasta|film|pel[ií]cula|lengüeta|disco|anillo|dispositivo|kit/i;
+const FORMA_RE = /l[ií]quid[oa]|shot\b|gomit|granulad|tablet|comprim|c[aá]psul|gragea|perla|gr[aá]nul|jarabe|soluci[oó]n|suspensi[oó]n|emulsi[oó]n|inyect|ampoll?eta|ampolla|vial|pluma|jeringa|cartucho|crema|gel\b|ung[uü]ento|pomada|loci[oó]n|parche|supositor|[oó]vulo|polvo|gotas|spray|aerosol|inhalad|shampoo|champ[uú]|colirio|enjuague|barra|sobre|pastilla|chicle|liofiliz|implante|aceite|espuma|toallita|mascarilla|s[eé]rum|serum|bruma|t[oó]nico|bals[aá]mico|elixir|tintura|pasta|film|pel[ií]cula|lengüeta|disco|anillo|dispositivo|kit/i;
 const UNIT_RE = /\b(?:mg|mcg|µg|g|gr|grs|kg|ml|l|lt|oz|ui|iu|cm|mm|m)\b|pieza|pza|unidad|tableta|c[aá]psula|comprimido|gragea|perla|caja|sobre|frasco|pluma|ampoll?eta|ampolla|jeringa|vial|tubo|bolsa|botella|lata|par\b|kit|toallita|parche|supositorio|[oó]vulo|disco|lanceta|tira|dosis|pastilla|gomita|cartucho|bote|barra|paquete|rollo|spray|aplicador|sachet|dispositivo|set|juego|pack|blister|capa/i;
 const PLACEHOLDER_RE = /\b(?:lorem|ipsum|n\/a|n\.a\.|s\/d|sin datos?|por definir|por completar|pendiente|xxx+|tbd|null|undefined)\b|\?\?\?/i;
 const ABBR_RE = /\b(?:TABS?|CAJ|CJA|FCO|AMP|SUSP|SOL|COMP|CAPS|PZAS?|PZ|C\/U|SOB)\b|\bc\/\s?\d/;
@@ -264,7 +264,9 @@ R('CLA-003', 'claridad', { peso: 3, severidad: 'warning', clase: 'contenido', de
       const prev = seen.get(k);
       /* Marca = principio activo (genéricos) y marca = fabricante o laboratorio son legítimos: no se marcan. */
       const legit = (a, b) => (a === 'marca' && ['principio', 'fabricante', 'laboratorio'].includes(b)) || (b === 'marca' && ['principio', 'fabricante', 'laboratorio'].includes(a));
-      if (prev && !legit(prev, fd.key)) { dup.push(`${labelOf(ctx.c, prev)} y ${fd.label}`); dupKeys.push(prev, fd.key); }
+      /* Una porción única repite el contenido neto: lo dice la etiqueta, no es error de captura. */
+      const unica = (a, b) => ['contenido', 'porcion'].includes(a) && ['contenido', 'porcion'].includes(b);
+      if (prev && !legit(prev, fd.key) && !unica(prev, fd.key)) { dup.push(`${labelOf(ctx.c, prev)} y ${fd.label}`); dupKeys.push(prev, fd.key); }
       else if (!prev) seen.set(k, fd.key);
     });
     return dup.length ? FAIL(`Mismo valor en: ${dup.join('; ')}.`, { pares: dup, campos: uniq(dupKeys) }) : OK();

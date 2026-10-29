@@ -110,7 +110,7 @@ function resolveKey(CATS, cat, x) {
 /* Reglas que apuntan a campos fijos cuando el hallazgo no trae `campos`. */
 const RULE_FIELDS = {
   'COH-C01': ['forma', 'via'], 'COH-C02': ['receta', 'leyenda'], 'COH-C03': ['concentracion', 'leyenda'], 'COH-C04': ['volumen', 'forma'],
-  'PRE-002': ['forma'], 'DES-002': ['marca'], 'CLA-003': ['marca'], 'COH-001': ['marca'],
+  'PRE-002': ['forma'], 'DES-002': ['marca'], 'COH-001': ['marca'],
   'SEG-001': ['receta']
 };
 const PRESENTATION_KEYS = { dis: ['paquete', 'presentacion'] };

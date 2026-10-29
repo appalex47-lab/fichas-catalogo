@@ -170,3 +170,10 @@ test('content: lote con promedio y estados', () => {
   assert.equal(b.summary.byStatus.sin_evaluar, 1);
   assert.equal(b.summary.evaluados, 2);
 });
+
+test('content: una porción única que repite el contenido y una forma líquida no son advertencias', () => {
+  const sup = { marca: 'Fresubin HPC', componente: 'Fórmula hipercalórica', forma: 'Líquido', contenido: '200 ml', porcion: '200 ml', porciones: '1', fabricante: 'Fresenius Kabi' };
+  assert.equal(find(ev('sup', sup), 'CLA-003'), undefined, 'contenido = porción única es legítimo');
+  assert.equal(find(ev('sup', sup), 'PRE-002'), undefined, 'Líquido es una forma reconocida');
+  assert.equal(find(ev('sup', { ...sup, sabor: '200 ml' }), 'CLA-003').estado, 'pendiente', 'otros repetidos siguen avisando');
+});
