@@ -255,7 +255,7 @@ test('medicamentos: indicaciones, posología, población y contraindicaciones so
 });
 
 test('FAQ: cada pregunta existe solo si el dato que la responde fue capturado', () => {
-  const q = r => (F.computeFor('med', r, keep, meta).mg.faq || []).map(x => x[0]);
+  const q = r => [...new Set([...Array(12).keys()].flatMap(sd => F.buildFaq(F.CATS.med, r, sd).items.map(x => x[0])))];
   const base = q(medFaq);
   assert.ok(base.some(x => /Qué contiene Mounjaro/.test(x)) && base.some(x => /Cómo se conserva/.test(x)));
   assert.ok(!base.some(x => /Para qué se usa|Cómo se usa|Quién no debe/.test(x)));
@@ -275,4 +275,32 @@ test('FAQ: sin suficientes datos no se genera y un producto bloqueado no la tien
   assert.equal(F.buildFaq(F.CATS.med, {}).html, '');
   const r = F.computeFor('med', { ...medFaq, receta: '' }, keep, meta).mg;
   assert.ok(r.blocked && r.html === '' && !r.faq);
+});
+
+test('FAQ: la variante es estable para un mismo producto y cambia entre productos', () => {
+  const a1 = F.computeFor('med', medFaq, keep, meta).mg.html, a2 = F.computeFor('med', medFaq, keep, meta).mg.html;
+  assert.equal(a1, a2);
+  const marcas = ['Mounjaro', 'Ozempic', 'Victoza', 'Trulicity', 'Wegovy', 'Saxenda', 'Byetta', 'Bydureon'];
+  const firmas = new Set(marcas.map(m => F.computeFor('med', { ...medFaq, marca: m }, keep, meta).mg.faq.map(x => x[0].replace(m, 'X')).join('|')));
+  assert.ok(firmas.size > 1, 'productos distintos no usan todos la misma redacción');
+});
+
+test('FAQ: todas las variantes cumplen las reglas de lenguaje y no tocan textos literales ni regulatorios', () => {
+  const lleno = { ...medFaq, indicaciones: 'Control glucémico', posologia: 'Una vez por semana', poblacion: 'Adultos', contraindicaciones: 'Hipersensibilidad' };
+  const cosF = { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal", piel: 'Piel sensible', modo: 'Aplicar sobre la piel limpia', precauciones: 'Evitar contacto con ojos', fps: '50+', nivel: 'Muy alta', inci: 'AQUA, GLYCERIN' };
+  const supF = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
+  const disF = { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro', tecnologia: 'Automático de brazo', fabricante: 'Omron', uso: 'medición de presión arterial', paquete: 'Brazalete y estuche' };
+  for (const [id, v] of [['med', lleno], ['med', { ...lleno, receta: 'no' }], ['cos', cosF], ['sup', supF], ['dis', disF]]) {
+    for (let sd = 0; sd < 12; sd++) {
+      const { items } = F.buildFaq(F.CATS[id], v, sd);
+      const txt = items.map(x => x.join(' ')).join(' ');
+      assert.ok(!F.COMERCIAL_RE.test(txt), `${id} seed ${sd}: lenguaje comercial`);
+      assert.deepEqual(F.scanRed(txt, id), [], `${id} seed ${sd}: claims`);
+      if (id === 'med' && v.receta === 'no') assert.ok(!/(?<!no )(?<!sin )\b(?:requiere receta|con receta|bajo receta)/i.test(txt), 'contradice receta');
+      if (id === 'med') {
+        for (const lit of [lleno.indicaciones, lleno.posologia, lleno.poblacion, lleno.contraindicaciones]) assert.ok(items.some(x => x[1] === lit + '.'), `texto literal intacto: ${lit}`);
+        assert.ok(items.some(x => x[1] === F.LEGEND.medConservacion), 'conservación intacta');
+      }
+    }
+  }
 });

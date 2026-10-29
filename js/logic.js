@@ -522,58 +522,71 @@ function buildMC(c, v) {
 const recetaMeta = (c, v) => c.id === 'med' ? (v.receta === 'si' ? 'Sí' : v.receta === 'no' ? 'No' : '') : 'No aplica para esta categoría';
 const mgFull = g => '```html\n' + g.html + '\n```\n\n- Categoría detectada: ' + g.meta.categoria + '\n- Requiere receta médica: ' + g.meta.receta;
 
-/* Preguntas frecuentes. Cada pregunta existe solo si el dato que la responde fue capturado; las respuestas son
-   plantillas fijas o copia literal de lo capturado. No se inventa texto y no se emite JSON-LD. */
+/* Preguntas frecuentes. Cada pregunta existe solo si el dato que la responde fue capturado. Las respuestas son frases fijas
+   o copia literal de lo capturado; no se inventa texto y no se emite JSON-LD.
+   Para que el catálogo no se vea repetitivo, la pregunta y los conectores de las respuestas de plantilla tienen variantes
+   escritas aquí. La variante se elige con un hash de los datos del producto: el mismo producto sale siempre igual y productos
+   distintos varían. Las leyendas regulatorias y los textos literales nunca se parafrasean. */
 const faqName = (c, v) => c.id === 'med' ? v.marca : join(' ', v.marca, v.producto || v.modelo || v.componente || v.tipo);
 const FAQ_MIN = 2;
-const faqPres = v => (v.forma || v.contenido) && `Se presenta ${join(', ', v.forma && 'en ' + lc(v.forma), v.contenido && lc(v.contenido))}.`;
+const faqSeed = (c, v) => {
+  let h = 2166136261;
+  for (const ch of [c.id, v.marca, v.principio, v.producto, v.modelo, v.componente, v.tipo, v.concentracion, v.contenido].map(x => x || '').join('|')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return h;
+};
+const faqPres = (v, ...pre) => (v.forma || v.contenido) && pre.map(t => `${t} ${join(', ', v.forma && 'en ' + lc(v.forma), v.contenido && lc(v.contenido))}.`);
+/* Cada entrada: [variantes de la pregunta, respuesta]. La respuesta es un texto fijo o una lista de variantes de plantilla. */
 const FAQ_RULES = {
   med: (v, n) => [
-    v.principio && [`¿Qué contiene ${n}?`, `${n} contiene ${join(' ', v.principio, join(' / ', v.concentracion, v.volumen))}.`],
-    v.indicaciones && [`¿Para qué se usa ${n}?`, v.indicaciones],
-    v.posologia && [`¿Cómo se usa ${n}?`, v.posologia],
-    v.via && [`¿Cómo se administra ${n}?`, `Se administra por vía ${lc(v.via)}.`],
-    v.poblacion && [`¿A quién va dirigido ${n}?`, v.poblacion],
-    v.contraindicaciones && [`¿Quién no debe usar ${n}?`, v.contraindicaciones],
-    v.receta === 'si' && [`¿Es necesaria la receta médica para ${n}?`, `Sí. ${LEGEND.medReceta}`],
-    v.receta === 'no' && [`¿Es necesaria la receta médica para ${n}?`, 'No requiere receta médica. Consulte a su médico y evite automedicarse.'],
-    faqPres(v) && [`¿En qué presentación se vende ${n}?`, faqPres(v)],
-    v.laboratorio && [`¿Quién fabrica ${n}?`, `Es desarrollado por el laboratorio ${v.laboratorio}.`],
-    [`¿Cómo se conserva ${n}?`, LEGEND.medConservacion]
+    v.principio && [[`¿Qué contiene ${n}?`, `¿Cuál es el principio activo de ${n}?`, `¿Qué sustancia activa tiene ${n}?`],
+      [`${n} contiene ${join(' ', v.principio, join(' / ', v.concentracion, v.volumen))}.`, `Su sustancia activa es ${join(' ', v.principio, join(' / ', v.concentracion, v.volumen))}.`]],
+    v.indicaciones && [[`¿Para qué se usa ${n}?`, `¿En qué casos se usa ${n}?`, `¿Cuál es la indicación de ${n}?`], v.indicaciones],
+    v.posologia && [[`¿Cómo se usa ${n}?`, `¿Cuál es la dosis de ${n}?`, `¿Cómo se debe utilizar ${n}?`], v.posologia],
+    v.via && [[`¿Cómo se administra ${n}?`, `¿Por qué vía se administra ${n}?`], [`Se administra por vía ${lc(v.via)}.`, `Su vía de administración es ${lc(v.via)}.`]],
+    v.poblacion && [[`¿A quién va dirigido ${n}?`, `¿Quién puede usar ${n}?`, `¿Para qué población es ${n}?`], v.poblacion],
+    v.contraindicaciones && [[`¿Quién no debe usar ${n}?`, `¿Cuándo no se debe usar ${n}?`, `¿Qué contraindicaciones tiene ${n}?`], v.contraindicaciones],
+    v.receta === 'si' && [[`¿Es necesaria la receta médica para ${n}?`, `¿Se necesita receta médica para ${n}?`], `Sí. ${LEGEND.medReceta}`],
+    v.receta === 'no' && [[`¿Es necesaria la receta médica para ${n}?`, `¿Se necesita receta médica para ${n}?`], 'No requiere receta médica. Consulte a su médico y evite automedicarse.'],
+    faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`, `¿Qué presentación tiene ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
+    v.laboratorio && [[`¿Quién fabrica ${n}?`, `¿Qué laboratorio produce ${n}?`, `¿De qué laboratorio es ${n}?`], [`Es desarrollado por el laboratorio ${v.laboratorio}.`, `Lo desarrolla el laboratorio ${v.laboratorio}.`]],
+    [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.medConservacion]
   ],
   cos: (v, n) => [
-    (v.ingredientes || v.atributo) && [`¿Qué contiene ${n}?`, `Contiene ${lc(v.ingredientes || v.atributo)}.`],
-    v.inci && [`¿Cuál es la lista completa de ingredientes de ${n}?`, v.inci],
-    v.piel && [`¿Para qué tipo de piel o necesidad es ${n}?`, `Está formulado para ${lc(v.piel)}.`],
-    v.modo && [`¿Cómo se usa ${n}?`, v.modo],
-    v.precauciones && [`¿Qué precauciones tiene ${n}?`, v.precauciones],
-    (v.fps || v.nivel) && [`¿Qué protección solar ofrece ${n}?`, join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`)],
-    v.contenido && [`¿Qué contenido tiene ${n}?`, `Se presenta en ${lc(v.contenido)}.`],
-    v.fabricante && [`¿Quién fabrica ${n}?`, `Es desarrollado por ${v.fabricante}.`]
+    (v.ingredientes || v.atributo) && [[`¿Qué contiene ${n}?`, `¿Qué activos tiene ${n}?`], [`Contiene ${lc(v.ingredientes || v.atributo)}.`, `Su fórmula incluye ${lc(v.ingredientes || v.atributo)}.`]],
+    v.inci && [[`¿Cuál es la lista completa de ingredientes de ${n}?`, `¿Qué ingredientes (INCI) tiene ${n}?`], v.inci],
+    v.piel && [[`¿Para qué tipo de piel o necesidad es ${n}?`, `¿Quién puede usar ${n}?`], [`Está formulado para ${lc(v.piel)}.`, `Está desarrollado para ${lc(v.piel)}.`]],
+    v.modo && [[`¿Cómo se usa ${n}?`, `¿Cómo se aplica ${n}?`], v.modo],
+    v.precauciones && [[`¿Qué precauciones tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.precauciones],
+    (v.fps || v.nivel) && [[`¿Qué protección solar ofrece ${n}?`, `¿Qué FPS tiene ${n}?`], join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`)],
+    v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto producto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${v.fabricante}.`, `Lo desarrolla ${v.fabricante}.`]]
   ],
   sup: (v, n) => [
-    (v.composicion || v.componente) && [`¿Qué contiene ${n}?`, `Contiene ${lc(v.composicion || v.componente)}.`],
-    faqPres(v) && [`¿En qué presentación se vende ${n}?`, faqPres(v)],
-    v.fabricante && [`¿Quién fabrica ${n}?`, `Es elaborado por ${v.fabricante}.`],
-    [`¿${n} es un medicamento?`, LEGEND.supResp],
-    [`¿Cómo se conserva ${n}?`, LEGEND.supConservacion]
+    (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
+    faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
+    [[`¿${n} es un medicamento?`, `¿${n} reemplaza a un medicamento?`], LEGEND.supResp],
+    [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.supConservacion]
   ],
   dis: (v, n) => [
-    v.uso && [`¿Para qué se usa ${n}?`, `Está diseñado para el uso previsto de ${lc(v.uso)}.`],
-    v.tecnologia && [`¿Qué tecnología tiene ${n}?`, `Es de tecnología ${lc(v.tecnologia)}.`],
-    v.paquete && [`¿Qué incluye el empaque de ${n}?`, `Incluye ${lc(v.paquete)}.`],
-    v.fabricante && [`¿Quién fabrica ${n}?`, `Es fabricado por ${v.fabricante}.`],
-    [`¿Cómo se debe utilizar ${n}?`, LEGEND.disMc]
+    v.uso && [[`¿Para qué se usa ${n}?`, `¿Cuál es el uso previsto de ${n}?`], [`Está diseñado para el uso previsto de ${lc(v.uso)}.`, `Su uso previsto es ${lc(v.uso)}.`]],
+    v.tecnologia && [[`¿Qué tecnología tiene ${n}?`, `¿Cómo mide ${n}?`], [`Es de tecnología ${lc(v.tecnologia)}.`, `Su tecnología es ${lc(v.tecnologia)}.`]],
+    v.paquete && [[`¿Qué incluye el empaque de ${n}?`, `¿Qué trae ${n} en la caja?`], [`Incluye ${lc(v.paquete)}.`, `El empaque contiene ${lc(v.paquete)}.`]],
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+    [[`¿Cómo se debe utilizar ${n}?`, `¿Cómo se usa ${n}?`], LEGEND.disMc]
   ]
 };
 const faqGeneric = (v, n) => [
-  v.contenido && [`¿Qué contenido tiene ${n}?`, `Se presenta en ${lc(v.contenido)}.`],
-  v.fabricante && [`¿Quién fabrica ${n}?`, `Es fabricado por ${v.fabricante}.`]
+  v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
+  v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]]
 ];
-function buildFaq(c, v) {
+/* `seed` solo se pasa en pruebas para recorrer todas las variantes. */
+function buildFaq(c, v, seed) {
   const n = faqName(c, v);
   if (!n) return { items: [], html: '' };
-  const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a]) => [q, sentence(a)]);
+  const h = seed == null ? faqSeed(c, v) : seed;
+  const pick = (arr, i) => Array.isArray(arr) ? arr[(h + i) % arr.length] : arr;
+  const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a], i) => [pick(q, i), sentence(pick(a, i))]);
   if (items.length < FAQ_MIN) return { items: [], html: '' };
   return { items, html: '<h2>Preguntas frecuentes:</h2>\n' + items.map(([q, a]) => `<h3>${escT(q)}</h3>\n<p>${escT(a)}</p>`).join('\n') };
 }
