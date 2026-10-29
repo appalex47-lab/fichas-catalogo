@@ -837,9 +837,22 @@ test('alérgenos: avisa si los ingredientes mencionan alérgenos que «Alérgeno
 
 test('lint: el tipo y el contenido no se mezclan y los laboratorios se llaman Laboratorio fuera de dispositivos y accesorios', () => {
   const chk = (id, raw) => F.lint(F.CATS[id], raw).check.join(' ');
-  assert.match(chk('sup', { componente: '200 mL', contenido: 'Fórmula hipercalórica' }), /parece una cantidad[\s\S]*no lleva una cantidad/);
+  assert.equal(chk('sup', { componente: '200 mL', contenido: 'Fórmula hipercalórica' }), '', 'al revés se acomoda solo');
+  assert.match(chk('sup', { componente: 'Fórmula hipercalórica', contenido: 'Botella' }), /no lleva una cantidad/);
   assert.equal(chk('sup', { componente: 'Fórmula hipercalórica', contenido: '200 mL' }), '');
   assert.equal(chk('sup', { componente: 'Vitamina B12 1000 mcg', contenido: 'Frasco con 30' }), '');
   const lbl = (id) => F.CATS[id].fields.find(f => f.key === 'fabricante').label;
   assert.deepEqual(['cos', 'sup', 'beb', 'hig', 'dis', 'acc'].map(lbl), ['Laboratorio', 'Laboratorio', 'Laboratorio', 'Laboratorio', 'Fabricante', 'Fabricante']);
+});
+
+test('tipo y contenido: lo mezclado se acomoda solo y deja constancia', () => {
+  const run = r => F.computeFor('sup', { marca: 'X', forma: 'Líquido', fabricante: 'F', ...r }, new Set(), F.defMeta());
+  const g = r => { const x = run(r); return [x.vt.v.componente, x.vt.v.contenido, x.vt.changes.length]; };
+  assert.deepEqual(g({ componente: '200 mL', contenido: 'Fórmula hipercalórica' }), ['Fórmula hipercalórica', '200 mL', 2], 'al revés: se intercambian');
+  assert.deepEqual(g({ componente: 'Fórmula hipercalórica 200 mL' }), ['Fórmula hipercalórica', '200 mL', 2], 'mezclados: se separan');
+  assert.deepEqual(g({ componente: 'Fórmula hipercalórica', contenido: '200 mL' }), ['Fórmula hipercalórica', '200 mL', 0], 'lo correcto no se toca');
+  assert.deepEqual(g({ componente: 'Vitamina C 500 mg', contenido: 'Frasco con 30 cápsulas' }).slice(0, 2), ['Vitamina C 500 mg', 'Frasco con 30 cápsulas'], 'una concentración no es contenido');
+  assert.deepEqual(g({ contenido: 'Fórmula hipercalórica' }).slice(0, 2), ['Fórmula hipercalórica', ''], 'un contenido sin cantidad pasa a tipo si el tipo está vacío');
+  assert.deepEqual(g({ componente: 'Colágeno', contenido: 'Frasco con 30 cápsulas' }).slice(2), [0]);
+  assert.match(run({ componente: '200 mL', contenido: 'Fórmula hipercalórica' }).title.title, /^X Fórmula hipercalórica \| /);
 });

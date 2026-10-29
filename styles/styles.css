@@ -21,7 +21,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font
 button,input,select,textarea{font:inherit;color:inherit}
 [hidden]{display:none!important}
 
-.wrap{max-width:1280px;margin:0 auto;padding:24px 136px 64px 16px}
+.wrap{max-width:none;margin:0;padding:24px calc(116px + clamp(16px,2.5vw,48px)) 64px clamp(16px,2.5vw,48px)}
 .top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
 .brand{display:flex;align-items:flex-start;gap:14px}
 .brand-mark{width:40px;height:40px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 6px rgba(14,122,114,.3);overflow:hidden}
@@ -532,9 +532,10 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 .tabla-nutrimental tr.titulo th{font-weight:700;text-align:left;background:var(--surface-2, rgba(127,127,127,.12));padding-top:8px}.tabla-nutrimental tr.nota td{font-style:italic;color:var(--muted)}.tabla-nutrimental caption{text-align:left;font-weight:600;padding:0 0 6px}
 
 /* Campana de notificaciones */
+.top{position:relative;z-index:50}
 .bell-wrap{position:relative}
 .bell-n{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:10px;background:var(--bad,#b3261e);color:#fff;font-size:12px;line-height:20px;text-align:center}
-.bell-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:min(440px,calc(100vw - 32px));max-height:70vh;overflow:auto;padding:12px 14px;background:var(--surface,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.bell-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:50;isolation:isolate;width:min(440px,calc(100vw - 32px));max-height:70vh;overflow:auto;padding:12px 14px;background:var(--surface,#fff);color:inherit;border:1px solid var(--line,#d0d5dd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .bell-pop h3{margin:0 0 6px;font-size:14px}
 .bell-pop ul{list-style:none;margin:0 0 10px;padding:0}
 .bell-pop li{padding:8px 0;border-top:1px solid var(--line,#e4e7ec);font-size:13px}

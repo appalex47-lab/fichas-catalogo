@@ -2759,18 +2759,21 @@ function renderCatalog() {
     + `<div class="lote-wrap"><table class="lote-table"><thead><tr><th>SKU</th><th>Producto</th><th>Rol</th><th>Estado</th><th>Vínculos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /* ---------- Campana: productos ya cargados cuyos vínculos cambiaron y productos nuevos sin cargar ---------- */
+const pendingLinks = c => c.entries.filter(x => (x.elegible && Catalog.status(c, x) === 'sin_evaluar') || (Catalog.isParent(x) && Catalog.waitingChildren(c, x).length)).map(x => x.sku);
 const bellList = (o, sign) => Catalog.REL_KINDS.filter(k => o[k].length).map(k => `${sign}${o[k].length} ${Catalog.REL_LABEL[k]} (${o[k].map(esc).join(', ')})`).join(' · ');
 function renderBell() {
   const pop = $('#bell-pop'), n = $('#bell-n'); if (!pop) return;
   if (Catalog.baseline(state.catalog)) saveCatalog();
   const all = Catalog.alerts(state.catalog), rel = all.filter(x => x.type === 'rel'), nuevo = all.filter(x => x.type === 'nuevo');
-  n.textContent = all.length; n.hidden = !all.length;
-  $('#bell').setAttribute('aria-label', all.length ? `Notificaciones: ${all.length} pendientes` : 'Notificaciones: ninguna pendiente');
+  const pend = pendingLinks(state.catalog), total = rel.length + (nuevo.length ? 1 : 0) + (pend.length ? 1 : 0);
+  n.textContent = total; n.hidden = !total;
+  $('#bell').setAttribute('aria-label', total ? `Notificaciones: ${total} pendientes` : 'Notificaciones: ninguna pendiente');
   const li = (a, body, chk) => `<li><label>${chk ? `<input type="checkbox" data-bell-sel="${esc(a.sku)}" checked>` : ''}<span><b>${esc(a.sku)}</b> ${esc(a.name)}<span class="bell-d">${body}</span></span></label> <button type="button" class="linkbtn" data-bell-dismiss="${esc(a.sku)}">Descartar</button></li>`;
-  pop.innerHTML = !all.length ? '<p class="hint">No hay notificaciones. Aquí aparecerán los productos que ya cargaste a Magento y recibieron vínculos nuevos, y los productos nuevos que aún no cargas.</p>'
+  pop.innerHTML = !total ? '<p class="hint">No hay notificaciones. Aquí aparecerán los productos que ya cargaste a Magento y recibieron vínculos nuevos, y los productos nuevos que aún no cargas.</p>'
     : (rel.length ? `<h3>Actualizar vínculos en Magento (${rel.length})</h3><ul>${rel.map(a => li(a, [bellList(a.add, '+'), bellList(a.rem, '−')].filter(Boolean).join(' · '), true)).join('')}</ul>`
       + '<div class="actions"><button type="button" class="btn" id="bell-dl">Descargar CSV de actualización</button></div><p class="hint">Lleva solo el SKU y las columnas de vínculos al día. Quitar un vínculo en Magento se hace a mano: una columna vacía puede no borrarlo. No lo he probado con una importación real.</p>' : '')
-    + (nuevo.length ? `<h3>Productos nuevos sin cargar (${nuevo.length})</h3><ul>${nuevo.map(a => li(a, 'Aún no se exporta. Se carga con el CSV normal en Exportar.', false)).join('')}</ul>` : '');
+    + (pend.length ? `<h3>Posibles complementos por revisar (${pend.length})</h3><p class="hint">Productos que pueden ser cross sell de otro o que esperan a su producto principal. Tú confirmas cada vínculo.</p><div class="actions"><button type="button" class="btn" id="bell-review">Revisar complementos</button></div>` : '')
+    + (nuevo.length ? `<h3>Productos nuevos sin cargar (${nuevo.length})</h3><p class="hint">Aún no se exportan. Se cargan con el CSV normal en Exportar.</p><details><summary>Ver los ${nuevo.length}</summary><ul>${nuevo.map(a => `<li><b>${esc(a.sku)}</b> ${esc(a.name)}</li>`).join('')}</ul></details><div class="actions"><button type="button" class="btn btn--quiet" id="bell-dismiss-new">Descartar todos</button></div>` : '');
 }
 $('#bell').addEventListener('click', () => { const pop = $('#bell-pop'); pop.hidden = !pop.hidden; $('#bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) renderBell(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#bell-pop').hidden) { $('#bell-pop').hidden = true; $('#bell').setAttribute('aria-expanded', 'false'); $('#bell').focus(); } });
@@ -2778,6 +2781,8 @@ document.addEventListener('click', e => { const w = e.target.closest && e.target
 $('#bell-pop').addEventListener('click', e => {
   const d = e.target.closest('[data-bell-dismiss]');
   if (d) { if (Catalog.dismiss(state.catalog, d.dataset.bellDismiss)) { saveCatalog(); renderBell(); } return; }
+  if (e.target.closest('#bell-dismiss-new')) { Catalog.alerts(state.catalog).filter(x => x.type === 'nuevo').forEach(x => Catalog.dismiss(state.catalog, x.sku)); saveCatalog(); renderBell(); return; }
+  if (e.target.closest('#bell-review')) { $('#bell-pop').hidden = true; $('#bell').setAttribute('aria-expanded', 'false'); queueLinking(pendingLinks(state.catalog)); return; }
   if (e.target.closest('#bell-dl')) {
     const skus = [...$('#bell-pop').querySelectorAll('[data-bell-sel]:checked')].map(x => x.dataset.bellSel);
     if (!skus.length) { toast('Marca al menos un producto.', 'warn'); return; }
@@ -2794,7 +2799,7 @@ $('#bell-pop').addEventListener('click', e => {
 document.addEventListener('click', async e => {
   const t = e.target.closest && e.target.closest('[data-cat-find],[data-cat-parent],[data-cat-del],[data-cat-unlink],#cat-review'); if (!t) return;
   const c = state.catalog;
-  if (t.id === 'cat-review') { queueLinking(c.entries.filter(x => (x.elegible && Catalog.status(c, x) === 'sin_evaluar') || (Catalog.isParent(x) && Catalog.waitingChildren(c, x).length)).map(x => x.sku)); return; }
+  if (t.id === 'cat-review') { queueLinking(pendingLinks(c)); return; }
   if (t.dataset.catFind) { queueLinking([t.dataset.catFind], true); return; }
   if (t.dataset.catParent) { const x = Catalog.find(c, t.dataset.catParent); if (x) { Catalog.setParent(c, x.sku, !x.padre); saveCatalog(); renderCatalog(); } return; }
   if (t.dataset.catUnlink) { const [p, ch] = t.dataset.catUnlink.split('|'); if (Catalog.unlink(c, p, ch)) { state.audit.push(Anomalies.event('complemento_desvinculado', null, { parent: p, child: ch, por: 'manual' })); persist('fichas.audit.v1', state.audit); saveCatalog(); renderCatalog(); toast('Vínculo quitado.'); } return; }
