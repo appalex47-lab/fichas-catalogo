@@ -193,6 +193,8 @@ const LEGEND = {
 };
 /* Secciones de texto literal que se agregan al HTML de Magento solo si el dato fue capturado: [encabezado, texto]. */
 const secs = pairs => pairs.filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`);
+/* Lista con viñetas a partir de un texto separado por comas, punto y coma o saltos de línea. */
+const listSec = (h, text) => { const items = String(text || '').split(/\s*[,;\n]+\s*/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean).map(cap); return items.length ? [`<h2>${h}</h2>\n<ul>\n${items.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>`] : []; };
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
 /* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
@@ -389,7 +391,13 @@ const CATS = {
       F('porcion','Tamaño de porción',{g:'d',ph:'1 cápsula',hint:'Opcional. Tal como aparece en la etiqueta.'}),
       F('porciones','Porciones por envase',{g:'d',ph:'100',hint:'Opcional. Tal como aparece en la etiqueta.'}),
       F('nutrimental','Información nutrimental',{g:'d',type:'area',raw:1,lines:1,rows:7,ph:'# Nutriente | Por porción | % VD',hint:'Opcional. Cópiala tal cual de la etiqueta, una fila por línea: Proteína | 20 g | 40 %. Si hay más de una columna (por porción, por 100 g, % VD), empieza con una línea de encabezados: # Nutriente | Por porción | Por 100 g | % VD. Un renglón dentro de otro empieza con guion: - Azúcares | 2 g. No se calcula nada: se muestra lo que captures.'}),
-      F('modo','Modo de consumo',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal como aparece en el empaque. Aparece en una sección aparte.'})
+      F('modo','Modo de consumo',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal como aparece en el empaque. Aparece en una sección aparte.'}),
+      F('ingredientes','Lista de ingredientes',{g:'d',type:'area',raw:1,hint:'Opcional. Cópiala tal cual del empaque, en el mismo orden. Aparece en una sección aparte.'}),
+      F('alergenos','Alérgenos',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal como aparece en el empaque, por ejemplo «Contiene leche y soya». Aparece en una sección aparte.'}),
+      F('advertencias','Advertencias',{g:'d',type:'area',sentence:1,hint:'Opcional. Leyendas del empaque, tal cual: embarazo, lactancia, menores, «consulte a su médico». Aparece en una sección aparte.'}),
+      F('atributos','Atributos del empaque',{g:'d',type:'area',sentence:1,hint:'Opcional. Solo lo que dice el empaque, separado por comas: Vegano, Sin gluten, Sin azúcar añadida. Salen como lista.'}),
+      F('publico','Dirigido a',{g:'d',ph:'Adultos',hint:'Opcional. Tal como aparece en el empaque, por ejemplo Adultos o Niños mayores de 4 años.'}),
+      F('envase','Tipo de envase',{g:'d',pres:1,ph:'Bote',hint:'Opcional. Frasco, bote, sobre, caja… Separado de la cantidad.'})
     ],
     title: [
       seg('Marca + componente', ['marca','componente']),
@@ -404,6 +412,7 @@ const CATS = {
       join(' - ', join(' ', v.marca, v.componente && `(${v.componente})`, v.contenido), v.fabricante),
       'Suplemento alimenticio' + (v.forma ? ' en forma de ' + lc(v.forma) : '') + ((v.composicion || v.componente) ? ' que contiene ' + lc(v.composicion || v.componente) : ''),
       v.sabor && saborTxt(v.sabor),
+      v.publico && `Dirigido a ${lc(v.publico)}`,
       v.contenido && `Presentación de ${lc(v.contenido)}`,
       v.porcion && `Tamaño de porción: ${lc(v.porcion)}`,
       v.porciones && `Porciones por envase: ${v.porciones}`,
@@ -421,8 +430,8 @@ const CATS = {
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
-        ['Contenido Neto/Piezas', v.contenido], ['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Composición:', v.composicion], ['Características:', v.caracteristicas], ['Modo de consumo:', v.modo]]), NOTA_SUP]);
+        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones], ['Dirigido a', v.publico], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+      ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Composición:', v.composicion], ['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP]);
     }
   },
 
@@ -567,7 +576,7 @@ Object.keys(CATS).forEach(id => { CATS[id].id = id; });
     med: [['leyenda', 'volumen'], ['volumen', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'categoria', 'leyenda']],
     dis: [['extra'], ['extra', 'categoria']],
     cos: [['comercial'], ['ingredientes', 'comercial', 'inci', 'modo', 'precauciones', 'fps', 'nivel', 'categoria']],
-    sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'categoria']],
+    sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'publico'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'categoria']],
     beb: [['descripcion', 'caracteristicas', 'leyenda'], ['descripcion', 'caracteristicas', 'leyenda', 'categoria']],
     hig: [['ingredientes', 'caracteristicas'], ['ingredientes', 'caracteristicas', 'categoria']],
     acc: [['queEs', 'caracteristicas', 'paquete'], ['queEs', 'caracteristicas', 'paquete', 'categoria']]
@@ -699,6 +708,11 @@ const FAQ_RULES = {
   sup: (v, n) => [
     (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
     v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
+    v.ingredientes && [[`¿Cuáles son los ingredientes de ${n}?`, `¿Qué ingredientes tiene ${n}?`], v.ingredientes],
+    v.alergenos && [[`¿${n} contiene alérgenos?`, `¿Qué alérgenos declara ${n}?`], v.alergenos],
+    v.atributos && [[`¿Qué atributos tiene ${n}?`, `¿Qué dice el empaque de ${n}?`], v.atributos],
+    v.publico && [[`¿Para quién es ${n}?`, `¿A quién está dirigido ${n}?`], [`Está dirigido a ${lc(v.publico)}.`, `Va dirigido a ${lc(v.publico)}.`]],
+    v.advertencias && [[`¿Qué advertencias tiene ${n}?`, `¿Qué precauciones tiene ${n}?`], v.advertencias],
     v.sabor && [[`¿Qué sabor tiene ${n}?`, `¿Cuál es el sabor de ${n}?`], [`Su sabor es ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`, `Es sabor ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`]],
     nutriFact(v, NUTRI_FIND.energia) && [[`¿Cuántas calorías tiene ${n}?`, `¿Cuántas calorías aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.energia).value}${nutriFact(v, NUTRI_FIND.energia).head}.`],
     nutriFact(v, NUTRI_FIND.proteina) && [[`¿Cuánta proteína tiene ${n}?`, `¿Cuánta proteína aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.proteina).value} de proteína${nutriFact(v, NUTRI_FIND.proteina).head}.`],
@@ -1335,6 +1349,7 @@ const typeSug = cat => [...new Set(TYPE_DICT[cat].list.map(([, name]) => name).f
   put('med', 'forma', FORM_SUG.med); put('sup', 'forma', FORM_SUG.sup);
   put('sup', 'componente', [...typeSug('sup'), 'Vitamina C', 'Vitamina D3', 'Vitamina B12', 'Vitamina E', 'Omega 3']);
   ['dis', 'cos', 'beb'].forEach(c => put(c, 'tipo', typeSug(c)));
+  put('sup', 'envase', ['Frasco', 'Bote', 'Tarro', 'Sobre', 'Sachet', 'Caja', 'Blíster', 'Botella', 'Lata', 'Pouch', 'Estuche']);
   ['hig', 'acc'].forEach(c => put(c, 'producto', typeSug(c)));
 }
 const CAT_KW = {
