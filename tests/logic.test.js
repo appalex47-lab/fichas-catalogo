@@ -478,8 +478,9 @@ test('sugerencias: los campos de forma y tipo traen listas de ayuda que no limit
 });
 
 /* ---------- Meta title largo: versión corta ---------- */
+const old = m => { m.cats.sup.mt = { ...F.META_GEN.mt }; m.cats.sup.md = { ...F.META_GEN.md }; return m; };
 test('meta title largo: sugiere una versión corta quitando primero la tienda y no la aplica sola', () => {
-  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const m = old(F.defMeta()); m.tienda = 'Farmacias Especializadas';
   const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
   const r = F.computeFor('sup', v, keep, m).meta;
   assert.equal(r.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL | Farmacias Especializadas');
@@ -491,7 +492,7 @@ test('meta title largo: sugiere una versión corta quitando primero la tienda y 
 });
 
 test('meta title largo: con la opción de la persona o la de la categoría usa la versión corta y deja de avisar', () => {
-  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const m = old(F.defMeta()); m.tienda = 'Farmacias Especializadas';
   const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
   const porProducto = F.computeFor('sup', v, keep, m, { mtShort: true }).meta;
   assert.equal(porProducto.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL');
@@ -515,7 +516,7 @@ test('meta title largo: quita bloques de atrás hacia adelante, nunca el primero
 });
 
 test('meta title largo: el CSV usa la versión corta de los productos que la eligieron y avisa de los que siguen largos', () => {
-  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas'; m.cats.sup.confirmed = true;
+  const m = old(F.defMeta()); m.tienda = 'Farmacias Especializadas'; m.cats.sup.confirmed = true;
   const mk = (sku, over) => ({ sku, cat: 'sup', v: { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' }, ...over });
   const ex = F.magentoBatch([mk('LARGO'), mk('CORTO', { mtShort: true })], keep, m, {});
   const col = sku => ex.rows.find(r => r[0] === sku)[ex.header.indexOf('meta_title')];
@@ -525,10 +526,33 @@ test('meta title largo: el CSV usa la versión corta de los productos que la eli
 });
 
 test('meta: un segmento opcional vacío del título no deja hueco en {seg2} y el sabor no desplaza la presentación', () => {
-  const m = F.defMeta(); m.tienda = 'Tienda';
+  const m = old(F.defMeta()); m.tienda = 'Tienda';
   const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
   assert.equal(F.computeFor('sup', base, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda');
   assert.equal(F.computeFor('sup', { ...base, sabor: 'Naranja' }, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda', 'el sabor no desplaza la presentación del meta title');
+});
+
+test('meta suplementos: la variante va antes que el tipo y lo opcional se omite de derecha a izquierda', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const v = { marca: 'Fresubin HPC', componente: 'Fórmula Hipercalórica e Hiperproteica', forma: 'Líquido', sabor: 'Frutos del Bosque', contenido: '200 mL', fabricante: 'Fresenius Kabi', caracteristicas: 'Alta en proteína. Sin gluten.' };
+  const r = F.computeFor('sup', v, keep, m).meta;
+  assert.equal(r.mt.text, 'Fresubin HPC | Frutos del Bosque, 200 mL', 'tienda y tipo largo se omiten; la variante se queda');
+  assert.ok(r.notes.some(n => /Meta title: se omitió/.test(n)) && !r.mt.over);
+  const corto = F.computeFor('sup', { ...v, tipoCorto: 'Hipercalórica' }, keep, m).meta;
+  assert.equal(corto.mt.text, 'Fresubin HPC Hipercalórica | Frutos del Bosque, 200 mL', 'con tipo corto cabe, sin tienda');
+  assert.equal(corto.md.text, 'Fresubin HPC Hipercalórica, Frutos del Bosque, 200 mL. Fresenius Kabi. Alta en proteína.');
+  const sinSabor = F.computeFor('sup', { ...v, sabor: '', tipoCorto: 'Fórmula' }, keep, m).meta;
+  assert.equal(sinSabor.mt.text, 'Fresubin HPC Fórmula | 200 mL | Farmacias Especializadas');
+});
+test('meta: un grupo opcional vacío desaparece y migrateMeta cambia solo la plantilla genérica sin confirmar', () => {
+  assert.equal(F.renderMetaTpl('{a}[ {b}]\n[{c}]', ' | ', { a: 'A' }).text, 'A');
+  const m = F.defMeta(); m.cats.sup.mt = { ...F.META_GEN.mt }; m.cats.sup.md = { ...F.META_GEN.md, max: 100 };
+  F.migrateMeta(m);
+  assert.equal(m.cats.sup.mt.tpl, F.META_SUP.mt.tpl);
+  assert.equal(m.cats.sup.md.tpl, F.META_SUP.md.tpl);
+  const c = F.defMeta(); c.cats.sup.confirmed = true; c.cats.sup.mt = { ...F.META_GEN.mt };
+  F.migrateMeta(c);
+  assert.equal(c.cats.sup.mt.tpl, F.META_GEN.mt.tpl, 'confirmada: no se toca');
 });
 
 /* ---------- Todo dato capturado llega a donde dice llegar ---------- */
@@ -543,7 +567,7 @@ test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo
     hig: { marca: 'M', producto: 'P', variante: 'V', contenido: '100 mL', fabricante: 'F' },
     acc: { marca: 'M', producto: 'P', material: 'Mat', contenido: '3 piezas', fabricante: 'F' }
   };
-  const NO_TEXT = new Set(['compat']);
+  const NO_TEXT = new Set(['compat', 'tipoCorto']);
   for (const [id, c] of Object.entries(F.CATS)) {
     const sinDato = F.computeFor(id, base[id], keep, meta);
     for (const fd of c.fields) {

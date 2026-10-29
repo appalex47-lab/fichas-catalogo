@@ -66,7 +66,7 @@ test('UX: cada dato dice dónde se usa y de dónde viene', { skip }, () => {
   a.fillMed('Tempra', '30', 'A1');
   const t = a.text('#fm-contenido');
   assert.match(t, /Interpretación: 30 → 30 piezas/);
-  assert.match(t, /Usado en: ✓ Título ✓ Descripción ✓ Magento ✓ SEO/);
+  assert.match(t, /Usado en: ✓ Título ✓ Descripción ✓ Magento ✓ Meta ✓ SEO/);
   assert.match(t, /Origen: captura manual/);
   assert.doesNotMatch(a.text('#live'), BAD);
   assert.match(a.text('#live'), /Título generado/);
@@ -420,14 +420,14 @@ test('meta title largo: la pestaña Meta sugiere la versión corta y «Usar vers
   const a = boot();
   a.fill('meta-tienda', 'Farmacias Especializadas');
   const setCat = id => { const r = a.d.querySelector(`#cats input[value="${id}"]`); r.checked = true; r.dispatchEvent(new a.w.Event('change', { bubbles: true })); };
-  setCat('sup');
-  Object.entries({ marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' }).forEach(([k, v]) => a.fill('f-' + k, v));
+  setCat('hig');
+  Object.entries({ marca: 'Dove Men Care', producto: 'Shampoo Fortificante Anticaída', variante: 'Cuidado Total', contenido: '750 mL', fabricante: 'Unilever' }).forEach(([k, v]) => a.fill('f-' + k, v));
   a.fill('sku', 'SUP-1');
   a.d.getElementById('tab-meta').click(); await wait(30);
-  assert.match(a.text('#meta-short'), /Versión corta sugerida \(51 de 60 caracteres\)/);
-  assert.match(a.text('#meta-mt'), /78 caracteres de 60/);
+  assert.match(a.text('#meta-short'), /Versión corta sugerida \(60 de 60 caracteres\)/);
+  assert.match(a.text('#meta-mt'), /87 caracteres de 60/);
   a.d.querySelector('[data-mtshort="on"]').click(); await wait(30);
-  assert.match(a.text('#meta-mt'), /51 caracteres de 60/);
+  assert.match(a.text('#meta-mt'), /60 caracteres de 60/);
   assert.match(a.text('#meta-short'), /Se usa la versión corta/);
   a.d.getElementById('add').click(); await wait(40);
   assert.equal(JSON.parse(a.w.localStorage.getItem('fichas.lote.v1'))[0].mtShort, true);

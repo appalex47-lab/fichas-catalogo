@@ -12,6 +12,7 @@ const {
   defExp,
   defMeta,
   defMetaCat,
+  migrateMeta,
   dupBrand,
   relations,
   encodeCp1252,
@@ -142,6 +143,7 @@ const state = {
 {
   const m = store.get('fichas.meta.v2', null), d = defMeta();
   state.meta = m ? { ...d, ...m, cats: Object.fromEntries(Object.keys(d.cats).map(id => [id, { ...d.cats[id], ...((m.cats || {})[id] || {}) }])) } : d;
+  migrateMeta(state.meta);
   state.exp = { ...defExp(), ...(store.get('fichas.exp.v2', null) || {}) };
   state.dic = { marcas: '', principios: '', labs: '', pos: false, ...(store.get('fichas.dic.v1', null) || {}) };
 }
@@ -1520,7 +1522,7 @@ function renderMetaCfg() {
       <div class="field"><label for="mmax-${k}">Límite de caracteres</label>
         <input type="number" min="0" id="mmax-${k}" data-mmax="${k}" value="${Number(cfg[k].max) || 0}"></div>
     </div></div>`;
-  const tokens = ['{seg1}', '{seg2}', '{seg3}', '{seg4}', '{titulo}', '{categoria}', '{tienda}', '{receta_txt}', ...c.fields.map(f => `{${f.key}}`)];
+  const tokens = ['{seg1}', '{seg2}', '{seg3}', '{seg4}', '{titulo}', '{categoria}', '{tienda}', '{receta_txt}', '{tipo_seo}', '{variante_seo}', '{caracteristica1}', ...c.fields.map(f => `{${f.key}}`)];
   $('#meta-body').innerHTML = `
     <div class="row2">
       <div class="field"><label for="meta-tienda">Nombre de la tienda ({tienda})</label><input type="text" id="meta-tienda" value="${esc(state.meta.tienda)}" autocomplete="off"></div>

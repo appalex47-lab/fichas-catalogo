@@ -437,6 +437,7 @@ const CATS = {
       F('fabricante','Fabricante',{req:1,ph:'GNC'}),
       F('composicion','Composición (resumen)',{g:'d',type:'area',hint:'Resumen para leer rápido, por ejemplo el aporte por porción. Si lo escribes con viñetas (•) sale como lista. La tabla completa va en «Información nutrimental».'}),
       F('caracteristicas','Características objetivas',{g:'d',type:'area',hint:'No conviertas ingredientes en beneficios si la ficha no lo dice.'}),
+      F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Fórmula hipercalórica',hint:'Opcional. Versión corta del tipo para el meta title y la meta description, por ejemplo «Fórmula hipercalórica». Si no lo capturas se usa el tipo completo. No sale en la ficha.'}),
       F('sabor','Sabor',{g:'d',ph:'Naranja',hint:'Opcional. Si lo capturas, entra en el título.'}),
       F('porcion','Tamaño de porción',{g:'d',ph:'1 cápsula',hint:'Opcional. Tal como aparece en la etiqueta.'}),
       F('porciones','Porciones por envase',{g:'d',ph:'100',hint:'Opcional. Tal como aparece en la etiqueta.'}),
@@ -1041,6 +1042,12 @@ const META_GEN = {
   mt: { tpl: '{seg1}\n{seg2}\n{tienda}', sep: ' | ', max: 60 },
   md: { tpl: '{seg1}\n{seg2}\n{seg3}\n{seg4}\n{tienda}', sep: '. ', max: 155 }
 };
+/* Suplementos: la variante (sabor y tamaño) va antes que el tipo, que se omite si no cabe, porque cada sabor y tamaño suele ser su propia página y
+   necesita un título distinto. Entre corchetes va lo opcional. */
+const META_SUP = {
+  mt: { tpl: '{marca}[ {tipo_seo}]\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
+  md: { tpl: '{marca} {tipo_seo}, {variante_seo}\n{fabricante}\n[{caracteristica1}]', sep: '. ', max: 155 }
+};
 const ALT_DEF = {
   med: '{marca} {concentracion}\n{principio}\n{contenido:lc}',
   dis: '{marca} {modelo} {tipo:lc}\n{tecnologia:lc}',
@@ -1052,10 +1059,19 @@ const ALT_DEF = {
 };
 const defMetaCat = id => ({
   confirmed: id === 'med',
-  mt: { ...(id === 'med' ? META_MED.mt : META_GEN.mt) },
-  md: { ...(id === 'med' ? META_MED.md : META_GEN.md) },
+  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : META_GEN.mt) },
+  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : META_GEN.md) },
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
+/* Lo guardado con la plantilla genérica de antes pasa a la nueva de suplementos, salvo que la persona ya haya confirmado esa estructura. */
+function migrateMeta(m) {
+  const sup = m && m.cats && m.cats.sup;
+  if (sup && !sup.confirmed) {
+    if (sup.mt && sup.mt.tpl === META_GEN.mt.tpl) sup.mt = { ...sup.mt, tpl: META_SUP.mt.tpl };
+    if (sup.md && sup.md.tpl === META_GEN.md.tpl) sup.md = { ...sup.md, tpl: META_SUP.md.tpl };
+  }
+  return m;
+}
 const defMeta = () => ({ tienda: '', cats: Object.fromEntries(Object.keys(CATS).map(id => [id, defMetaCat(id)])) });
 const defExp = () => ({ attr: 'categoria_prod', enc: 'cp1252', incF: false, excL: false, incIA: false, incRel: true });
 const TITLE_MAX = 150; // Límite del título para Google Merchant Center (criterio de la herramienta)
@@ -1068,7 +1084,25 @@ function scanRed(text, catId) {
   return f;
 }
 
-function renderMetaTpl(tpl, sep, tokens) {
+/* Lo que va entre [corchetes] en una plantilla es opcional: si el texto pasa del límite se omite de derecha a izquierda. Un grupo cuyos datos
+   están vacíos desaparece solo. `drop` es cuántos grupos se omiten, contados desde la derecha. */
+function expandMetaBrackets(tpl, tokens, drop) {
+  const inners = [];
+  String(tpl || '').replace(/\[([^\[\]]*)\]/g, (m, inner) => { inners.push(inner); return m; });
+  const from = inners.length - (drop || 0), texts = [];
+  let gi = 0;
+  const out = String(tpl || '').replace(/\[([^\[\]]*)\]/g, (m, inner) => {
+    const i = gi++, toks = [...inner.matchAll(/\{(\w+)(?::(lc|o))?\}/g)];
+    const empty = toks.length && toks.every(t => t[2] === 'o' || !tokens[t[1]]);
+    const shown = inner.replace(/\{(\w+)(?::(lc|o))?\}/g, (mm, k, mod) => { let val = tokens[k] || ''; if (val && mod === 'lc') val = lc(val); return val; }).trim();
+    texts[i] = empty ? '' : shown;
+    return empty || i >= from ? '' : inner;
+  });
+  return { tpl: out, groups: inners.length, texts };
+}
+function renderMetaTpl(tpl, sep, tokens, drop) {
+  const ex = expandMetaBrackets(tpl, tokens, drop);
+  tpl = ex.tpl;
   const lines = String(tpl || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const out = [], unknown = new Set(), skipped = [];
   const dotSep = /^\s*\./.test(sep || '');
@@ -1090,12 +1124,13 @@ function renderMetaTpl(tpl, sep, tokens) {
   }
   let text = out.join(sep == null ? ' ' : sep);
   if (dotSep && text && !/[.!?]$/.test(text)) text += '.';
-  return { text: text.trim(), unknown: [...unknown], skipped, blocks: lines.length };
+  return { text: text.trim(), unknown: [...unknown], skipped, blocks: lines.length, groups: ex.groups, groupTexts: ex.texts };
 }
 
 /* Versión corta de un meta title que supera el límite: se omite primero el bloque de la tienda y luego los últimos bloques,
  * de atrás hacia adelante. Nunca se corta una palabra ni se quita el primer bloque. Solo devuelve algo si así llega al límite. */
-function shortenMeta(tpl, sep, tokens, max) {
+function shortenMeta(tpl, sep, tokens, max, drop) {
+  tpl = expandMetaBrackets(tpl, tokens, drop || 0).tpl;
   const lines = String(tpl || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (!max || lines.length < 2) return null;
   const render = idx => renderMetaTpl(idx.map(i => lines[i]).join('\n'), sep, tokens);
@@ -1123,28 +1158,39 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   /* {seg1} a {seg4} son los segmentos del título que sí tienen texto, en orden: un segmento opcional vacío (por ejemplo el sabor) no deja un hueco. */
   const segTexts = title.segs.map(x => x && x.text).filter(Boolean);
   for (let i = 1; i <= 4; i++) tokens['seg' + i] = segTexts[i - 1] || '';
-  const out = {}, warns = [];
+  /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
+  tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';
+  tokens.variante_seo = [dv.sabor, dv.contenido].filter(Boolean).join(', ');
+  tokens.caracteristica1 = String(dv.caracteristicas || '').split(/(?<=[.!?])\s+/)[0].trim().replace(/\.$/, '');
+  const out = {}, warns = [], notes = [];
   [['mt', 'Meta title'], ['md', 'Meta description'], ['alt', 'Alt de imagen']].forEach(([k, label]) => {
     const t = conf[k] || { tpl: '', sep: ' ', max: 0 };
-    const r = renderMetaTpl(t.tpl, t.sep, tokens);
     const max = Number(t.max) || 0;
+    let r = renderMetaTpl(t.tpl, t.sep, tokens, 0), drop = 0, bracketDropped = [];
+    const fullText = r.text;
+    if (max && r.text.length > max && r.groups) {
+      for (let d = 1; d <= r.groups; d++) { drop = d; r = renderMetaTpl(t.tpl, t.sep, tokens, d); if (r.text.length <= max) break; }
+      bracketDropped = r.groupTexts.slice(r.groups - drop).filter(Boolean).reverse();
+      if (bracketDropped.length) notes.push(`${label}: se omitió ${bracketDropped.map(x => '«' + x + '»').join(', ')} (opcional en la plantilla) para no pasar de ${max} caracteres.`);
+    }
     let text = r.text, shortInfo = null, shortened = false;
     if (k === 'mt' && max && text.length > max) {
-      shortInfo = shortenMeta(t.tpl, t.sep, tokens, max);
+      shortInfo = shortenMeta(t.tpl, t.sep, tokens, max, drop);
       if (shortInfo && ((flags && flags.mtShort) || t.auto)) { text = shortInfo.text; shortened = true; }
     }
     out[k] = { text, len: text.length, max, over: !!(max && text.length > max), unknown: r.unknown, skipped: r.skipped, blocks: r.blocks };
     if (shortInfo) out[k].short = shortInfo;
+    if (bracketDropped.length) { out[k].bracketDropped = bracketDropped; out[k].fullText = fullText; }
     if (shortened) { out[k].shortened = true; out[k].original = r.text; out[k].autoShort = !!t.auto && !(flags && flags.mtShort); }
     if (r.unknown.length) warns.push(`${label}: token desconocido ${r.unknown.map(x => '{' + x + '}').join(', ')}.`);
-    if (out[k].over) warns.push(`${label}: ${r.text.length} caracteres, supera el límite de ${max}.`);
-    const red = (k === 'alt' || !conf.confirmed) ? scanRed(r.text, c.id) : [];
+    if (out[k].over) warns.push(`${label}: ${text.length} caracteres, supera el límite de ${max}.`);
+    const red = (k === 'alt' || !conf.confirmed) ? scanRed(text, c.id) : [];
     if (red.length) warns.push(`${label}: contiene «${red.join('», «')}».`);
     if (k === 'alt' && ALT_BAD_START_RE.test(r.text)) warns.push('Alt de imagen: no empieces con "imagen de" o "foto de". El lector de pantalla ya lo anuncia.');
     if (k !== 'alt' && c.id === 'med' && !conf.confirmed && COMERCIAL_RE.test(r.text)) warns.push(`${label}: lenguaje comercial en un medicamento. Confirma con Regulatorio que sea aceptable.`);
   });
   out.warns = warns;
-  out.notes = out.mt.shortened ? [`Meta title acortado: se omitió ${out.mt.short.dropped.map(x => '«' + x + '»').join(', ')}.`] : [];
+  out.notes = [...notes, ...(out.mt.shortened ? [`Meta title acortado: se omitió ${out.mt.short.dropped.map(x => '«' + x + '»').join(', ')}.`] : [])];
   out.confirmed = !!conf.confirmed;
   return out;
 }
@@ -1650,6 +1696,9 @@ const api = {
   buildMg,
   buildFaq,
   shortenMeta,
+  migrateMeta,
+  META_SUP,
+  expandMetaBrackets,
   parseNutrition,
   nutriConsistency,
   relations,

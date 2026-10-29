@@ -216,7 +216,7 @@ test('ux: «este dato alimenta estos campos» sale de la plantilla real', () => 
   const res = F.computeFor('med', med, keep, meta);
   const ctx = { CATS: F.CATS, cat: 'med', titleKeys: U.titleKeysOf(res), metaKeys: U.metaKeysOf(meta, 'med') };
   const u = U.usageOf('contenido', ctx);
-  assert.deepEqual(u.used, ['Título', 'Descripción', 'Magento', 'SEO']);
+  assert.deepEqual(u.used, ['Título', 'Descripción', 'Magento', 'Meta', 'SEO']);
   assert.match(U.usageText(u), /Título · Descripción/);
   assert.ok(U.usageOf('marca', ctx).used.includes('Meta'));
   assert.deepEqual(U.usageOf('inexistente', ctx).used, []);
