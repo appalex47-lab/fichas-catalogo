@@ -200,7 +200,7 @@ Reglas:
 4. "texto_leido" es la transcripción EXACTA de lo que se ve en la foto. "valor" usa solo esas palabras (puedes corregir mayúsculas). Para inci, modo y precauciones, "valor" debe ser idéntico a "texto_leido".
 5. Si algo no se lee con claridad, no lo incluyas o pon "legible": false. Nunca lo completes, lo adivines ni lo traduzcas.
 6. No incluyas datos que no estén visibles en las fotos. No indiques si el producto requiere receta.
-7. Para ingredientes, alergenos, advertencias y atributos, "valor" es idéntico a "texto_leido". Para nutrimental, "valor" es la tabla en líneas con barras: una primera línea opcional de encabezados que empieza con "#" (por ejemplo "# Nutriente | Por porción | Por 100 g | % VD") y luego una línea por nutriente "Nombre | cantidad | cantidad". Una subfila empieza con "-". Las cantidades y unidades deben ser exactamente las de la etiqueta; nunca calcules, conviertas ni completes valores.`;
+7. Para ingredientes, alergenos, advertencias y atributos, "valor" es idéntico a "texto_leido". Para nutrimental, "valor" es la tabla en líneas: una línea con barras es una fila ("Nombre | cantidad | cantidad"); una línea sin barras es un título o una nota ("Vitaminas", "de los cuales"); una primera línea opcional que empieza con "#" son los encabezados de columna (por ejemplo "# Nutriente | Por porción | Por 100 g | % VD"). Una subfila empieza con "-". Copia los decimales como están impresos (coma o punto). Las cantidades y unidades deben ser exactamente las de la etiqueta; nunca calcules, conviertas ni completes valores.`;
 
 /* o: { cat, text, images: [dataUrl] } */
 function buildVisionMessages(o) {

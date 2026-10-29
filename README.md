@@ -126,6 +126,7 @@ La página solo necesita `index.html`, `styles/styles.css`, `js/logic.js`, `js/a
 - Título de medicamentos: `Marca concentración / volumen | Principio activo | Forma | Laboratorio X`, sin piezas en la forma.
 - La descripción de Magento se bloquea si en medicamentos no se declara si requiere receta, o si falta el dato vital de la categoría (principio activo, activo, componente o tecnología).
 - Meta de medicamentos: `Comprar {marca} {concentración} | {principio} | {laboratorio}` y `El {marca} de {concentración} contiene {principio} por {laboratorio} | Venta en línea de forma segura`. Agrega "con receta médica" solo si se declaró receta. La estructura de las demás categorías es provisional y sus metas salen vacías hasta confirmarlas en la interfaz.
+- Meta de suplementos: la variante va antes que el tipo para que cada sabor y tamaño tenga un título distinto: `{marca}[ {tipo_seo}] | {sabor, contenido} | [{tienda}]`. Lo que va entre `[corchetes]` es opcional y se omite de derecha a izquierda (primero la tienda, luego el tipo) cuando el texto pasa del límite; la nota lo avisa. Campo opcional «Tipo corto (para el meta title)», por ejemplo «Fórmula hipercalórica», que no sale en la ficha. Datos derivados disponibles en cualquier plantilla: `{tipo_seo}`, `{variante_seo}` y `{caracteristica1}`. Lo guardado con la plantilla genérica anterior pasa a esta, salvo que ya hayas confirmado la estructura. Como la estructura de suplementos no está confirmada, su meta sigue vacía en el CSV hasta que la confirmes.
 - Sin repetir información: si el tipo ya está dentro del nombre del producto, o la marca al inicio del nombre, el título, la descripción de Merchant Center, las metas y el alt no lo repiten. Las plantillas de Magento conservan ambas filas.
 - Alt: se arma con marca, concentración, principio activo y presentación, con límite de 125 caracteres y sin "imagen de".
 - Revisión de lenguaje: avisa de claims prohibidos, adjetivos vacíos y claims que requieren validación.
@@ -182,22 +183,39 @@ Los datos de texto opcionales («Datos para las descripciones») salen en el HTM
 
 ## Tabla nutrimental de suplementos
 
-El campo opcional «Información nutrimental» (suplementos, en «Datos para las descripciones») arma una tabla HTML en la ficha de Magento, con `id="tabla-nutrimental"` y `class="tabla-nutrimental"` para que tu tema la estile. Se captura tal cual la etiqueta, una fila por línea:
+El campo opcional «Información nutrimental» (suplementos, en «Datos para las descripciones») arma una tabla HTML en la ficha de Magento, con `id="tabla-nutrimental"` y `class="tabla-nutrimental"` para que tu tema la estile. Se captura tal cual la etiqueta, con **una sola regla: una línea con `|` es una fila y una línea sin `|` es texto**.
 
 ```
-# Nutriente | Por porción (30 g) | Por 100 g | % VD
-Energía | 120 kcal | 400 kcal | 6 %
-Proteína | 24 g | 80 g | 48 %
-- Azúcares | 1.5 g | 5 g
+Información nutrimental: por porción (200 mL)
+Contenido energético | 400 kcal (1680 kJ)
+Proteínas | 20,0 g
+Carbohidratos | 45,0 g
+de los cuales
+- Azúcar | 11,6 g
+- Lactosa | ≤ 0,6 g
+Vitaminas
+- Vitamina A | 425 µg RE
+- de la cual β-Caroteno | 125 µg RE
+Minerales
+- Sodio | 120 mg / 5,2 mmol
 ```
 
-- La línea que empieza con `#` son los encabezados. Es obligatoria solo si hay más de una columna de valores (por porción, por 100 g, % VD, en cualquier combinación). Con una sola columna se llama «Cantidad».
-- Una fila que empieza con guion es una subfila (azúcares dentro de carbohidratos). También se entienden filas pegadas con tabulaciones desde una hoja de cálculo o sin barras («Proteína 20 g 40 %»).
-- **No se calcula ni se corrige nada.** Se limpian las unidades (`20G` → `20 g`), la coma decimal y las mayúsculas sostenidas de los nombres. Los valores como `<1 mg` o `No significativo` se muestran tal cual.
-- **Avisos** (sin bloquear): una fila sin cantidad o sin nombre, encabezados que no cuadran con las columnas, y calorías que no se parecen a 4·proteína + 4·carbohidratos + 9·grasa (tolerancia del 20 %, se revisa cada columna con valores en gramos y kcal).
-- La tabla lleva `aria-label="Información nutrimental"` (sin título visible repetido).
-- Las preguntas frecuentes agregan «¿Cuántas calorías tiene…?», «¿Cuánta proteína tiene…?» y «¿Cuánta azúcar tiene…?», con el valor de la primera columna de la tabla.
+- **Texto sin barra:** «de los cuales» (o «de la cual…») sale como nota en cursiva; cualquier otra línea (`Vitaminas`, `Minerales`) sale como título en negritas que abarca todas las columnas; el primer texto, antes de cualquier fila, es el título de la tabla (si empieza con «Información nutrimental:» esa parte se quita, porque ya es el encabezado de la sección).
+- **Filas:** una fila que empieza con guion o viñeta (`-`, `•`) es una subfila. Se aceptan tabulaciones (copiar desde una hoja de cálculo).
+- **Columnas:** con una sola columna de valores se llama «Cantidad». Si hay más (por porción, por 100 g, % VD, en cualquier combinación) la primera línea lleva los encabezados y empieza con `#`: `# Nutriente | Por porción | Por 100 g | % VD`.
+- **No se calcula ni se corrige nada.** Los decimales se respetan como los escribes (coma o punto). Una cantidad simple se limpia (`20,0g` pasa a `20,0 g`, `90 MG` a `90 mg`); cualquier otra cosa (`400 kcal (1680 kJ)`, `425 µg RE`, `<1 mg`, `850 mOsmol/kg H₂O`) pasa tal cual.
+- **Avisos** (sin bloquear): una fila con barra pero sin cantidad o sin nombre, una fila de porción dentro de la tabla (se omite: va en «Tamaño de porción»), encabezados que no cuadran con las columnas, y calorías que no se parecen a 4·proteína + 4·carbohidratos + 9·grasa (tolerancia del 20 %).
+- La tabla lleva `aria-label="Información nutrimental"`; si escribes un título, sale como `<caption>`.
+- Las preguntas frecuentes agregan calorías, proteína y azúcares con el valor de la primera columna y su base («…, por porción (200 mL)»).
 - No encontré una fuente que confirme qué estructura de información nutrimental exige la normativa para suplementos (la NOM-051 se aplica a alimentos y bebidas preenvasados), por eso la tabla copia el formato de cada etiqueta. Valida con tu equipo regulatorio cualquier leyenda obligatoria.
+
+## Redacción de la ficha de suplementos
+
+- **Frase inicial:** «Este suplemento se presenta en forma de líquido, en una botella de 200 ml.» Se arma con lo que haya: sin envase, «…en una presentación de 200 ml»; si el contenido ya trae el envase («Frasco con 100 piezas»), «…en un frasco con 100 piezas»; un envase de varias palabras no entra en la frase.
+- **Composición (resumen):** es un resumen para leer rápido (por ejemplo el aporte por porción). Si lo escribes con viñetas (•) sale como lista en Magento y como frase en Merchant Center y en las preguntas. La tabla completa va en «Información nutrimental».
+- **«Dirigido a»** de más de 60 caracteres sale como sección en lugar de fila de la ficha técnica.
+- **Preguntas frecuentes:** no repiten respuestas literales de más de 250 caracteres (la lista de ingredientes, por ejemplo, queda en su sección); sin doble punto; el sabor va en minúscula dentro de la frase; si el nombre completo pasa de 40 caracteres, las preguntas usan solo la marca; la respuesta sobre si es un medicamento empieza con «No.».
+- **Aviso de alérgenos:** si la lista de ingredientes menciona leche, soya, trigo, huevo, pescado, crustáceos, cacahuate, frutos secos o ajonjolí y «Alérgenos» no los menciona, avisa. Es solo un aviso: la herramienta nunca declara alérgenos por ti. «Libre de gluten» o «sin lactosa» van mejor en «Atributos del empaque» y «no apto para…» en «Advertencias».
 
 ## Más campos de la ficha de suplementos y lectura por foto
 

@@ -88,21 +88,24 @@ function joinForm(forma, contenido) {
 const saborTxt = s => s && (/^sabor\b/i.test(s) ? s : 'Sabor ' + s);
 
 /* ---------- Tabla nutrimental (suplementos) ----------
- * Se captura tal cual la etiqueta, una fila por línea: «Proteína | 20 g | 40 %». Si hay más de una columna se agrega una línea de
- * encabezados que empieza con #: «# Nutriente | Por porción | Por 100 g | % VD». Una fila que empieza con guion es una subfila
- * («- Azúcares | 2 g»). También se entiende una fila pegada sin barras («Proteína 20 g 40 %»). La herramienta solo ordena y limpia:
- * no calcula ni corrige cantidades. Solo avisa si las calorías no cuadran con proteína, carbohidratos y grasas. */
+ * Se captura tal cual la etiqueta. Regla única: una línea con «|» (o tabulación) es una fila («Proteínas | 20,0 g | 40 %») y una línea
+ * sin «|» es texto: un título en negritas («Vitaminas»), una nota («de los cuales») o, si es la primera, el título de la tabla
+ * («Información nutrimental: por porción (200 mL)»). Una línea que empieza con # son los encabezados de columna cuando hay más de
+ * una («# Nutriente | Por porción | % VD»). Una fila que empieza con guion o viñeta es una subfila. La herramienta solo ordena y
+ * limpia: respeta los decimales como los escribes y no calcula ni corrige cantidades. Solo avisa si las calorías no cuadran con
+ * proteína, carbohidratos y grasas. */
 const NUTRI_UNIT = { g: 'g', mg: 'mg', mcg: 'mcg', 'µg': 'mcg', ug: 'mcg', kcal: 'kcal', cal: 'kcal', kj: 'kJ', ui: 'UI', iu: 'UI', ml: 'mL', l: 'L', '%': '%', mmol: 'mmol', meq: 'mEq', ufc: 'UFC', cfu: 'CFU', 'mosmol/l': 'mOsmol/L', 'mosmol/kg h2o': 'mOsmol/kg H2O', 'mosmol/kg': 'mOsmol/kg' };
-const NUTRI_VAL_RE = /(?<![\p{L}\d.,])([<≤~]?\s*\d+(?:[.,]\d+)?)\s*(mosmol\/kg(?:\s*h2o)?|mosmol\/l|kcal|kj|mcg|µg|ug|mg|mmol|meq|ufc|cfu|ui|iu|ml|cal|g|l|%)(?![\p{L}])/giu;
+/* Una cantidad simple («20,0g», «<1 mg») se escribe con espacio y unidad normalizada; cualquier otra cosa («400 kcal (1680 kJ)», «425 µg RE») pasa tal cual. */
 function nutriCell(x) {
-  const m = String(x ?? '').trim().match(/^([<≤~]?)\s*(\d+(?:[.,]\d+)?)\s*(.+)$/);
+  const t = String(x ?? '').trim(), m = t.match(/^([<≤~]?\s*)(\d+(?:[.,]\d+)?)\s*(.+)$/);
   const u = m && NUTRI_UNIT[m[3].toLowerCase().replace(/\s+/g, ' ')];
-  return u ? `${m[1]}${m[2].replace(',', '.')} ${u}` : String(x ?? '').trim();
+  return u ? `${m[1]}${m[2]} ${u}` : t;
 }
 const NUTRI_PORTION_RE = /^(por\s+)?porci[oó]n(\s+de)?$|^tama[ñn]o\s+de\s+(la\s+)?porci[oó]n$|^(porciones?\s+por\s+envase|por\s+envase)$/i;
+const NUTRI_NOTE_RE = /^de\s+(los|las|la|el)\s+(cuales?|cual)\b/i;
 const nutriName = s => { s = s.trim(); return s && s === s.toUpperCase() && /\p{L}/u.test(s) ? cap(s.toLowerCase()) : s; };
 function parseNutrition(text) {
-  const out = { head: null, rows: [], problems: [], explicit: false };
+  const out = { head: null, rows: [], items: [], caption: '', problems: [], explicit: false };
   const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const body = [];
   lines.forEach(l => {
@@ -112,19 +115,28 @@ function parseNutrition(text) {
   body.forEach(l => {
     let sub = false;
     if (/^[-•–]\s*/.test(l)) { sub = true; l = l.replace(/^[-•–]\s*/, ''); }
-    let name, cells;
-    if (/[|\t]/.test(l)) { const p = l.split(/\s*[|\t]\s*/); name = p[0]; cells = p.slice(1).filter(x => x !== ''); }
-    else {
-      const hits = [...l.matchAll(NUTRI_VAL_RE)];
-      name = hits.length ? l.slice(0, hits[0].index) : l;
-      cells = hits.map(h => h[0]);
+    if (!/[|\t]/.test(l)) {
+      /* Sin barra: texto. Nota, título de grupo o, la primera vez y antes de cualquier fila, título de la tabla. */
+      const t = l.replace(/[:\s]+$/, '');
+      if (NUTRI_NOTE_RE.test(t)) { out.items.push({ kind: 'nota', text: t }); return; }
+      if (!out.rows.length && !out.items.length && !out.caption) {
+        const c = t.replace(/^informaci[oó]n\s+nutri(?:mental|cional)\s*[:\-–]?\s*/i, '').trim();
+        if (c) out.caption = cap(c);
+        else out.items.push({ kind: 'skip' });
+        return;
+      }
+      out.items.push({ kind: 'titulo', text: nutriName(t) });
+      return;
     }
-    name = nutriName(name.replace(/[:\s]+$/, ''));
+    const p = l.split(/\s*[|\t]\s*/), cells = p.slice(1).filter(x => x !== '');
+    const name = nutriName(p[0].replace(/[:\s]+$/, ''));
     if (!name) { out.problems.push(`Hay una fila sin nombre de nutriente: «${l}».`); return; }
     if (NUTRI_PORTION_RE.test(name)) { out.problems.push(`La fila «${name}${cells.length ? ': ' + cells.join(' / ') : ''}» es la porción, no un nutriente. Captúrala en «Tamaño de porción»; se omite de la tabla.`); return; }
-    if (!cells.length) { out.problems.push(`La fila «${name}» no tiene cantidad. Si es una nota (por ejemplo «de los cuales»), quítala; si es una subfila, empieza la línea con un guion.`); return; }
-    out.rows.push({ name, sub, cells: cells.map(nutriCell) });
+    if (!cells.length) { out.problems.push(`La fila «${name}» tiene la barra pero no tiene cantidad. Si es un título o una nota, quita la barra.`); return; }
+    const row = { kind: 'row', name, sub, cells: cells.map(nutriCell) };
+    out.rows.push(row); out.items.push(row);
   });
+  out.items = out.items.filter(x => x.kind !== 'skip');
   const cols = Math.max(0, ...out.rows.map(r => r.cells.length));
   if (!out.head) out.head = ['Nutriente', ...(cols <= 1 ? ['Cantidad'] : Array.from({ length: cols }, (_, i) => `Valor ${i + 1}`))];
   if (out.rows.length && cols > 1 && !out.explicit) out.problems.push('La tabla tiene más de una columna. Agrega una primera línea con los encabezados, por ejemplo «# Nutriente | Por porción | % VD».');
@@ -134,13 +146,13 @@ function parseNutrition(text) {
   return out;
 }
 const NUTRI_FIND = {
-  energia: /^(energ[ií]a|calor[ií]as|valor energ[eé]tico)/i,
+  energia: /^(energ[ií]a|contenido energ[eé]tico|calor[ií]as|valor energ[eé]tico)/i,
   proteina: /^prote[ií]nas?\b/i,
   carbo: /^(carbohidratos?|hidratos de carbono)( total(?:es)?)?$/i,
-  grasa: /^(grasas?|l[ií]pidos)( total(?:es)?)?$/i,
+  grasa: /^(grasas?|l[ií]pidos(?: \(grasas?\))?)( total(?:es)?)?$/i,
   azucar: /^az[uú]cares?( total(?:es)?)?$/i
 };
-const nutriNum = (cell, unit) => { const m = String(cell || '').match(/^(\d+(?:\.\d+)?) (\S+)$/); return m && m[2] === unit ? Number(m[1]) : null; };
+const nutriNum = (cell, unit) => { const m = String(cell || '').match(/^(\d+(?:[.,]\d+)?) (\S+)$/); return m && m[2] === unit ? Number(m[1].replace(',', '.')) : null; };
 /* Aviso (no corrección) si las calorías declaradas no se parecen a 4·proteína + 4·carbohidratos + 9·grasa. */
 function nutriConsistency(p) {
   const find = re => p.rows.find(r => !r.sub && re.test(r.name));
@@ -148,7 +160,7 @@ function nutriConsistency(p) {
   if (!e || !pr || !ch || !gr) return [];
   const msgs = [];
   for (let j = 0; j < p.cols; j++) {
-    const kcal = nutriNum(e.cells[j], 'kcal'), P = nutriNum(pr.cells[j], 'g'), C = nutriNum(ch.cells[j], 'g'), G = nutriNum(gr.cells[j], 'g');
+    const kcal = nutriNum((e.cells[j] || '').replace(/\s*\(.*$/, ''), 'kcal'), P = nutriNum(pr.cells[j], 'g'), C = nutriNum(ch.cells[j], 'g'), G = nutriNum(gr.cells[j], 'g');
     if ([kcal, P, C, G].some(x => x === null)) continue;
     const exp = 4 * P + 4 * C + 9 * G;
     if (Math.abs(kcal - exp) > Math.max(10, exp * 0.2)) msgs.push(`Tabla nutrimental, columna «${p.head[j + 1] || 'Valor ' + (j + 1)}»: declara ${kcal} kcal, pero proteína, carbohidratos y grasas suman cerca de ${Math.round(exp)} kcal (4-4-9). Verifica la etiqueta.`);
@@ -171,17 +183,20 @@ function nutriTableHtml(v) {
   if (!text) return '';
   const p = parseNutrition(text);
   if (!p.rows.length) return '';
-  const th = p.head.slice(0, p.cols + 1).map(h => `<th scope="col">${escT(h)}</th>`).join('');
-  const rows = p.rows.map(r => `    <tr${r.sub ? ' class="sub"' : ''}><th scope="row">${escT(r.name)}</th>${Array.from({ length: p.cols }, (_, j) => `<td>${escT(r.cells[j] || '—')}</td>`).join('')}</tr>`).join('\n');
-  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental">\n  <thead><tr>${th}</tr></thead>\n  <tbody>\n${rows}\n  </tbody>\n</table>`;
+  const span = p.cols + 1;
+  const th = p.head.slice(0, span).map(h => `<th scope="col">${escT(h)}</th>`).join('');
+  const body = p.items.map(it => it.kind === 'titulo' ? `    <tr class="titulo"><th scope="colgroup" colspan="${span}">${escT(it.text)}</th></tr>`
+    : it.kind === 'nota' ? `    <tr class="nota"><td colspan="${span}">${escT(it.text)}</td></tr>`
+    : `    <tr${it.sub ? ' class="sub"' : ''}><th scope="row">${escT(it.name)}</th>${Array.from({ length: p.cols }, (_, j) => `<td>${escT(it.cells[j] || '—')}</td>`).join('')}</tr>`).join('\n');
+  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental">\n${p.caption ? `  <caption>${escT(p.caption)}</caption>\n` : ''}  <thead><tr>${th}</tr></thead>\n  <tbody>\n${body}\n  </tbody>\n</table>`;
 }
 /* Dato de la primera columna de valores, para las preguntas frecuentes. */
 function nutriFact(v, re) {
   if (!v.nutrimental) return null;
   const p = parseNutrition(v.nutrimental), r = p.rows.find(x => re.test(x.name));
   if (!r || !r.cells[0]) return null;
-  const head = p.explicit && p.head[1] && !/^(cantidad|valor 1)$/i.test(p.head[1]) ? ` (${lc(p.head[1])})` : '';
-  return { name: r.name, value: r.cells[0], head };
+  const basis = p.explicit && p.head[1] && !/^(cantidad|valor 1)$/i.test(p.head[1]) ? p.head[1] : p.caption;
+  return { name: r.name, value: r.cells[0], head: basis ? `, ${lc(basis)}` : '' };
 }
 
 /* ---------- Plantillas de Magento ---------- */
@@ -202,6 +217,32 @@ const LEGEND = {
   supResp: 'El consumo de este producto es responsabilidad de quien lo recomienda y de quien lo usa. Este producto no es un medicamento.',
   supConservacion: 'Consérvese bien cerrado en un lugar fresco y seco. No se deje al alcance de los niños.'
 };
+/* Frase de presentación según los datos: «en forma de líquido, en una botella de 200 ml». El envase solo entra si es una palabra; si el contenido ya
+   empieza por el envase («Frasco con 100 piezas») se usa tal cual; sin envase, «en una presentación de …». `w` envuelve los datos (negritas en Magento). */
+const ENVASE_ART = { frasco: 'un', bote: 'un', tarro: 'un', sobre: 'un', sachet: 'un', 'blíster': 'un', estuche: 'un', tubo: 'un', vial: 'un', pouch: 'un', display: 'un', botella: 'una', caja: 'una', lata: 'una', bolsa: 'una' };
+const firstWord = t => (fold(String(t || '')).toLowerCase().match(/^\p{L}+/u) || [''])[0];
+function presentPhrase(v, w = x => x) {
+  const parts = [];
+  if (v.forma) parts.push(`en forma de ${w(lc(v.forma))}`);
+  if (v.contenido) {
+    const own = ENVASE_ART[firstWord(v.contenido)], env = String(v.envase || '').trim(), envArt = ENVASE_ART[firstWord(env)];
+    if (own) parts.push(`en ${own} ${w(lc(v.contenido))}`);
+    else if (env && !/\s/.test(env) && envArt) parts.push(`en ${envArt} ${lc(env)} de ${w(v.contenido)}`);
+    else parts.push(`en una presentación de ${w(v.contenido)}`);
+  }
+  return parts.join(', ');
+}
+/* Un resumen con viñetas en una línea («Aporte: • Proteínas: 20 g • Grasas: 5 g») se lee como frase en Merchant Center y en las preguntas. */
+const flatBullets = t => String(t || '').replace(/\s*•\s*/g, '; ').replace(/:\s*;\s*/, ': ').replace(/^;\s*/, '').trim();
+/* Composición en el HTML: si trae viñetas («•») sale como lista; si no, como texto. */
+function compSec(t) {
+  t = String(t || '').trim();
+  if (!t) return [];
+  const parts = t.split(/\s*•\s*/).map(x => x.trim()).filter(Boolean);
+  if (parts.length < 3 || !t.includes('•')) return [`<h2>Composición:</h2>\n<p>${escT(t)}</p>`];
+  const lead = t.startsWith('•') ? '' : parts.shift();
+  return [`<h2>Composición:</h2>\n${lead ? `<p>${escT(lead)}</p>\n` : ''}<ul>\n${parts.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>`];
+}
 /* Secciones de texto literal que se agregan al HTML de Magento solo si el dato fue capturado: [encabezado, texto]. */
 const secs = pairs => pairs.filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`);
 /* Lista con viñetas a partir de un texto separado por comas, punto y coma o saltos de línea. */
@@ -394,8 +435,9 @@ const CATS = {
       F('forma','Forma',{req:1,pres:1,ph:'Cápsulas'}),
       F('contenido','Contenido neto o piezas',{req:1,pres:1,ph:'Frasco con 100 piezas'}),
       F('fabricante','Fabricante',{req:1,ph:'GNC'}),
-      F('composicion','Composición o ingredientes',{g:'d',type:'area'}),
+      F('composicion','Composición (resumen)',{g:'d',type:'area',hint:'Resumen para leer rápido, por ejemplo el aporte por porción. Si lo escribes con viñetas (•) sale como lista. La tabla completa va en «Información nutrimental».'}),
       F('caracteristicas','Características objetivas',{g:'d',type:'area',hint:'No conviertas ingredientes en beneficios si la ficha no lo dice.'}),
+      F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Fórmula hipercalórica',hint:'Opcional. Versión corta del tipo para el meta title y la meta description, por ejemplo «Fórmula hipercalórica». Si no lo capturas se usa el tipo completo. No sale en la ficha.'}),
       F('sabor','Sabor',{g:'d',ph:'Naranja',hint:'Opcional. Si lo capturas, entra en el título.'}),
       F('porcion','Tamaño de porción',{g:'d',ph:'1 cápsula',hint:'Opcional. Tal como aparece en la etiqueta.'}),
       F('porciones','Porciones por envase',{g:'d',ph:'100',hint:'Opcional. Tal como aparece en la etiqueta.'}),
@@ -419,7 +461,7 @@ const CATS = {
     mgUses: ['marca','componente','forma','contenido','fabricante'],
     mc: v => [
       join(' - ', join(' ', v.marca, v.componente && `(${v.componente})`, v.contenido), v.fabricante),
-      'Suplemento alimenticio' + (v.forma ? ' en forma de ' + lc(v.forma) : '') + (v.composicion ? ' que contiene ' + lc(v.composicion) : ''),
+      'Suplemento alimenticio' + (v.forma ? ' en forma de ' + lc(v.forma) : '') + (v.composicion ? ' que contiene ' + lc(flatBullets(v.composicion)) : ''),
       optMc('Sabor', v.sabor && saborTxt(v.sabor)),
       optMc('Dirigido a', v.publico && `Dirigido a ${lc(v.publico)}`),
       optMc('Porción', portionLine(v)),
@@ -429,15 +471,12 @@ const CATS = {
     ],
     mg: v => {
       let p = `${S(join(' ', v.marca, v.componente && `(${v.componente})`))} es un producto alimenticio` + (v.fabricante ? ` elaborado por el fabricante ${S(v.fabricante)}` : '') + '.';
-      if (v.forma || v.contenido) {
-        p += ' Este suplemento' + (v.forma ? ` en forma de ${S(v.forma)}` : '')
-          + (v.contenido ? `${v.forma ? ',' : ''} estructurado en una presentación de ${S(v.contenido)}` : '') + '.';
-      }
+      if (v.forma || v.contenido) p += ` Este suplemento se presenta ${presentPhrase(v, S)}.`;
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Tipo o Componente Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
-        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ...portionRows(v), ['Dirigido a', v.publico], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Composición:', v.composicion], ['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP]);
+        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ...portionRows(v), ...(v.publico && v.publico.length <= 60 ? [['Dirigido a', v.publico]] : []), ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+      ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Dirigido a:', v.publico && v.publico.length > 60 ? v.publico : '']]), ...compSec(v.composicion), ...secs([['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP]);
     }
   },
 
@@ -684,7 +723,8 @@ const mgFull = g => '```html\n' + g.html + '\n```\n\n- Categoría detectada: ' +
    Para que el catálogo no se vea repetitivo, la pregunta y los conectores de las respuestas de plantilla tienen variantes
    escritas aquí. La variante se elige con un hash de los datos del producto: el mismo producto sale siempre igual y productos
    distintos varían. Las leyendas regulatorias y los textos literales nunca se parafrasean. */
-const faqName = (c, v) => c.id === 'med' ? v.marca : join(' ', v.marca, v.producto || v.modelo || v.componente || v.tipo);
+const FAQ_NAME_MAX = 40, FAQ_ANSWER_MAX = 250;
+const faqName = (c, v) => { if (c.id === 'med') return v.marca; const full = join(' ', v.marca, v.producto || v.modelo || v.componente || v.tipo); return full.length > FAQ_NAME_MAX && v.marca ? v.marca : full; };
 const FAQ_MIN = 2;
 const faqSeed = (c, v) => {
   let h = 2166136261;
@@ -721,22 +761,22 @@ const FAQ_RULES = {
     v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
   ],
   sup: (v, n) => [
-    v.composicion && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion)}.`, `Su composición incluye ${lc(v.composicion)}.`]],
+    v.composicion && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(flatBullets(v.composicion))}.`, `Su composición incluye ${lc(flatBullets(v.composicion))}.`]],
     v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
     v.ingredientes && [[`¿Cuáles son los ingredientes de ${n}?`, `¿Qué ingredientes tiene ${n}?`], v.ingredientes],
     v.alergenos && [[`¿${n} contiene alérgenos?`, `¿Qué alérgenos declara ${n}?`], v.alergenos],
-    v.atributos && [[`¿Qué atributos tiene ${n}?`, `¿Qué dice el empaque de ${n}?`], v.atributos],
+    v.atributos && [[`¿Qué atributos tiene ${n}?`, `¿Qué atributos declara el empaque de ${n}?`], v.atributos],
     v.publico && [[`¿Para quién es ${n}?`, `¿A quién está dirigido ${n}?`], [`Está dirigido a ${lc(v.publico)}.`, `Va dirigido a ${lc(v.publico)}.`]],
     v.advertencias && [[`¿Qué advertencias tiene ${n}?`, `¿Qué precauciones tiene ${n}?`], v.advertencias],
-    v.sabor && [[`¿Qué sabor tiene ${n}?`, `¿Cuál es el sabor de ${n}?`], [`Su sabor es ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`, `Es sabor ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`]],
+    v.sabor && [[`¿Qué sabor tiene ${n}?`, `¿Cuál es el sabor de ${n}?`], [`Su sabor es ${String(v.sabor).replace(/^sabor\s+/i, '').toLowerCase()}.`, `Es sabor ${String(v.sabor).replace(/^sabor\s+/i, '').toLowerCase()}.`]],
     nutriFact(v, NUTRI_FIND.energia) && [[`¿Cuántas calorías tiene ${n}?`, `¿Cuántas calorías aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.energia).value}${nutriFact(v, NUTRI_FIND.energia).head}.`],
     nutriFact(v, NUTRI_FIND.proteina) && [[`¿Cuánta proteína tiene ${n}?`, `¿Cuánta proteína aporta ${n}?`], `Según su tabla nutrimental, aporta ${nutriFact(v, NUTRI_FIND.proteina).value} de proteína${nutriFact(v, NUTRI_FIND.proteina).head}.`],
     nutriFact(v, NUTRI_FIND.azucar) && [[`¿Cuánta azúcar tiene ${n}?`, `¿Cuántos azúcares aporta ${n}?`], `Según su tabla nutrimental, tiene ${nutriFact(v, NUTRI_FIND.azucar).value} de azúcares${nutriFact(v, NUTRI_FIND.azucar).head}.`],
     v.porciones && !isSingleServing(v) && [[`¿Cuántas porciones trae ${n}?`, `¿Cuántas porciones tiene cada envase de ${n}?`], [`Trae ${v.porciones} porciones por envase${v.porcion ? `, con un tamaño de porción de ${lc(v.porcion)}` : ''}.`]],
-    faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
+    (v.forma || v.contenido) && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], `Se presenta ${presentPhrase(v)}.`],
     v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
     v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
-    [[`¿${n} es un medicamento?`, `¿${n} reemplaza a un medicamento?`], LEGEND.supResp],
+    [[`¿${n} es un medicamento?`, `¿Se considera ${n} un medicamento?`], `No. ${LEGEND.supResp}`],
     [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.supConservacion]
   ],
   dis: (v, n) => [
@@ -759,7 +799,7 @@ function buildFaq(c, v, seed) {
   if (!n) return { items: [], html: '' };
   const h = seed == null ? faqSeed(c, v) : seed;
   const pick = (arr, i) => Array.isArray(arr) ? arr[(h + i) % arr.length] : arr;
-  const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a], i) => [pick(q, i), sentence(pick(a, i))]);
+  const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a], i) => [pick(q, i), sentence(pick(a, i)).replace(/([.!?])\.+$/, '$1')]).filter(([, a]) => a.length <= FAQ_ANSWER_MAX);
   if (items.length < FAQ_MIN) return { items: [], html: '' };
   return { items, html: '<h2>Preguntas frecuentes:</h2>\n' + items.map(([q, a]) => `<h3>${escT(q)}</h3>\n<p>${escT(a)}</p>`).join('\n') };
 }
@@ -825,6 +865,18 @@ function nivelPorFps(fps) {
   return { n, nivel: 'Muy alta' };
 }
 const langCount = L => L.claim.length + L.vacio.length + L.amber.length + (L.med ? L.med.length : 0);
+/* Alérgenos frecuentes: [nombre, cómo se reconoce en la lista de ingredientes, cómo debe aparecer declarado]. Solo para avisar. */
+const ALERGENOS = [
+  ['leche', /\b(leche|l[aá]cte[oa]s?|lactosuero|case[ií]n\w*|suero de leche)\b/i, /\b(leche|l[aá]cte[oa]s?)\b/i],
+  ['soya', /\b(soya|soja)\b/i, /\b(soya|soja)\b/i],
+  ['trigo', /\btrigo\b/i, /\btrigo\b/i],
+  ['huevo', /\b(huevos?|alb[uú]mina)\b/i, /\bhuevos?\b/i],
+  ['pescado', /\bpescados?\b/i, /\bpescados?\b/i],
+  ['crustáceos', /\b(camar[oó]n|langosta|cangrejo|crust[aá]ceos?)\b/i, /\b(crust[aá]ceos?|camar[oó]n|langosta|cangrejo)\b/i],
+  ['cacahuate', /\b(cacahuates?|man[ií])\b/i, /\b(cacahuates?|man[ií])\b/i],
+  ['frutos secos', /\b(nueces|nuez|almendras?|avellanas?|pistaches?|anacardos?|casta[nñ]as?)\b/i, /\b(frutos secos|nueces|nuez|almendras?|avellanas?|pistaches?|anacardos?)\b/i],
+  ['ajonjolí', /\b(ajonjol[ií]|s[eé]samo)\b/i, /\b(ajonjol[ií]|s[eé]samo)\b/i]
+];
 function lint(c, raw) {
   const out = { claim: [], vacio: [], amber: [], med: [], check: [] };
   for (const fd of c.fields) {
@@ -852,6 +904,10 @@ function lint(c, raw) {
   }
   if (c.id === 'sup' && /^\s*(suplementos?(\s+alimenticios?)?|productos?|alimentos?)\s*$/i.test(raw.componente || '')) out.check.push(`«${String(raw.componente).trim()}» no describe el producto. Escribe qué es o su ingrediente principal, por ejemplo «Fórmula hipercalórica» o «Vitamina C».`);
   if (c.id === 'sup' && /^\d+(?:[.,]\d+)?$/.test(String(raw.porcion || '').trim())) out.check.push(`El tamaño de porción «${String(raw.porcion).trim()}» no tiene unidad. Escríbelo como aparece en la etiqueta, por ejemplo «${String(raw.porcion).trim()} mL» o «1 cápsula».`);
+  if (c.id === 'sup' && raw.ingredientes) {
+    const faltan = ALERGENOS.filter(([, enIng, decl]) => enIng.test(raw.ingredientes) && !decl.test(raw.alergenos || '')).map(a => a[0]);
+    if (faltan.length) out.check.push(`Los ingredientes mencionan ${faltan.join(', ')}, pero «Alérgenos» no ${faltan.length > 1 ? 'los' : 'lo'} menciona. Revisa la etiqueta: esta herramienta no declara alérgenos por ti.`);
+  }
   if (c.id === 'sup' && raw.nutrimental) { const np = parseNutrition(raw.nutrimental); out.check.push(...np.problems, ...nutriConsistency(np)); }
   if (raw.atc && !ATC_RE.test(String(raw.atc).toUpperCase().replace(/\s+/g, ''))) out.check.push(`El código ATC "${raw.atc}" no tiene el formato esperado. Ejemplos: A10, A10BX, A10BX16.`);
   return out;
@@ -986,6 +1042,12 @@ const META_GEN = {
   mt: { tpl: '{seg1}\n{seg2}\n{tienda}', sep: ' | ', max: 60 },
   md: { tpl: '{seg1}\n{seg2}\n{seg3}\n{seg4}\n{tienda}', sep: '. ', max: 155 }
 };
+/* Suplementos: la variante (sabor y tamaño) va antes que el tipo, que se omite si no cabe, porque cada sabor y tamaño suele ser su propia página y
+   necesita un título distinto. Entre corchetes va lo opcional. */
+const META_SUP = {
+  mt: { tpl: '{marca}[ {tipo_seo}]\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
+  md: { tpl: '{marca} {tipo_seo}, {variante_seo}\n{fabricante}\n[{caracteristica1}]', sep: '. ', max: 155 }
+};
 const ALT_DEF = {
   med: '{marca} {concentracion}\n{principio}\n{contenido:lc}',
   dis: '{marca} {modelo} {tipo:lc}\n{tecnologia:lc}',
@@ -997,10 +1059,19 @@ const ALT_DEF = {
 };
 const defMetaCat = id => ({
   confirmed: id === 'med',
-  mt: { ...(id === 'med' ? META_MED.mt : META_GEN.mt) },
-  md: { ...(id === 'med' ? META_MED.md : META_GEN.md) },
+  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : META_GEN.mt) },
+  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : META_GEN.md) },
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
+/* Lo guardado con la plantilla genérica de antes pasa a la nueva de suplementos, salvo que la persona ya haya confirmado esa estructura. */
+function migrateMeta(m) {
+  const sup = m && m.cats && m.cats.sup;
+  if (sup && !sup.confirmed) {
+    if (sup.mt && sup.mt.tpl === META_GEN.mt.tpl) sup.mt = { ...sup.mt, tpl: META_SUP.mt.tpl };
+    if (sup.md && sup.md.tpl === META_GEN.md.tpl) sup.md = { ...sup.md, tpl: META_SUP.md.tpl };
+  }
+  return m;
+}
 const defMeta = () => ({ tienda: '', cats: Object.fromEntries(Object.keys(CATS).map(id => [id, defMetaCat(id)])) });
 const defExp = () => ({ attr: 'categoria_prod', enc: 'cp1252', incF: false, excL: false, incIA: false, incRel: true });
 const TITLE_MAX = 150; // Límite del título para Google Merchant Center (criterio de la herramienta)
@@ -1013,7 +1084,25 @@ function scanRed(text, catId) {
   return f;
 }
 
-function renderMetaTpl(tpl, sep, tokens) {
+/* Lo que va entre [corchetes] en una plantilla es opcional: si el texto pasa del límite se omite de derecha a izquierda. Un grupo cuyos datos
+   están vacíos desaparece solo. `drop` es cuántos grupos se omiten, contados desde la derecha. */
+function expandMetaBrackets(tpl, tokens, drop) {
+  const inners = [];
+  String(tpl || '').replace(/\[([^\[\]]*)\]/g, (m, inner) => { inners.push(inner); return m; });
+  const from = inners.length - (drop || 0), texts = [];
+  let gi = 0;
+  const out = String(tpl || '').replace(/\[([^\[\]]*)\]/g, (m, inner) => {
+    const i = gi++, toks = [...inner.matchAll(/\{(\w+)(?::(lc|o))?\}/g)];
+    const empty = toks.length && toks.every(t => t[2] === 'o' || !tokens[t[1]]);
+    const shown = inner.replace(/\{(\w+)(?::(lc|o))?\}/g, (mm, k, mod) => { let val = tokens[k] || ''; if (val && mod === 'lc') val = lc(val); return val; }).trim();
+    texts[i] = empty ? '' : shown;
+    return empty || i >= from ? '' : inner;
+  });
+  return { tpl: out, groups: inners.length, texts };
+}
+function renderMetaTpl(tpl, sep, tokens, drop) {
+  const ex = expandMetaBrackets(tpl, tokens, drop);
+  tpl = ex.tpl;
   const lines = String(tpl || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const out = [], unknown = new Set(), skipped = [];
   const dotSep = /^\s*\./.test(sep || '');
@@ -1035,12 +1124,13 @@ function renderMetaTpl(tpl, sep, tokens) {
   }
   let text = out.join(sep == null ? ' ' : sep);
   if (dotSep && text && !/[.!?]$/.test(text)) text += '.';
-  return { text: text.trim(), unknown: [...unknown], skipped, blocks: lines.length };
+  return { text: text.trim(), unknown: [...unknown], skipped, blocks: lines.length, groups: ex.groups, groupTexts: ex.texts };
 }
 
 /* Versión corta de un meta title que supera el límite: se omite primero el bloque de la tienda y luego los últimos bloques,
  * de atrás hacia adelante. Nunca se corta una palabra ni se quita el primer bloque. Solo devuelve algo si así llega al límite. */
-function shortenMeta(tpl, sep, tokens, max) {
+function shortenMeta(tpl, sep, tokens, max, drop) {
+  tpl = expandMetaBrackets(tpl, tokens, drop || 0).tpl;
   const lines = String(tpl || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (!max || lines.length < 2) return null;
   const render = idx => renderMetaTpl(idx.map(i => lines[i]).join('\n'), sep, tokens);
@@ -1068,28 +1158,39 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   /* {seg1} a {seg4} son los segmentos del título que sí tienen texto, en orden: un segmento opcional vacío (por ejemplo el sabor) no deja un hueco. */
   const segTexts = title.segs.map(x => x && x.text).filter(Boolean);
   for (let i = 1; i <= 4; i++) tokens['seg' + i] = segTexts[i - 1] || '';
-  const out = {}, warns = [];
+  /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
+  tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';
+  tokens.variante_seo = [dv.sabor, dv.contenido].filter(Boolean).join(', ');
+  tokens.caracteristica1 = String(dv.caracteristicas || '').split(/(?<=[.!?])\s+/)[0].trim().replace(/\.$/, '');
+  const out = {}, warns = [], notes = [];
   [['mt', 'Meta title'], ['md', 'Meta description'], ['alt', 'Alt de imagen']].forEach(([k, label]) => {
     const t = conf[k] || { tpl: '', sep: ' ', max: 0 };
-    const r = renderMetaTpl(t.tpl, t.sep, tokens);
     const max = Number(t.max) || 0;
+    let r = renderMetaTpl(t.tpl, t.sep, tokens, 0), drop = 0, bracketDropped = [];
+    const fullText = r.text;
+    if (max && r.text.length > max && r.groups) {
+      for (let d = 1; d <= r.groups; d++) { drop = d; r = renderMetaTpl(t.tpl, t.sep, tokens, d); if (r.text.length <= max) break; }
+      bracketDropped = r.groupTexts.slice(r.groups - drop).filter(Boolean).reverse();
+      if (bracketDropped.length) notes.push(`${label}: se omitió ${bracketDropped.map(x => '«' + x + '»').join(', ')} (opcional en la plantilla) para no pasar de ${max} caracteres.`);
+    }
     let text = r.text, shortInfo = null, shortened = false;
     if (k === 'mt' && max && text.length > max) {
-      shortInfo = shortenMeta(t.tpl, t.sep, tokens, max);
+      shortInfo = shortenMeta(t.tpl, t.sep, tokens, max, drop);
       if (shortInfo && ((flags && flags.mtShort) || t.auto)) { text = shortInfo.text; shortened = true; }
     }
     out[k] = { text, len: text.length, max, over: !!(max && text.length > max), unknown: r.unknown, skipped: r.skipped, blocks: r.blocks };
     if (shortInfo) out[k].short = shortInfo;
+    if (bracketDropped.length) { out[k].bracketDropped = bracketDropped; out[k].fullText = fullText; }
     if (shortened) { out[k].shortened = true; out[k].original = r.text; out[k].autoShort = !!t.auto && !(flags && flags.mtShort); }
     if (r.unknown.length) warns.push(`${label}: token desconocido ${r.unknown.map(x => '{' + x + '}').join(', ')}.`);
-    if (out[k].over) warns.push(`${label}: ${r.text.length} caracteres, supera el límite de ${max}.`);
-    const red = (k === 'alt' || !conf.confirmed) ? scanRed(r.text, c.id) : [];
+    if (out[k].over) warns.push(`${label}: ${text.length} caracteres, supera el límite de ${max}.`);
+    const red = (k === 'alt' || !conf.confirmed) ? scanRed(text, c.id) : [];
     if (red.length) warns.push(`${label}: contiene «${red.join('», «')}».`);
     if (k === 'alt' && ALT_BAD_START_RE.test(r.text)) warns.push('Alt de imagen: no empieces con "imagen de" o "foto de". El lector de pantalla ya lo anuncia.');
     if (k !== 'alt' && c.id === 'med' && !conf.confirmed && COMERCIAL_RE.test(r.text)) warns.push(`${label}: lenguaje comercial en un medicamento. Confirma con Regulatorio que sea aceptable.`);
   });
   out.warns = warns;
-  out.notes = out.mt.shortened ? [`Meta title acortado: se omitió ${out.mt.short.dropped.map(x => '«' + x + '»').join(', ')}.`] : [];
+  out.notes = [...notes, ...(out.mt.shortened ? [`Meta title acortado: se omitió ${out.mt.short.dropped.map(x => '«' + x + '»').join(', ')}.`] : [])];
   out.confirmed = !!conf.confirmed;
   return out;
 }
@@ -1595,6 +1696,9 @@ const api = {
   buildMg,
   buildFaq,
   shortenMeta,
+  migrateMeta,
+  META_SUP,
+  expandMetaBrackets,
   parseNutrition,
   nutriConsistency,
   relations,

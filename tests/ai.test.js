@@ -327,7 +327,8 @@ test('fotos: el aviso enviado a la IA incluye los campos nuevos solo para suplem
   const m = AI.buildVisionMessages({ cat: 'sup', images: ['data:image/jpeg;base64,AAAA'] });
   const claves = JSON.parse(m[1].content[0].text).categorias[0].campos_permitidos.map(x => x.clave);
   ['nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'envase', 'publico', 'porcion', 'porciones'].forEach(k => assert.ok(claves.includes(k), k));
-  assert.match(m[0].content, /nutrimental, "valor" es la tabla en líneas con barras/);
+  assert.match(m[0].content, /nutrimental, "valor" es la tabla en líneas/);
+  assert.match(m[0].content, /una línea sin barras es un título o una nota/);
   assert.match(m[0].content, /nunca calcules, conviertas ni completes/);
   const cos = JSON.parse(AI.buildVisionMessages({ cat: 'cos', images: ['x'] })[1].content[0].text).categorias[0].campos_permitidos.map(x => x.clave);
   assert.ok(!cos.includes('nutrimental') && !cos.includes('ingredientes'));

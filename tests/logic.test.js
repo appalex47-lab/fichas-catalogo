@@ -478,8 +478,9 @@ test('sugerencias: los campos de forma y tipo traen listas de ayuda que no limit
 });
 
 /* ---------- Meta title largo: versión corta ---------- */
+const old = m => { m.cats.sup.mt = { ...F.META_GEN.mt }; m.cats.sup.md = { ...F.META_GEN.md }; return m; };
 test('meta title largo: sugiere una versión corta quitando primero la tienda y no la aplica sola', () => {
-  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const m = old(F.defMeta()); m.tienda = 'Farmacias Especializadas';
   const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
   const r = F.computeFor('sup', v, keep, m).meta;
   assert.equal(r.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL | Farmacias Especializadas');
@@ -491,7 +492,7 @@ test('meta title largo: sugiere una versión corta quitando primero la tienda y 
 });
 
 test('meta title largo: con la opción de la persona o la de la categoría usa la versión corta y deja de avisar', () => {
-  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const m = old(F.defMeta()); m.tienda = 'Farmacias Especializadas';
   const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
   const porProducto = F.computeFor('sup', v, keep, m, { mtShort: true }).meta;
   assert.equal(porProducto.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL');
@@ -515,7 +516,7 @@ test('meta title largo: quita bloques de atrás hacia adelante, nunca el primero
 });
 
 test('meta title largo: el CSV usa la versión corta de los productos que la eligieron y avisa de los que siguen largos', () => {
-  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas'; m.cats.sup.confirmed = true;
+  const m = old(F.defMeta()); m.tienda = 'Farmacias Especializadas'; m.cats.sup.confirmed = true;
   const mk = (sku, over) => ({ sku, cat: 'sup', v: { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' }, ...over });
   const ex = F.magentoBatch([mk('LARGO'), mk('CORTO', { mtShort: true })], keep, m, {});
   const col = sku => ex.rows.find(r => r[0] === sku)[ex.header.indexOf('meta_title')];
@@ -525,10 +526,33 @@ test('meta title largo: el CSV usa la versión corta de los productos que la eli
 });
 
 test('meta: un segmento opcional vacío del título no deja hueco en {seg2} y el sabor no desplaza la presentación', () => {
-  const m = F.defMeta(); m.tienda = 'Tienda';
+  const m = old(F.defMeta()); m.tienda = 'Tienda';
   const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
   assert.equal(F.computeFor('sup', base, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda');
   assert.equal(F.computeFor('sup', { ...base, sabor: 'Naranja' }, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda', 'el sabor no desplaza la presentación del meta title');
+});
+
+test('meta suplementos: la variante va antes que el tipo y lo opcional se omite de derecha a izquierda', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const v = { marca: 'Fresubin HPC', componente: 'Fórmula Hipercalórica e Hiperproteica', forma: 'Líquido', sabor: 'Frutos del Bosque', contenido: '200 mL', fabricante: 'Fresenius Kabi', caracteristicas: 'Alta en proteína. Sin gluten.' };
+  const r = F.computeFor('sup', v, keep, m).meta;
+  assert.equal(r.mt.text, 'Fresubin HPC | Frutos del Bosque, 200 mL', 'tienda y tipo largo se omiten; la variante se queda');
+  assert.ok(r.notes.some(n => /Meta title: se omitió/.test(n)) && !r.mt.over);
+  const corto = F.computeFor('sup', { ...v, tipoCorto: 'Hipercalórica' }, keep, m).meta;
+  assert.equal(corto.mt.text, 'Fresubin HPC Hipercalórica | Frutos del Bosque, 200 mL', 'con tipo corto cabe, sin tienda');
+  assert.equal(corto.md.text, 'Fresubin HPC Hipercalórica, Frutos del Bosque, 200 mL. Fresenius Kabi. Alta en proteína.');
+  const sinSabor = F.computeFor('sup', { ...v, sabor: '', tipoCorto: 'Fórmula' }, keep, m).meta;
+  assert.equal(sinSabor.mt.text, 'Fresubin HPC Fórmula | 200 mL | Farmacias Especializadas');
+});
+test('meta: un grupo opcional vacío desaparece y migrateMeta cambia solo la plantilla genérica sin confirmar', () => {
+  assert.equal(F.renderMetaTpl('{a}[ {b}]\n[{c}]', ' | ', { a: 'A' }).text, 'A');
+  const m = F.defMeta(); m.cats.sup.mt = { ...F.META_GEN.mt }; m.cats.sup.md = { ...F.META_GEN.md, max: 100 };
+  F.migrateMeta(m);
+  assert.equal(m.cats.sup.mt.tpl, F.META_SUP.mt.tpl);
+  assert.equal(m.cats.sup.md.tpl, F.META_SUP.md.tpl);
+  const c = F.defMeta(); c.cats.sup.confirmed = true; c.cats.sup.mt = { ...F.META_GEN.mt };
+  F.migrateMeta(c);
+  assert.equal(c.cats.sup.mt.tpl, F.META_GEN.mt.tpl, 'confirmada: no se toca');
 });
 
 /* ---------- Todo dato capturado llega a donde dice llegar ---------- */
@@ -543,7 +567,7 @@ test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo
     hig: { marca: 'M', producto: 'P', variante: 'V', contenido: '100 mL', fabricante: 'F' },
     acc: { marca: 'M', producto: 'P', material: 'Mat', contenido: '3 piezas', fabricante: 'F' }
   };
-  const NO_TEXT = new Set(['compat']);
+  const NO_TEXT = new Set(['compat', 'tipoCorto']);
   for (const [id, c] of Object.entries(F.CATS)) {
     const sinDato = F.computeFor(id, base[id], keep, meta);
     for (const fd of c.fields) {
@@ -587,27 +611,46 @@ test('tabla nutrimental: se arma una tabla HTML con id, encabezados y subfilas a
   assert.equal((h.match(/id="tabla-nutrimental"/g) || []).length, 1);
 });
 
-test('tabla nutrimental: limpia unidades y mayúsculas, acepta tabulaciones y filas pegadas sin barras, y escapa el HTML', () => {
-  const p = F.parseNutrition('PROTEÍNA\t20G\t40%\nCalorías 120KCAL\nSodio | <1 mg\nVitamina C | 90 MG\nHierro | No significativo & otros');
-  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Proteína', '20 g', '40 %'], ['Calorías', '120 kcal'], ['Sodio', '<1 mg'], ['Vitamina C', '90 mg'], ['Hierro', 'No significativo & otros']]);
+test('tabla nutrimental: limpia unidades y mayúsculas, respeta los decimales como se escriben, acepta tabulaciones y escapa el HTML', () => {
+  const p = F.parseNutrition('PROTEÍNA\t20,0G\t40%\nCalorías | 120KCAL\nSodio | <1 mg\nVitamina C | 90 MG\nHierro | No significativo & otros');
+  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Proteína', '20,0 g', '40 %'], ['Calorías', '120 kcal'], ['Sodio', '<1 mg'], ['Vitamina C', '90 mg'], ['Hierro', 'No significativo & otros']]);
   assert.deepEqual(p.head, ['Nutriente', 'Valor 1', 'Valor 2'], 'sin encabezados con varias columnas usa nombres genéricos');
   assert.ok(p.problems.some(x => /encabezados/.test(x)), 'y lo avisa');
   const h = F.computeFor('sup', { ...supBase, nutrimental: 'Hierro | No significativo & <b>' }, keep, meta).mg.html;
   assert.match(h, /<td>No significativo &amp; &lt;b&gt;<\/td>/);
   assert.match(h, /<th scope="col">Cantidad<\/th>/, 'una sola columna se llama Cantidad');
-  assert.equal(F.parseNutrition('Proteína | 20,5 g').rows[0].cells[0], '20.5 g', 'la coma decimal pasa a punto');
+  assert.equal(F.parseNutrition('Proteína | 20,5 g').rows[0].cells[0], '20,5 g', 'la coma decimal se respeta');
+  assert.equal(F.parseNutrition('Proteína | 20.5 g').rows[0].cells[0], '20.5 g', 'y el punto también');
 });
 
-test('tabla nutrimental: avisa de filas sin cantidad o sin nombre y de columnas que no cuadran, sin tocar los datos', () => {
-  const p = F.parseNutrition('# Nutriente | Por porción\nProteína | 20 g | 40 %\nGrasa\n | 5 g');
-  assert.ok(p.problems.some(x => /Grasa/.test(x) && /no tiene cantidad/.test(x)));
+test('tabla nutrimental: una línea sin barra es texto (título, nota o título de la tabla) y con barra es una fila', () => {
+  const p = F.parseNutrition('Información nutrimental: por porción (200 mL)\nProteínas | 20,0 g\nde los cuales\n- Azúcar | 11,6 g\nVITAMINAS\n• Vitamina A | 425 µg RE\n• de la cual β-Caroteno | 125 µg RE\nMinerales\n- Sodio | 120 mg / 5,2 mmol');
+  assert.equal(p.caption, 'Por porción (200 mL)', 'el primer texto es el título de la tabla, sin repetir «Información nutrimental»');
+  assert.deepEqual(p.items.map(i => [i.kind, i.name || i.text]), [['row', 'Proteínas'], ['nota', 'de los cuales'], ['row', 'Azúcar'], ['titulo', 'Vitaminas'], ['row', 'Vitamina A'], ['row', 'de la cual β-Caroteno'], ['titulo', 'Minerales'], ['row', 'Sodio']]);
+  assert.deepEqual(p.problems, [], 'nada de esto es un problema');
+  assert.deepEqual(F.parseNutrition('Proteína 20 g 40 %').rows, [], 'sin barra no es una fila');
+  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Información nutrimental: por porción (200 mL)\nProteínas | 20,0 g\nde los cuales\n- Azúcar | 11,6 g\nVitaminas\n- Vitamina A | 425 µg RE\n- Sodio | 120 mg / 5,2 mmol\n- Lactosa | ≤ 0,6 g' }, keep, meta).mg.html;
+  assert.match(h, /<caption>Por porción \(200 mL\)<\/caption>/);
+  assert.match(h, /<tr class="nota"><td colspan="2">de los cuales<\/td><\/tr>/);
+  assert.match(h, /<tr class="titulo"><th scope="colgroup" colspan="2">Vitaminas<\/th><\/tr>/);
+  assert.match(h, /<tr class="sub"><th scope="row">Vitamina A<\/th><td>425 µg RE<\/td><\/tr>/, 'las unidades compuestas pasan tal cual');
+  assert.match(h, /<td>120 mg \/ 5,2 mmol<\/td>/);
+  assert.match(h, /<td>≤ 0,6 g<\/td>/);
+});
+
+test('tabla nutrimental: con tu etiqueta completa las calorías cuadran y no avisa', () => {
+  const etiqueta = 'Información nutrimental: por porción (200 mL)\nContenido energético | 400 kcal (1680 kJ)\nProteínas | 20,0 g\nCarbohidratos | 45,0 g\nde los cuales\n- Azúcar | 11,6 g\nGrasas | 15,6 g\nFibra | 0,0 g\nAgua | 139 mL\nOsmolaridad | 590 mOsmol/L\nOsmolalidad | 850 mOsmol/kg H₂O';
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: etiqueta }).check, []);
+  assert.match(F.lint(F.CATS.sup, { nutrimental: etiqueta.replace('400 kcal', '700 kcal') }).check.join(' '), /declara 700 kcal, pero .* cerca de 400 kcal/);
+});
+test('tabla nutrimental: avisa de filas con barra sin cantidad o sin nombre y de columnas que no cuadran, sin tocar los datos', () => {
+  const p = F.parseNutrition('# Nutriente | Por porción\nProteína | 20 g | 40 %\nGrasa |\n | 5 g');
+  assert.ok(p.problems.some(x => /Grasa/.test(x) && /tiene la barra pero no tiene cantidad/.test(x)));
   assert.ok(p.problems.some(x => /sin nombre/.test(x)));
   assert.ok(p.problems.some(x => /columna\(s\) de valores/.test(x)));
-  const c = F.lint(F.CATS.sup, { nutrimental: '# Nutriente | Por porción\nGrasa' }).check;
-  assert.match(c.join(' '), /Grasa/);
+  assert.match(F.lint(F.CATS.sup, { nutrimental: '# Nutriente | Por porción\nGrasa |' }).check.join(' '), /Grasa/);
   assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: TABLA }).check, [], 'una tabla coherente no avisa');
 });
-
 test('tabla nutrimental: avisa si las calorías no cuadran con 4-4-9, por columna, y nunca corrige el número', () => {
   const mal = '# Nutriente | Por porción | Por 100 g\nEnergía | 300 kcal | 400 kcal\nProteína | 24 g | 80 g\nCarbohidratos | 3 g | 10 g\nGrasa total | 1.5 g | 5 g';
   const avisos = F.lint(F.CATS.sup, { nutrimental: mal }).check;
@@ -622,11 +665,11 @@ test('tabla nutrimental: avisa si las calorías no cuadran con 4-4-9, por column
 
 test('tabla nutrimental: sin captura no cambia nada y las preguntas frecuentes salen de la tabla', () => {
   assert.equal(F.computeFor('sup', supBase, keep, meta).mg.html, F.computeFor('sup', { ...supBase, nutrimental: '   \n  ' }, keep, meta).mg.html);
-  assert.ok(!/tabla-nutrimental/.test(F.computeFor('sup', { ...supBase, nutrimental: 'solo texto sin cantidades' }, keep, meta).mg.html), 'sin filas válidas no hay tabla');
+  assert.ok(!/tabla-nutrimental/.test(F.computeFor('sup', { ...supBase, nutrimental: 'solo texto sin cantidades' }, keep, meta).mg.html), 'sin filas con barra no hay tabla');
   const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...supBase, nutrimental: TABLA }, sd).items);
   const resp = re => q.filter(([a]) => re.test(a)).map(([, b]) => b);
-  assert.ok(resp(/calorías/).every(b => /aporta 120 kcal \(por porción \(30 g\)\)\./.test(b)) && resp(/calorías/).length);
-  assert.ok(resp(/proteína/).every(b => /aporta 24 g de proteína/.test(b)) && resp(/proteína/).length);
+  assert.ok(resp(/calorías/).every(b => /aporta 120 kcal, por porción \(30 g\)\./.test(b)) && resp(/calorías/).length);
+  assert.ok(resp(/proteína/).every(b => /aporta 24 g de proteína, por porción/.test(b)) && resp(/proteína/).length);
   assert.ok(resp(/azúcar/).every(b => /tiene 1.5 g de azúcares/.test(b)) && resp(/azúcar/).length);
 });
 
@@ -656,7 +699,7 @@ test('suplementos: los campos de ficha nuevos alimentan las preguntas frecuentes
   const resp = re => llenas.filter(([a]) => re.test(a)).map(x => x[1]);
   assert.ok(resp(/ingredientes/).length && resp(/ingredientes/).every(b => b === 'Proteína de suero.'));
   assert.ok(resp(/alérgenos/).length && resp(/alérgenos/).every(b => b === 'Contiene leche.'));
-  assert.ok(resp(/atributos|empaque/).every(b => b === 'Sin gluten.'));
+  assert.ok(resp(/atributos/).every(b => b === 'Sin gluten.'));
   assert.ok(resp(/quién|dirigido/).every(b => /dirigido a adultos/i.test(b)));
   assert.ok(resp(/advertencias|precauciones/).every(b => b === 'Consulte a su médico.'));
   assert.ok(F.computeFor('sup', { ...base, publico: 'Adultos' }, keep, meta).mc.text.includes('Dirigido a adultos'));
@@ -688,7 +731,7 @@ test('porción distinta del contenido: se muestran las dos filas y una sola fras
 test('introducción y Merchant Center: ya no dicen «incorpora X» ni «contiene X» con el tipo del producto', () => {
   const r = F.computeFor('sup', hiper, keep, meta);
   assert.ok(!/incorpora/.test(r.mg.html));
-  assert.match(r.mg.html, /Este suplemento en forma de <strong>Líquido<\/strong>, estructurado en una presentación de <strong>200 ml<\/strong>\./);
+  assert.match(r.mg.html, /Este suplemento se presenta en forma de <strong>líquido<\/strong>, en una presentación de <strong>200 ml<\/strong>\./);
   assert.match(r.mg.html, /<strong>Supportan DKN \(Fórmula hipercalórica\)<\/strong>/);
   const sinComp = F.computeFor('sup', { ...hiper, composicion: '' }, keep, meta);
   assert.ok(!/que contiene/.test(sinComp.mc.text), 'sin composición no hay «contiene»');
@@ -712,15 +755,13 @@ test('Merchant Center: sin «Presentación de X» repetido y con presupuesto de 
   assert.deepEqual(F.computeFor('med', { marca: 'M', concentracion: '5 mg', principio: 'P', forma: 'Tableta', contenido: 'Caja', laboratorio: 'L', via: 'Oral', receta: 'no' }, keep, meta).mc.dropped, [], 'otras categorías no cambian');
 });
 
-test('tabla nutrimental: la fila de porción se omite con aviso, se aceptan osmolaridades y «Nombre: valor» y los avisos orientan', () => {
-  const p = F.parseNutrition('Por porción de | 200 mL\nContenido energético | 300 kcal\nOsmolaridad: 435 mOsmol/L\nOsmolalidad | 575 mOsmol/kg H2O\nde los cuales\nCarbohidratos | 23.2 g');
-  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Contenido energético', '300 kcal'], ['Osmolaridad', '435 mOsmol/L'], ['Osmolalidad', '575 mOsmol/kg H2O'], ['Carbohidratos', '23.2 g']]);
+test('tabla nutrimental: la fila de porción se omite con aviso y se aceptan osmolaridades y unidades compuestas', () => {
+  const p = F.parseNutrition('Por porción de | 200 mL\nContenido energético | 300 kcal\nOsmolaridad | 435 mOsmol/L\nOsmolalidad | 575 mOsmol/kg H2O\nde los cuales\nCarbohidratos | 23,2 g');
+  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Contenido energético', '300 kcal'], ['Osmolaridad', '435 mOsmol/L'], ['Osmolalidad', '575 mOsmol/kg H2O'], ['Carbohidratos', '23,2 g']]);
   assert.ok(p.problems.some(x => /«Por porción de: 200 mL» es la porción, no un nutriente\. Captúrala en «Tamaño de porción»/.test(x)));
-  assert.ok(p.problems.some(x => /«de los cuales» no tiene cantidad\. Si es una nota/.test(x)));
   const h = F.computeFor('sup', { ...hiper, nutrimental: 'Por porción de | 200 mL\nProteína | 20 g' }, keep, meta).mg.html;
   assert.ok(!/Por porción de/.test(h) && /<th scope="row">Proteína<\/th>/.test(h));
 });
-
 test('suplementos: avisa si el tipo es genérico o el tamaño de porción no tiene unidad', () => {
   const c = F.lint(F.CATS.sup, { componente: 'Suplemento Alimenticio', porcion: '200' }).check.join(' | ');
   assert.match(c, /«Suplemento Alimenticio» no describe el producto/);
@@ -736,4 +777,60 @@ test('Merchant Center: medicamentos y dermocosméticos tampoco repiten «Present
   const cos = F.computeFor('cos', { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal", piel: 'Piel sensible' }, keep, meta).mc.text;
   assert.ok(!/Presentación/.test(cos));
   assert.match(cos, /Frasco 30 mL - L'Oréal/);
+});
+
+/* ---------- Ficha de Fresubin: frase de presentación, preguntas, alérgenos y composición resumida ---------- */
+const fresubin = { marca: 'Fresubin HPC', componente: 'Fórmula Hipercalórica e Hiperproteica', forma: 'Líquido', sabor: 'Frutos del Bosque', contenido: '200 mL', envase: 'Botella', porcion: '200 mL', porciones: '1', fabricante: 'Fresenius Kabi',
+  publico: 'Pacientes con requerimientos elevados o restricción de líquidos, adultos mayores, sarcopenia o en unidades de cuidados intensivos.',
+  composicion: 'Aporte nutricional por 200 ml:• Proteínas: 20 g • Carbohidratos: 45 g • Lípidos (grasas): 15.6 g • Fibra: 0 g (sin fibra)',
+  ingredientes: 'Agua, maltodextrina, jarabe de glucosa, sacarosa, caseinato de calcio, proteínas de leche, lecitina de soya, aceite de girasol, sabor frutas del bosque',
+  alergenos: 'Libre de gluten y lactosa (no apto para galactosémicos).', modo: 'Producto listo para tomarse frío o a temperatura ambiente.',
+  caracteristicas: 'La fórmula enteral hipercalórica, hiperproteica es un alimento especializado completo, de alto valor proteico y energético (2 kcal/mL).' };
+
+test('presentación: la frase inicial se arma según forma, envase y contenido', () => {
+  const intro = v => F.computeFor('sup', { ...supBase, ...v }, keep, meta).mg.html.split('\n')[0].replace(/<\/?strong>/g, '');
+  assert.match(intro({ forma: 'Líquido', contenido: '200 mL', envase: 'Botella' }), /Este suplemento se presenta en forma de líquido, en una botella de 200 ml\./);
+  assert.match(intro({ forma: 'Polvo', contenido: '900 g', envase: 'Bote' }), /se presenta en forma de polvo, en un bote de 900 g\./);
+  assert.match(intro({ forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', envase: '' }), /se presenta en forma de cápsulas, en un frasco con 100 piezas\./);
+  assert.match(intro({ forma: 'Líquido', contenido: '200 mL', envase: 'Botella de plástico con tapa de seguridad' }), /en una presentación de 200 ml\./, 'un envase largo no se mete en la frase');
+  assert.match(intro({ forma: 'Líquido', contenido: '200 mL', envase: '' }), /en forma de líquido, en una presentación de 200 ml\./);
+  assert.match(intro({ forma: '', contenido: '200 mL', envase: 'Botella' }), /Este suplemento se presenta en una botella de 200 ml\./);
+  const q = [...Array(4).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...supBase, forma: 'Líquido', contenido: '200 mL', envase: 'Botella' }, sd).items);
+  assert.ok(q.filter(([a]) => /presenta|presentación/.test(a)).every(([, b]) => b === 'Se presenta en forma de líquido, en una botella de 200 mL.'));
+});
+
+test('preguntas frecuentes: sin doble punto, sabor en minúscula, nombre corto, «No.» en medicamento y sin respuestas largas repetidas', () => {
+  const largo = { ...fresubin, ingredientes: fresubin.ingredientes + ', ' + 'polvo de betabel, extracto de especias rojas, ácido clorhídrico, '.repeat(6) };
+  const items = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, largo, sd).items);
+  const resp = re => items.filter(([a]) => re.test(a)).map(([, b]) => b);
+  assert.ok(items.every(([, b]) => !/\.\.$/.test(b)), 'ninguna respuesta termina en doble punto');
+  assert.ok(resp(/dirigido|para quién/i).every(b => /^Va dirigido a pacientes con requerimientos elevados.*intensivos\.$/.test(b) || /^Está dirigido a pacientes/.test(b)));
+  assert.ok(resp(/sabor/).every(b => /frutos del bosque\.$/.test(b)), 'el sabor va en minúscula dentro de la frase');
+  assert.ok(items.every(([a]) => !/Fórmula Hipercalórica e Hiperproteica/.test(a)) && items.some(([a]) => /Fresubin HPC\?/.test(a)), 'el nombre largo se acorta a la marca');
+  assert.ok(resp(/medicamento/).every(b => b.startsWith('No. El consumo de este producto')));
+  assert.ok(!items.some(([a]) => /ingredientes/.test(a)), 'la lista larga de ingredientes no se repite en las preguntas');
+  assert.ok(items.every(([, b]) => b.length <= 250));
+  const corto = F.buildFaq(F.CATS.sup, { ...supBase, ingredientes: 'Agua, sal' }, 0).items.map(x => x[0]).join(' ');
+  assert.match(corto, /ingredientes/, 'una lista corta sí se incluye');
+  assert.match(items.find(([a]) => /composición|contiene/.test(a))[1], /aporte nutricional por 200 ml: Proteínas: 20 g; Carbohidratos: 45 g;/, 'el resumen con viñetas se lee como frase');
+});
+
+test('Magento: la composición resumida con viñetas sale como lista y «Dirigido a» largo sale como sección', () => {
+  const h = F.computeFor('sup', fresubin, keep, meta).mg.html;
+  assert.match(h, /<h2>Composición:<\/h2>\n<p>Aporte nutricional por 200 ml:<\/p>\n<ul>\n  <li>Proteínas: 20 g<\/li>\n  <li>Carbohidratos: 45 g<\/li>/);
+  assert.match(h, /<h2>Dirigido a:<\/h2>\n<p>Pacientes con requerimientos elevados/);
+  assert.ok(!/<li><strong>Dirigido a:<\/strong>/.test(h));
+  assert.match(F.computeFor('sup', { ...fresubin, publico: 'Adultos' }, keep, meta).mg.html, /<li><strong>Dirigido a:<\/strong> Adultos<\/li>/);
+  assert.match(F.computeFor('sup', { ...fresubin, composicion: 'Proteína de suero' }, keep, meta).mg.html, /<h2>Composición:<\/h2>\n<p>Proteína de suero<\/p>/);
+  assert.match(F.computeFor('sup', fresubin, keep, meta).mc.text, /que contiene aporte nutricional por 200 m[lL]: Proteínas: 20 g; Carbohidratos: 45 g/, 'en Merchant Center las viñetas pasan a frase');
+});
+
+test('alérgenos: avisa si los ingredientes mencionan alérgenos que «Alérgenos» no declara, y no declara nada por ti', () => {
+  const a = F.lint(F.CATS.sup, { ingredientes: fresubin.ingredientes, alergenos: fresubin.alergenos }).check.join(' ');
+  assert.match(a, /Los ingredientes mencionan leche, soya, pero «Alérgenos» no los menciona/);
+  assert.deepEqual(F.lint(F.CATS.sup, { ingredientes: fresubin.ingredientes, alergenos: 'Contiene leche y soya.' }).check, []);
+  assert.match(F.lint(F.CATS.sup, { ingredientes: 'Harina de trigo, huevo en polvo, almendras' }).check.join(' '), /trigo, huevo, frutos secos, pero «Alérgenos» no los menciona/);
+  assert.deepEqual(F.lint(F.CATS.sup, { ingredientes: 'Agua, sal, sucralosa' }).check, [], 'sin alérgenos no avisa');
+  assert.match(F.lint(F.CATS.sup, { ingredientes: 'Suero de leche' }).check.join(' '), /mencionan leche, pero «Alérgenos» no lo menciona/);
+  assert.equal(F.computeFor('sup', { ...fresubin, alergenos: '' }, keep, meta).mg.html.includes('Alérgenos:'), false, 'la herramienta no inventa la declaración');
 });
