@@ -377,7 +377,7 @@ const CATS = {
       F('tipo','Tipo de producto',{ph:'Sérum',hint:'Forma o denominación. Si el nombre ya lo dice, por ejemplo «Crema Hidratante», no se repite en el título.'}),
       F('atributo','Atributo o activo principal',{req:1,ph:'Ácido hialurónico'}),
       F('contenido','Contenido',{req:1,pres:1,ph:'Frasco 30 mL'}),
-      F('fabricante','Fabricante',{req:1,ph:"L'Oréal"}),
+      F('fabricante','Laboratorio',{req:1,ph:"L'Oréal"}),
       F('piel','Tipo de piel o necesidad declarada',{g:'d',hint:'Solo si está validado en el empaque.'}),
       F('ingredientes','Ingredientes o activos destacados',{g:'d',type:'area'}),
       F('textura','Textura u objetivo cosmético',{g:'d'}),
@@ -392,7 +392,7 @@ const CATS = {
       seg('Marca + producto + tipo', ['marca','producto','tipo'], null, ['producto','tipo']),
       seg('Atributo o activo principal', ['atributo']),
       seg('Contenido', ['contenido']),
-      seg('Fabricante', ['fabricante'])
+      seg('Laboratorio', ['fabricante'])
     ],
     vital: ['atributo'],
     mcUses: ['marca','producto','tipo','atributo','contenido','fabricante','piel','ingredientes','textura'],
@@ -422,7 +422,7 @@ const CATS = {
       if (v.fps || v.nivel) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel]])}\n</ul>`);
       return assemble(p, 'Detalles del producto:', [
         ['Marca', v.marca], ['Nombre del Producto', v.producto], ['Tipo de Producto', v.tipo],
-        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
       ], [...extras, ...(v.comercial ? [`<p>${escT(v.comercial)}</p>`] : [])]);
     }
   },
@@ -434,7 +434,7 @@ const CATS = {
       F('componente','Tipo o componente principal',{req:1,ph:'Fórmula hipercalórica',hint:'Qué es el producto o su ingrediente principal: Fórmula hipercalórica, Vitamina C, Proteína whey. «Suplemento alimenticio» no describe el producto.'}),
       F('forma','Forma',{req:1,pres:1,ph:'Cápsulas'}),
       F('contenido','Contenido neto o piezas',{req:1,pres:1,ph:'Frasco con 100 piezas'}),
-      F('fabricante','Fabricante',{req:1,ph:'GNC'}),
+      F('fabricante','Laboratorio',{req:1,ph:'GNC'}),
       F('composicion','Composición (resumen)',{g:'d',type:'area',hint:'Resumen para leer rápido, por ejemplo el aporte por porción. Si lo escribes con viñetas (•) sale como lista. La tabla completa va en «Información nutrimental».'}),
       F('caracteristicas','Características objetivas',{g:'d',type:'area',hint:'No conviertas ingredientes en beneficios si la ficha no lo dice.'}),
       F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Fórmula hipercalórica',hint:'Opcional. Versión corta del tipo para el meta title y la meta description, por ejemplo «Fórmula hipercalórica». Si no lo capturas se usa el tipo completo. No sale en la ficha.'}),
@@ -454,7 +454,7 @@ const CATS = {
       seg('Marca + componente', ['marca','componente']),
       seg('Forma + contenido', ['forma','contenido'], v => joinForm(v.forma, v.contenido)),
       seg('Sabor', ['sabor'], v => saborTxt(v.sabor)),
-      seg('Fabricante', ['fabricante'])
+      seg('Laboratorio', ['fabricante'])
     ],
     vital: ['componente'],
     mcUses: ['marca','componente','forma','contenido','fabricante','composicion'],
@@ -470,12 +470,12 @@ const CATS = {
       LEGEND.supResp
     ],
     mg: v => {
-      let p = `${S(join(' ', v.marca, v.componente && `(${v.componente})`))} es un producto alimenticio` + (v.fabricante ? ` elaborado por el fabricante ${S(v.fabricante)}` : '') + '.';
+      let p = `${S(join(' ', v.marca, v.componente && `(${v.componente})`))} es un producto alimenticio` + (v.fabricante ? ` elaborado por el laboratorio ${S(v.fabricante)}` : '') + '.';
       if (v.forma || v.contenido) p += ` Este suplemento se presenta ${presentPhrase(v, S)}.`;
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Tipo o Componente Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
-        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ...portionRows(v), ...(v.publico && v.publico.length <= 60 ? [['Dirigido a', v.publico]] : []), ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+        ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ...portionRows(v), ...(v.publico && v.publico.length <= 60 ? [['Dirigido a', v.publico]] : []), ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
       ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Dirigido a:', v.publico && v.publico.length > 60 ? v.publico : '']]), ...compSec(v.composicion), ...secs([['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP]);
     }
   },
@@ -488,7 +488,7 @@ const CATS = {
       F('sabor','Sabor',{req:1,ph:'Coco'}),
       F('atributo','Atributo verificado',{req:1,ph:'Sin azúcar'}),
       F('contenido','Contenido',{req:1,pres:1,ph:'625 mL'}),
-      F('fabricante','Fabricante',{g:'d'}),
+      F('fabricante','Laboratorio',{g:'d'}),
       F('descripcion','Descripción objetiva',{g:'d',type:'area'}),
       F('caracteristicas','Características verificables',{g:'d',type:'area'}),
       F('leyenda','Leyenda correspondiente',{g:'d',type:'area',hint:'Solo si aplica y viene en la ficha.'})
@@ -532,7 +532,7 @@ const CATS = {
       F('producto','Producto',{req:1,ph:'Total 12 pasta dental'}),
       F('variante','Variante o característica principal',{req:1,ph:'Salud bucal completa'}),
       F('contenido','Contenido',{req:1,pres:1,ph:'Crema 150 mL'}),
-      F('fabricante','Fabricante',{req:1,ph:'Colgate-Palmolive'}),
+      F('fabricante','Laboratorio',{req:1,ph:'Colgate-Palmolive'}),
       F('uso','Uso objetivo',{g:'d'}),
       F('ingredientes','Ingredientes destacados',{g:'d',type:'area'}),
       F('caracteristicas','Características',{g:'d',type:'area'})
@@ -541,7 +541,7 @@ const CATS = {
       seg('Marca + producto', ['marca','producto']),
       seg('Variante o característica principal', ['variante']),
       seg('Contenido', ['contenido']),
-      seg('Fabricante', ['fabricante'])
+      seg('Laboratorio', ['fabricante'])
     ],
     vital: [],
     mcUses: ['marca','producto','variante','contenido','fabricante','uso','ingredientes'],
@@ -565,7 +565,7 @@ const CATS = {
       }
       return assemble(p, 'Información de cuidado personal:', [
         ['Marca', v.marca], ['Producto', v.producto], ['Variante o Característica Principal', v.variante],
-        ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+        ['Contenido', v.contenido], ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
       ], secs([['Ingredientes:', v.ingredientes], ['Características:', v.caracteristicas]]));
     }
   },
@@ -877,6 +877,7 @@ const ALERGENOS = [
   ['frutos secos', /\b(nueces|nuez|almendras?|avellanas?|pistaches?|anacardos?|casta[nñ]as?)\b/i, /\b(frutos secos|nueces|nuez|almendras?|avellanas?|pistaches?|anacardos?)\b/i],
   ['ajonjolí', /\b(ajonjol[ií]|s[eé]samo)\b/i, /\b(ajonjol[ií]|s[eé]samo)\b/i]
 ];
+const QTY_RE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|kg|ml|l|ui|piezas?|pzas?|pz|tabletas?|c[aá]psulas?|sobres?|unidades?|gomitas?|ampolletas?|tiras?)\b/i;
 function lint(c, raw) {
   const out = { claim: [], vacio: [], amber: [], med: [], check: [] };
   for (const fd of c.fields) {
@@ -903,6 +904,16 @@ function lint(c, raw) {
     } else if (nivel) out.check.push('Capturaste un nivel de protección sin FPS.');
   }
   if (c.id === 'sup' && /^\s*(suplementos?(\s+alimenticios?)?|productos?|alimentos?)\s*$/i.test(raw.componente || '')) out.check.push(`«${String(raw.componente).trim()}» no describe el producto. Escribe qué es o su ingrediente principal, por ejemplo «Fórmula hipercalórica» o «Vitamina C».`);
+  /* El tipo y el contenido no se mezclan: el tipo dice qué es el producto y el contenido cuánto trae. */
+  const tipoKey = { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' }[c.id];
+  if (tipoKey && raw[tipoKey]) {
+    const t = String(raw[tipoKey]).trim(), lbl = (c.fields.find(f => f.key === tipoKey) || {}).label || tipoKey;
+    if (QTY_RE.test(t) && !/\b(?:vitamina|omega|b\d+|d\d|q\d+)\b/i.test(t.replace(QTY_RE, ''))) out.check.push(`«${t}» parece una cantidad o presentación y va en «Contenido». En «${lbl}» escribe qué es el producto.`);
+  }
+  if (tipoKey && raw.contenido) {
+    const n = String(raw.contenido).trim();
+    if (!/\d/.test(n) && !/\b(?:[uú]nic[oa]|par|kit|pieza|unidad)\b/i.test(n)) out.check.push(`«${n}» no lleva una cantidad. En «Contenido» escribe cuánto trae, por ejemplo «200 mL» o «Frasco con 30 cápsulas»; el tipo va en «${(c.fields.find(f => f.key === tipoKey) || {}).label || tipoKey}».`);
+  }
   if (c.id === 'sup' && /^\d+(?:[.,]\d+)?$/.test(String(raw.porcion || '').trim())) out.check.push(`El tamaño de porción «${String(raw.porcion).trim()}» no tiene unidad. Escríbelo como aparece en la etiqueta, por ejemplo «${String(raw.porcion).trim()} mL» o «1 cápsula».`);
   if (c.id === 'sup' && raw.ingredientes) {
     const faltan = ALERGENOS.filter(([, enIng, decl]) => enIng.test(raw.ingredientes) && !decl.test(raw.alergenos || '')).map(a => a[0]);

@@ -52,6 +52,9 @@ const shortName = (catId, v) => {
   const size = catId === 'med' ? [v.concentracion, v.volumen].filter(Boolean).join(' / ') : (v.concentracion || v.contenido || '');
   return [v.marca, id, size].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
 };
+/* Datos que usan las reglas de relacionados y alternativas, para calcularlas sin el lote. */
+const REL_FIELDS = ['marca', 'principio', 'concentracion', 'volumen', 'forma', 'contenido', 'laboratorio', 'fabricante', 'receta', 'especialidad', 'compat'];
+const relData = v => Object.fromEntries(REL_FIELDS.filter(k => v && v[k]).map(k => [k, String(v[k])]));
 function upsert(cat, item, title, at) {
   const sku = String(item.sku || '').trim();
   if (!sku) return { entry: null, isNew: false, removed: [] };
@@ -59,7 +62,7 @@ function upsert(cat, item, title, at) {
   const elegible = eligibleOf(item.cat, v);
   let e = find(cat, sku), isNew = !e, removed = [];
   if (!e) { e = { sku, addedAt: at, comp: 'sin_evaluar' }; cat.entries.push(e); }
-  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at });
+  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at, rv: relData(v) });
   if (!elegible) {
     /* Si dejó de ser elegible (por ejemplo, se declaró que requiere receta), pierde sus vínculos como complemento. */
     removed = cat.links.filter(l => lk(l.c) === lk(sku));
@@ -117,14 +120,78 @@ function crosssellMap(cat) {
   return out;
 }
 const knownSkus = cat => new Set(cat.entries.filter(e => e.exportedAt).map(e => lk(e.sku)));
+
+/* ---------- Campana: lo que cambió en los vínculos de un producto ya cargado en Magento ----------
+ * Se compara lo que hoy dicen las reglas contra lo que tenía el producto cuando se exportó (relSnap). Solo cuentan los SKU que ya están
+ * en Magento. Los complementos (cross sell) avisan al producto principal; relacionados y alternativas, a los dos lados. */
+const REL_KINDS = ['crosssell', 'upsell', 'related'];
+const REL_LABEL = { crosssell: 'cross sell', upsell: 'alternativas', related: 'relacionados' };
+function currentRels(cat) {
+  const map = F.relations(cat.entries.map(e => ({ sku: e.sku, cat: e.cat, v: e.rv || { marca: e.marca } })));
+  const cm = crosssellMap(cat), known = knownSkus(cat), out = new Map();
+  const ok = a => [...new Set(a)].filter(x => known.has(lk(x))).sort();
+  cat.entries.forEach(e => {
+    const k = lk(e.sku), r = map.get(k) || { upsell: [], related: [], crosssell: [] };
+    out.set(k, { upsell: ok(r.upsell), related: ok(r.related), crosssell: ok([...r.crosssell, ...(cm.get(k) || [])]) });
+  });
+  return out;
+}
+const emptyRels = () => ({ crosssell: [], upsell: [], related: [] });
+function relDiff(snap, cur) {
+  const add = {}, rem = {};
+  REL_KINDS.forEach(k => {
+    const a = (snap && snap[k]) || [], b = (cur && cur[k]) || [];
+    add[k] = b.filter(x => !a.some(y => lk(y) === lk(x)));
+    rem[k] = a.filter(x => !b.some(y => lk(y) === lk(x)));
+  });
+  return { add, rem, empty: REL_KINDS.every(k => !add[k].length && !rem[k].length) };
+}
+/* Los productos ya exportados antes de existir la campana toman su estado actual como punto de partida, sin avisar. */
+function baseline(cat) {
+  const cur = currentRels(cat); let n = 0;
+  cat.entries.forEach(e => { if (e.exportedAt && !e.relSnap) { e.relSnap = cur.get(lk(e.sku)) || emptyRels(); n++; } });
+  return n;
+}
+function alerts(cat) {
+  const cur = currentRels(cat), out = [];
+  cat.entries.forEach(e => {
+    if (!e.exportedAt) { if (e.bellSeen !== 'nuevo') out.push({ type: 'nuevo', sku: e.sku, name: e.nombre, sig: 'nuevo' }); return; }
+    if (!e.relSnap) return;
+    const d = relDiff(e.relSnap, cur.get(lk(e.sku)));
+    if (d.empty) return;
+    const sig = JSON.stringify([d.add, d.rem]);
+    if (e.bellSeen !== sig) out.push({ type: 'rel', sku: e.sku, name: e.nombre, add: d.add, rem: d.rem, sig });
+  });
+  return out;
+}
+function dismiss(cat, sku) {
+  const a = alerts(cat).find(x => lk(x.sku) === lk(sku)), e = find(cat, sku);
+  if (!a || !e) return false;
+  e.bellSeen = a.sig; return true;
+}
+/* Marca como cargados a Magento y guarda cómo quedaron sus vínculos en ese archivo. */
 function markExported(cat, skus, at) {
   const set = new Set([...skus].map(lk));
   let n = 0;
   cat.entries.forEach(e => { if (set.has(lk(e.sku))) { e.exportedAt = at; n++; } });
+  const cur = currentRels(cat);
+  cat.entries.forEach(e => { if (set.has(lk(e.sku))) { e.relSnap = cur.get(lk(e.sku)) || emptyRels(); delete e.bellSeen; } });
   return n;
 }
+/* Archivo solo con SKU y vínculos al día, para los productos que pidieron actualizar. Una columna vacía no quita vínculos en Magento. */
+function relUpdateCsv(cat, skus) {
+  const cur = currentRels(cat), H = F.MAG_HEADER, I = F.MAG_IDX;
+  const rows = [...skus].map(sku => {
+    const e = find(cat, sku); if (!e || !e.exportedAt) return null;
+    const r = cur.get(lk(e.sku)) || emptyRels(), row = new Array(H.length).fill('');
+    row[I.sku] = e.sku;
+    [['upsell_skus', 'upsell'], ['related_skus', 'related'], ['crosssell_skus', 'crosssell']].forEach(([col, k]) => { if (r[k].length) row[I[col]] = r[k].join(','); });
+    return row;
+  }).filter(Boolean);
+  return { header: H, rows };
+}
 
-const api = { shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
+const api = { REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasCatalog = api;
 })(typeof self !== 'undefined' ? self : this);
