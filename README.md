@@ -176,6 +176,13 @@ Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**
 - **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe el título del producto (que incluye marca, principio activo, concentración, presentación y laboratorio) y esos mismos datos sueltos; no recibe receta, categoría, SKU ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
 - El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
 
+## Formas, tipos y campos de suplementos
+
+- **Forma:** es un campo de texto libre; se puede escribir cualquier valor. Los campos de forma (medicamentos y suplementos) y de tipo (dispositivos, dermocosméticos, bebidas, cuidado personal y accesorios) muestran una lista de ayuda al escribir, que no limita lo que capturas.
+- **Reconocimiento en datos crudos:** además de tableta, cápsula e inyectable, se reconocen tableta masticable, efervescente y sublingual, cápsula blanda (softgel o perla) y vegetal, gomita, polvo, líquido, shot, barra, chicle, pastilla, granulado, spray, aceite y emulsión. También más envases (bote, tarro, lata, pouch, vial) y unidades (perlas, softgels, barras, shots, chicles, porciones).
+- **Tipos nuevos:** dispositivos (lancetas, esfigmomanómetro, estetoscopio, pulsioxímetro, báscula, humidificador…), dermocosméticos (exfoliante, desmaquillante, bálsamo labial, bruma…), cuidado personal (acondicionador, toallas sanitarias, tampones, pañales, repelente…), accesorios (rodillera, tobillera, collarín, muletas, pastillero…), bebidas (nutrición oral, bebida de proteína, agua alcalina, fórmula infantil…) y suplementos (calcio, hierro, biotina, ashwagandha, cúrcuma, colágeno hidrolizado, proteína whey, BCAA…). Las palabras clave que detectan la categoría también se ampliaron.
+- **Suplementos, campos opcionales nuevos:** «Sabor» (entra en el título solo si lo capturas; también se reconoce en los datos crudos), «Tamaño de porción», «Porciones por envase» y «Modo de consumo» (tal como está en el empaque, como sección aparte). Salen en la ficha técnica, en la descripción de Merchant Center y en las preguntas frecuentes, y no cambian nada si quedan vacíos.
+
 ## Diccionario de clasificación (Ajustes, pestaña Clasificación)
 
 Relaciona cada **principio activo** con su **código ATC** y su área. Es un dato interno: no sale en la ficha, en el CSV ni en Magento. Se guarda solo en este navegador (exporta e importa CSV para pasarlo a otro).

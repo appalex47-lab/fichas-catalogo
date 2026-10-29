@@ -110,3 +110,18 @@ test('área terapéutica: sin llave avisa, con llave propone y solo se aplica al
   assert.match(a.text('#cat-body'), /Diabetes y metabolismo · Control de peso · ATC A10BX16/);
   assert.deepEqual(a.errors, []);
 });
+
+test('formulario: forma y tipo traen una lista de ayuda y aceptan cualquier otro valor', { skip }, async () => {
+  const a = boot();
+  setCat(a, 'sup');
+  const inp = a.d.getElementById('f-forma');
+  assert.equal(inp.getAttribute('list'), 'dl-forma');
+  const opts = [...a.d.querySelectorAll('#dl-forma option')].map(o => o.value);
+  assert.ok(opts.includes('Gomitas') && opts.includes('Polvo') && opts.includes('Shot'));
+  a.fill('f-forma', 'Pastillas de goma');
+  assert.equal(a.d.getElementById('f-forma').value, 'Pastillas de goma');
+  ['sabor', 'porcion', 'porciones', 'modo'].forEach(k => assert.ok(a.d.getElementById('f-' + k), `campo ${k}`));
+  setCat(a, 'med');
+  assert.ok([...a.d.querySelectorAll('#dl-forma option')].map(o => o.value).includes('Solución inyectable'));
+  assert.deepEqual(a.errors, []);
+});

@@ -76,7 +76,7 @@ function expandPres(t) {
   s = s.replace(SINGULAR_ONE_RE, (m, noun) => SINGULAR_NOUN[noun.toLowerCase()] ? `1 ${SINGULAR_NOUN[noun.toLowerCase()]}` : m);
   return cap(s.trim());
 }
-const COUNT_NOUN_RE = /(\d+)\s+(tabletas?|cápsulas?|capsulas?|piezas?|sobres?|comprimidos?|parches?|pastillas?|gomitas?|unidades|unidad|ampolletas?|plumas?|tiras|lancetas?|grageas?|sachets?|toallitas?|jeringas?)(?![\p{L}])/giu;
+const COUNT_NOUN_RE = /(\d+)\s+(tabletas?|cápsulas?|capsulas?|piezas?|sobres?|comprimidos?|parches?|pastillas?|gomitas?|unidades|unidad|ampolletas?|plumas?|tiras|lancetas?|grageas?|sachets?|toallitas?|jeringas?|perlas?|softgels?|barras?|shots?|chicles?|porciones|viales?)(?![\p{L}])/giu;
 const capNouns = s => s.replace(COUNT_NOUN_RE, (m, n, w) => `${n} ${w.toLowerCase()}`);
 function joinForm(forma, contenido) {
   if (!forma) return contenido || '';
@@ -295,10 +295,15 @@ const CATS = {
       F('contenido','Contenido neto o piezas',{req:1,pres:1,ph:'Frasco con 100 piezas'}),
       F('fabricante','Fabricante',{req:1,ph:'GNC'}),
       F('composicion','Composición o ingredientes',{g:'d',type:'area'}),
-      F('caracteristicas','Características objetivas',{g:'d',type:'area',hint:'No conviertas ingredientes en beneficios si la ficha no lo dice.'})
+      F('caracteristicas','Características objetivas',{g:'d',type:'area',hint:'No conviertas ingredientes en beneficios si la ficha no lo dice.'}),
+      F('sabor','Sabor',{g:'d',ph:'Naranja',hint:'Opcional. Si lo capturas, entra en el título.'}),
+      F('porcion','Tamaño de porción',{g:'d',ph:'1 cápsula',hint:'Opcional. Tal como aparece en la etiqueta.'}),
+      F('porciones','Porciones por envase',{g:'d',ph:'100',hint:'Opcional. Tal como aparece en la etiqueta.'}),
+      F('modo','Modo de consumo',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal como aparece en el empaque. Aparece en una sección aparte.'})
     ],
     title: [
       seg('Marca + componente', ['marca','componente']),
+      seg('Sabor', ['sabor'], v => saborTxt(v.sabor)),
       seg('Forma + contenido', ['forma','contenido'], v => joinForm(v.forma, v.contenido)),
       seg('Fabricante', ['fabricante'])
     ],
@@ -308,7 +313,11 @@ const CATS = {
     mc: v => [
       join(' - ', join(' ', v.marca, v.componente && `(${v.componente})`, v.contenido), v.fabricante),
       'Suplemento alimenticio' + (v.forma ? ' en forma de ' + lc(v.forma) : '') + ((v.composicion || v.componente) ? ' que contiene ' + lc(v.composicion || v.componente) : ''),
+      v.sabor && saborTxt(v.sabor),
       v.contenido && `Presentación de ${lc(v.contenido)}`,
+      v.porcion && `Tamaño de porción: ${lc(v.porcion)}`,
+      v.porciones && `Porciones por envase: ${v.porciones}`,
+      v.modo,
       v.caracteristicas,
       LEGEND.supResp
     ],
@@ -321,9 +330,9 @@ const CATS = {
       }
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
-        ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma],
-        ['Contenido Neto/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], [NOTA_SUP]);
+        ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
+        ['Contenido Neto/Piezas', v.contenido], ['Tamaño de Porción', v.porcion], ['Porciones por Envase', v.porciones], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+      ], [...(v.modo ? [`<h2>Modo de consumo:</h2>\n<p>${escT(v.modo)}</p>`] : []), NOTA_SUP]);
     }
   },
 
@@ -584,6 +593,9 @@ const FAQ_RULES = {
   ],
   sup: (v, n) => [
     (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
+    v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
+    v.sabor && [[`¿Qué sabor tiene ${n}?`, `¿Cuál es el sabor de ${n}?`], [`Su sabor es ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`, `Es sabor ${lc(String(v.sabor).replace(/^sabor\s+/i, ''))}.`]],
+    v.porciones && [[`¿Cuántas porciones trae ${n}?`, `¿Cuántas porciones tiene cada envase de ${n}?`], [`Trae ${v.porciones} porciones por envase${v.porcion ? `, con un tamaño de porción de ${lc(v.porcion)}` : ''}.`]],
     faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
     v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
     v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
@@ -1107,14 +1119,19 @@ function makeScanner(text) {
 const NUM = '\\d+(?:[.,]\\d+)?';
 const UNIT = '(?:mg|mcg|ug|gr|grs|g|ui|iu|ml|l|%)';
 const mkDoseRe = () => new RegExp(`${NUM}\\s*${UNIT}(?![a-z0-9])(?:\\s*\\/\\s*(?:${NUM}\\s*)?${UNIT}(?![a-z0-9]))*`, 'gi');
-const CONT = '(?:caj(?:a)?|fco|frasco|blister|blis|sobres?|estuche|tubo|bolsa|botella)';
-const NOUN = '(?:tab(?:s|letas?)?|caps?(?:ulas?)?|comp(?:rimidos?)?|pzas?|pz|piezas?|amp(?:olletas?)?|plumas?|sobres?|grag(?:eas?)?|parches?|tiras?|lancetas?|gomitas?|ovulos?|supositorios?|unidades|unidad)';
+const CONT = '(?:caj(?:a)?|fco|frasco|blister|blis|sobres?|estuche|tubo|bolsa|botella|bote|tarro|lata|pouch|display|vial)';
+const NOUN = '(?:tab(?:s|letas?)?|caps?(?:ulas?)?|comp(?:rimidos?)?|pzas?|pz|piezas?|amp(?:olletas?)?|plumas?|sobres?|grag(?:eas?)?|parches?|tiras?|lancetas?|gomitas?|ovulos?|supositorios?|unidades|unidad|pastillas?|perlas?|softgels?|sachets?|barras?|shots?|chicles?|porciones|viales?)';
 const LIBS = '(?:\\s+(?:de\\s+)?(?:lib(?:eracion)?\\.?\\s*)?(?:prolongada|retardada|modificada))?';
 const mkPiecesRe = () => new RegExp(`(?:\\b${CONT}\\.?\\s*)?(?:\\bc\\/\\s*|\\bx\\s*|\\bcon\\s+)\\d+(?:\\s*${NOUN}\\b\\.?${LIBS})?|\\b\\d+\\s*${NOUN}\\b\\.?${LIBS}`, 'gi');
 const MASS_UNITS = new Set(['mg', 'mcg', 'ug', 'g', 'gr', 'grs', 'ui', 'iu', '%']);
 const VOL_UNITS = new Set(['ml', 'l']);
 
 const FORMS = [
+  [/\b(?:tab(?:s|letas?)?|comp(?:rimidos?)?)\.?\s*mast(?:icables?)?\b\.?/gi, 'Tableta masticable', 0],
+  [/\b(?:tab(?:s|letas?)?|comp(?:rimidos?)?)\.?\s*efervesc(?:entes?)?\b\.?|\befervescentes?\b/gi, 'Tableta efervescente', 0],
+  [/\b(?:tab(?:s|letas?)?|comp(?:rimidos?)?)\.?\s*sublingual(?:es)?\b/gi, 'Tableta sublingual', 1],
+  [/\bcaps?(?:ulas?)?\.?\s*blandas?\b|\bsoftgels?\b|\bperlas?\b/gi, 'Cápsula blanda', 0],
+  [/\bcaps?(?:ulas?)?\.?\s*(?:vegetales?|veg)\b/gi, 'Cápsula vegetal', 0],
   [/\bsol(?:ucion)?\.?\s*iny(?:ectable)?\b\.?/gi, 'Solución inyectable', 1],
   [/\bsusp(?:ension)?\.?\s*iny(?:ectable)?\b\.?/gi, 'Suspensión inyectable', 1],
   [/\bsol(?:ucion)?\.?\s*oral\b/gi, 'Solución oral', 1],
@@ -1134,34 +1151,56 @@ const FORMS = [
   [/\bung(?:uento)?\b\.?/gi, 'Ungüento', 1],
   [/\bgomitas?\b/gi, 'Gomita', 0],
   [/\bpolvo\b/gi, 'Polvo', 0],
+  [/\bliquido\b/gi, 'Líquido', 0],
+  [/\bshots?\b/gi, 'Shot', 0],
+  [/\bbarras?\b/gi, 'Barra', 0],
+  [/\bchicles?\b/gi, 'Chicle', 0],
+  [/\bpastillas?\b/gi, 'Pastilla', 0],
+  [/\bgranulado\b/gi, 'Granulado', 0],
+  [/\b(?:spray|aerosol)\b/gi, 'Spray', 0],
+  [/\baceite\b/gi, 'Aceite', 0],
+  [/\bemulsion\b/gi, 'Emulsión', 0],
   [/\bcrema\b/gi, 'Crema', 0],
   [/\bgel\b/gi, 'Gel', 0]
 ];
-const FORM_PLURAL = { 'Tableta': 'tabletas', 'Comprimido': 'comprimidos', 'Cápsula': 'cápsulas', 'Gragea': 'grageas', 'Ampolleta': 'ampolletas', 'Supositorio': 'supositorios', 'Óvulo': 'óvulos', 'Gomita': 'gomitas' };
+const FORM_PLURAL = { 'Tableta': 'tabletas', 'Comprimido': 'comprimidos', 'Cápsula': 'cápsulas', 'Gragea': 'grageas', 'Ampolleta': 'ampolletas', 'Supositorio': 'supositorios', 'Óvulo': 'óvulos', 'Gomita': 'gomitas', 'Tableta masticable': 'tabletas masticables', 'Tableta efervescente': 'tabletas efervescentes', 'Tableta sublingual': 'tabletas sublinguales', 'Cápsula blanda': 'cápsulas blandas', 'Cápsula vegetal': 'cápsulas vegetales', 'Pastilla': 'pastillas', 'Chicle': 'chicles', 'Barra': 'barras', 'Shot': 'shots' };
 const VIAS = [
   [/\boral\b/gi, 'Oral'], [/\bsubcut(?:anea)?\b|\bs\.?c\.?(?![a-z0-9])/gi, 'Subcutánea'], [/\bintramuscular\b/gi, 'Intramuscular'],
   [/\bintravenosa\b|\bendovenosa\b/gi, 'Intravenosa'], [/\btopic[oa]\b/gi, 'Tópica'], [/\boftalmica\b/gi, 'Oftálmica'],
   [/\bnasal\b/gi, 'Nasal'], [/\bsublingual\b/gi, 'Sublingual'], [/\brectal\b/gi, 'Rectal'], [/\bvaginal\b/gi, 'Vaginal'], [/\binhalada\b/gi, 'Inhalada']
 ];
 const TYPE_DICT = {
-  dis: { key: 'tipo', list: [[/\bbaumanometro\b/gi, 'Baumanómetro'], [/\btensiometro\b/gi, 'Tensiómetro'], [/\bglucometro\b/gi, 'Glucómetro'], [/\btermometro\b/gi, 'Termómetro'], [/\boximetro\b/gi, 'Oxímetro'], [/\bnebulizador\b/gi, 'Nebulizador'], [/\binhalocamara\b/gi, 'Inhalocámara']] },
-  cos: { key: 'tipo', list: [[/\bcrema hidratante\b/gi, 'Crema hidratante'], [/\bcrema facial\b/gi, 'Crema facial'], [/\bcrema corporal\b/gi, 'Crema corporal'], [/\bcrema de manos\b/gi, 'Crema de manos'], [/\bgel limpiador\b/gi, 'Gel limpiador'], [/\bgel facial\b/gi, 'Gel facial'], [/\bespuma limpiadora\b/gi, 'Espuma limpiadora'], [/\bagua micelar\b/gi, 'Agua micelar'], [/\blocion hidratante\b/gi, 'Loción hidratante'], [/\blocion corporal\b/gi, 'Loción corporal'], [/\bemulsion hidratante\b/gi, 'Emulsión hidratante'], [/\bserum\b/gi, 'Sérum'], [/\bprotector solar\b/gi, 'Protector solar'], [/\bcontorno de ojos\b/gi, 'Contorno de ojos'], [/\bcrema\b/gi, 'Crema'], [/\bgel\b/gi, 'Gel'], [/\blocion\b/gi, 'Loción'], [/\bemulsion\b/gi, 'Emulsión'], [/\bbalsamo\b/gi, 'Bálsamo'], [/\bmascarilla\b/gi, 'Mascarilla'], [/\btonico\b/gi, 'Tónico'], [/\blimpiador\b/gi, 'Limpiador']] },
-  hig: { key: 'producto', list: [[/\bpasta dental\b|\bcrema dental\b/gi, 'Pasta dental'], [/\b(?:shampoo|champu)\b/gi, 'Shampoo'], [/\bdesodorante\b/gi, 'Desodorante'], [/\bjabon\b/gi, 'Jabón'], [/\benjuague bucal\b/gi, 'Enjuague bucal'], [/\bcepillo dental\b/gi, 'Cepillo dental'], [/\bhilo dental\b/gi, 'Hilo dental'], [/\btoallas humedas\b/gi, 'Toallas húmedas']] },
-  acc: { key: 'producto', list: [[/\bparches? termicos?\b/gi, 'Parches térmicos'], [/\bvenda\b/gi, 'Venda'], [/\bfaja\b/gi, 'Faja'], [/\bmunequera\b/gi, 'Muñequera'], [/\bbolsa termica\b/gi, 'Bolsa térmica'], [/\b(?:cubrebocas|tapabocas)\b/gi, 'Cubrebocas']] },
-  beb: { key: 'tipo', list: [[/\bsuero oral\b/gi, 'Suero oral'], [/\bbebida (?:hidratante|isotonica)\b/gi, 'Bebida hidratante'], [/\bisotonica\b/gi, 'Bebida isotónica'], [/\brehidratante\b/gi, 'Bebida rehidratante']] },
-  sup: { key: 'componente', list: [[/\bvitamina [a-z]\d*\b/gi, null], [/\bomega ?-?3\b/gi, 'Omega 3'], [/\bcolageno\b/gi, 'Colágeno'], [/\bprobioticos?\b/gi, 'Probiótico'], [/\bmultivitaminico\b/gi, 'Multivitamínico'], [/\bmagnesio\b/gi, 'Magnesio'], [/\bzinc\b/gi, 'Zinc'], [/\bmelatonina\b/gi, 'Melatonina'], [/\bcreatina\b/gi, 'Creatina'], [/\bproteina\b/gi, 'Proteína']] }
+  dis: { key: 'tipo', list: [[/\bpulsioximetro\b/gi, 'Pulsioxímetro'], [/\besfigmomanometro\b/gi, 'Esfigmomanómetro'], [/\bestetoscopio\b/gi, 'Estetoscopio'], [/\btiras reactivas\b/gi, 'Tiras reactivas'], [/\blancetas\b/gi, 'Lancetas'], [/\blancetero\b/gi, 'Lancetero'], [/\bbascula(?: digital)?\b/gi, 'Báscula'], [/\bhumidificador\b/gi, 'Humidificador'], [/\bvaporizador\b/gi, 'Vaporizador'], [/\baspirador nasal\b/gi, 'Aspirador nasal'], [/\b(?:electroestimulador|tens)\b/gi, 'Electroestimulador'], [/\bmasajeador\b/gi, 'Masajeador'], [/\bbaumanometro\b/gi, 'Baumanómetro'], [/\btensiometro\b/gi, 'Tensiómetro'], [/\bglucometro\b/gi, 'Glucómetro'], [/\btermometro\b/gi, 'Termómetro'], [/\boximetro\b/gi, 'Oxímetro'], [/\bnebulizador\b/gi, 'Nebulizador'], [/\binhalocamara\b/gi, 'Inhalocámara']] },
+  cos: { key: 'tipo', list: [[/\bbalsamo labial\b/gi, 'Bálsamo labial'], [/\bprotector labial\b/gi, 'Protector labial'], [/\bleche limpiadora\b/gi, 'Leche limpiadora'], [/\bdesmaquillante\b/gi, 'Desmaquillante'], [/\bexfoliante\b/gi, 'Exfoliante'], [/\baceite\b/gi, 'Aceite'], [/\bbruma\b/gi, 'Bruma'], [/\bfluido\b/gi, 'Fluido'], [/\bcrema para ojos\b/gi, 'Contorno de ojos'], [/\b(?:gel de ducha|gel de bano)\b/gi, 'Gel de baño'], [/\bcrema hidratante\b/gi, 'Crema hidratante'], [/\bcrema facial\b/gi, 'Crema facial'], [/\bcrema corporal\b/gi, 'Crema corporal'], [/\bcrema de manos\b/gi, 'Crema de manos'], [/\bgel limpiador\b/gi, 'Gel limpiador'], [/\bgel facial\b/gi, 'Gel facial'], [/\bespuma limpiadora\b/gi, 'Espuma limpiadora'], [/\bagua micelar\b/gi, 'Agua micelar'], [/\blocion hidratante\b/gi, 'Loción hidratante'], [/\blocion corporal\b/gi, 'Loción corporal'], [/\bemulsion hidratante\b/gi, 'Emulsión hidratante'], [/\bserum\b/gi, 'Sérum'], [/\bprotector solar\b/gi, 'Protector solar'], [/\bcontorno de ojos\b/gi, 'Contorno de ojos'], [/\bcrema\b/gi, 'Crema'], [/\bgel\b/gi, 'Gel'], [/\blocion\b/gi, 'Loción'], [/\bemulsion\b/gi, 'Emulsión'], [/\bbalsamo\b/gi, 'Bálsamo'], [/\bmascarilla\b/gi, 'Mascarilla'], [/\btonico\b/gi, 'Tónico'], [/\blimpiador\b/gi, 'Limpiador']] },
+  hig: { key: 'producto', list: [[/\bjabon liquido\b/gi, 'Jabón líquido'], [/\bgel antibacterial\b/gi, 'Gel antibacterial'], [/\bacondicionador\b/gi, 'Acondicionador'], [/\btoallas sanitarias\b/gi, 'Toallas sanitarias'], [/\btampones\b/gi, 'Tampones'], [/\bprotectores? diarios?\b/gi, 'Protectores diarios'], [/\bpanales\b/gi, 'Pañales'], [/\balgodon\b/gi, 'Algodón'], [/\bcotonetes\b/gi, 'Cotonetes'], [/\brastrillo\b/gi, 'Rastrillo'], [/\brepelente\b/gi, 'Repelente'], [/\btalco\b/gi, 'Talco'], [/\bpreservativos?\b/gi, 'Preservativos'], [/\bpasta dental\b|\bcrema dental\b/gi, 'Pasta dental'], [/\b(?:shampoo|champu)\b/gi, 'Shampoo'], [/\bdesodorante\b/gi, 'Desodorante'], [/\bjabon\b/gi, 'Jabón'], [/\benjuague bucal\b/gi, 'Enjuague bucal'], [/\bcepillo dental\b/gi, 'Cepillo dental'], [/\bhilo dental\b/gi, 'Hilo dental'], [/\btoallas humedas\b/gi, 'Toallas húmedas']] },
+  acc: { key: 'producto', list: [[/\brodillera\b/gi, 'Rodillera'], [/\btobillera\b/gi, 'Tobillera'], [/\bcollarin\b/gi, 'Collarín'], [/\bcabestrillo\b/gi, 'Cabestrillo'], [/\bmuletas?\b/gi, 'Muletas'], [/\bbaston\b/gi, 'Bastón'], [/\bplantillas?\b/gi, 'Plantillas'], [/\bmedias de compresion\b/gi, 'Medias de compresión'], [/\bpastillero\b/gi, 'Pastillero'], [/\bguantes\b/gi, 'Guantes'], [/\bbolsa para hielo\b/gi, 'Bolsa para hielo'], [/\bparches? termicos?\b/gi, 'Parches térmicos'], [/\bvenda\b/gi, 'Venda'], [/\bfaja\b/gi, 'Faja'], [/\bmunequera\b/gi, 'Muñequera'], [/\bbolsa termica\b/gi, 'Bolsa térmica'], [/\b(?:cubrebocas|tapabocas)\b/gi, 'Cubrebocas']] },
+  beb: { key: 'tipo', list: [[/\bnutricion oral\b/gi, 'Nutrición oral'], [/\bbebida (?:de )?proteina\b/gi, 'Bebida de proteína'], [/\bbebida deportiva\b/gi, 'Bebida deportiva'], [/\bbebida con electrolitos\b/gi, 'Bebida con electrolitos'], [/\bagua alcalina\b/gi, 'Agua alcalina'], [/\bagua\b/gi, 'Agua'], [/\bjugo\b/gi, 'Jugo'], [/\bleche\b/gi, 'Leche'], [/\bformula infantil\b/gi, 'Fórmula infantil'], [/\bsuero oral\b/gi, 'Suero oral'], [/\bbebida (?:hidratante|isotonica)\b/gi, 'Bebida hidratante'], [/\bisotonica\b/gi, 'Bebida isotónica'], [/\brehidratante\b/gi, 'Bebida rehidratante']] },
+  sup: { key: 'componente', list: [[/\bcolageno hidrolizado\b/gi, 'Colágeno hidrolizado'], [/\bacido folico\b/gi, 'Ácido fólico'], [/\bcoenzima q ?10\b/gi, 'Coenzima Q10'], [/\bcalcio\b/gi, 'Calcio'], [/\bhierro\b/gi, 'Hierro'], [/\bbiotina\b/gi, 'Biotina'], [/\bashwagandha\b/gi, 'Ashwagandha'], [/\bcurcuma\b/gi, 'Cúrcuma'], [/\bfibra\b/gi, 'Fibra'], [/\bglutamina\b/gi, 'Glutamina'], [/\bprebioticos?\b/gi, 'Prebiótico'], [/\blecitina\b/gi, 'Lecitina'], [/\bluteina\b/gi, 'Luteína'], [/\b(?:espirulina|spirulina)\b/gi, 'Espirulina'], [/\bjengibre\b/gi, 'Jengibre'], [/\bginkgo(?: biloba)?\b/gi, 'Ginkgo biloba'], [/\bvaleriana\b/gi, 'Valeriana'], [/\bpotasio\b/gi, 'Potasio'], [/\bselenio\b/gi, 'Selenio'], [/\bl-?carnitina\b/gi, 'L-carnitina'], [/\bbcaa\b/gi, 'BCAA'], [/\baminoacidos\b/gi, 'Aminoácidos'], [/\b(?:proteina whey|whey)\b/gi, 'Proteína whey'], [/\belectrolitos\b/gi, 'Electrolitos'], [/\bvitamina [a-z]\d*\b/gi, null], [/\bomega ?-?3\b/gi, 'Omega 3'], [/\bcolageno\b/gi, 'Colágeno'], [/\bprobioticos?\b/gi, 'Probiótico'], [/\bmultivitaminico\b/gi, 'Multivitamínico'], [/\bmagnesio\b/gi, 'Magnesio'], [/\bzinc\b/gi, 'Zinc'], [/\bmelatonina\b/gi, 'Melatonina'], [/\bcreatina\b/gi, 'Creatina'], [/\bproteina\b/gi, 'Proteína']] }
 };
-const FLAVORS = [['coco', 'Coco'], ['fresa', 'Fresa'], ['limon', 'Limón'], ['naranja', 'Naranja'], ['uva', 'Uva'], ['manzana', 'Manzana'], ['mora azul', 'Mora azul'], ['mora', 'Mora'], ['menta', 'Menta'], ['vainilla', 'Vainilla'], ['chocolate', 'Chocolate'], ['mango', 'Mango'], ['pina', 'Piña'], ['durazno', 'Durazno'], ['sandia', 'Sandía'], ['maracuya', 'Maracuyá'], ['cereza', 'Cereza'], ['toronja', 'Toronja'], ['mandarina', 'Mandarina'], ['jamaica', 'Jamaica'], ['tamarindo', 'Tamarindo'], ['frutos rojos', 'Frutos rojos']];
+/* Sugerencias para los campos de texto (lista de ayuda: se puede escribir cualquier valor). */
+const FORM_SUG = {
+  med: ['Tableta', 'Tableta de liberación prolongada', 'Tableta masticable', 'Tableta efervescente', 'Tableta sublingual', 'Comprimido', 'Cápsula', 'Cápsula blanda', 'Gragea', 'Solución inyectable', 'Suspensión inyectable', 'Solución oral', 'Suspensión oral', 'Jarabe', 'Gotas', 'Solución oftálmica', 'Ungüento', 'Crema', 'Gel', 'Supositorio', 'Óvulo', 'Polvo', 'Parche', 'Spray', 'Ampolleta'],
+  sup: ['Cápsulas', 'Cápsulas blandas', 'Cápsulas vegetales', 'Tabletas', 'Tabletas masticables', 'Tabletas efervescentes', 'Gomitas', 'Polvo', 'Polvo para preparar bebida', 'Líquido', 'Gotas', 'Shot', 'Barra', 'Chicle', 'Pastillas', 'Sobres', 'Spray', 'Aceite', 'Jarabe', 'Granulado', 'Perlas']
+};
+const FLAVORS = [['coco', 'Coco'], ['fresa', 'Fresa'], ['limon', 'Limón'], ['naranja', 'Naranja'], ['uva', 'Uva'], ['manzana', 'Manzana'], ['mora azul', 'Mora azul'], ['mora', 'Mora'], ['menta', 'Menta'], ['vainilla', 'Vainilla'], ['chocolate', 'Chocolate'], ['mango', 'Mango'], ['pina', 'Piña'], ['durazno', 'Durazno'], ['sandia', 'Sandía'], ['maracuya', 'Maracuyá'], ['cereza', 'Cereza'], ['toronja', 'Toronja'], ['mandarina', 'Mandarina'], ['jamaica', 'Jamaica'], ['tamarindo', 'Tamarindo'], ['frutos rojos', 'Frutos rojos'], ['frutos del bosque', 'Frutos del bosque'], ['platano', 'Plátano'], ['cafe', 'Café'], ['caramelo', 'Caramelo'], ['galleta', 'Galleta'], ['cookies', 'Cookies'], ['moka', 'Moka'], ['citricos', 'Cítricos'], ['guayaba', 'Guayaba'], ['frambuesa', 'Frambuesa'], ['arandano', 'Arándano'], ['lima', 'Lima']];
 const BEB_ATTR = [[/\bsin azucar(?:es)?\b/gi, 'Sin azúcar'], [/\bsin lactosa\b/gi, 'Sin lactosa'], [/\bsin gluten\b|\blibre de gluten\b/gi, 'Sin gluten'], [/\bsin calorias\b/gi, 'Sin calorías'], [/\bbajo en sodio\b/gi, 'Bajo en sodio'], [/\bzero\b/gi, 'Zero'], [/\blight\b/gi, 'Light']];
 const COS_ACT = [[/\bacido hialuronico\b/gi, 'Ácido hialurónico'], [/\bniacinamida\b/gi, 'Niacinamida'], [/\bretinol\b/gi, 'Retinol'], [/\bceramidas\b/gi, 'Ceramidas'], [/\bpeptidos\b/gi, 'Péptidos'], [/\bacido salicilico\b/gi, 'Ácido salicílico'], [/\bacido glicolico\b/gi, 'Ácido glicólico'], [/\bcentella asiatica\b/gi, 'Centella asiática'], [/\bvitamina c\b/gi, 'Vitamina C']];
 const DIS_TECH = [[/\bautomatico de brazo\b/gi, 'Automático de brazo'], [/\bautomatico de muneca\b/gi, 'Automático de muñeca'], [/\bde brazo\b/gi, 'De brazo'], [/\bde muneca\b/gi, 'De muñeca'], [/\binfrarrojo\b/gi, 'Infrarrojo'], [/\bautomatico\b/gi, 'Automático']];
+const typeSug = cat => [...new Set(TYPE_DICT[cat].list.map(([, name]) => name).filter(Boolean))];
+{
+  const put = (cat, key, list) => { const fd = CATS[cat].fields.find(x => x.key === key); if (fd) fd.sug = list; };
+  put('med', 'forma', FORM_SUG.med); put('sup', 'forma', FORM_SUG.sup);
+  put('sup', 'componente', [...typeSug('sup'), 'Vitamina C', 'Vitamina D3', 'Vitamina B12', 'Vitamina E', 'Omega 3']);
+  ['dis', 'cos', 'beb'].forEach(c => put(c, 'tipo', typeSug(c)));
+  ['hig', 'acc'].forEach(c => put(c, 'producto', typeSug(c)));
+}
 const CAT_KW = {
-  dis: /\b(baumanometro|tensiometro|glucometro|termometro|oximetro|nebulizador|inhalocamara|estetoscopio|tiras reactivas|lancetero)\b/i,
-  cos: /\b(crema (?:hidratante|facial|corporal|de manos)|gel (?:limpiador|facial)|agua micelar|espuma limpiadora|serum|protector solar|fps|spf|contorno de ojos|mascarilla|limpiador|tonico|acido hialuronico|niacinamida|retinol|ceramidas|locion|emulsion)\b/i,
-  sup: /\b(vitamina [a-z]|multivitaminico|omega ?-?3|colageno|probioticos?|magnesio|zinc|melatonina|creatina|proteina|gomitas?)\b/i,
-  beb: /\b(suero oral|electrolit|electrolitos|bebida|sabor|isotonica|rehidratante)\b/i,
-  hig: /\b(pasta dental|crema dental|shampoo|champu|desodorante|jabon|enjuague bucal|cepillo dental|hilo dental|toallas humedas)\b/i,
-  acc: /\b(parches? termicos?|venda|faja|munequera|bolsa termica|cubrebocas|tapabocas)\b/i
+  dis: /\b(baumanometro|tensiometro|glucometro|termometro|oximetro|nebulizador|inhalocamara|estetoscopio|tiras reactivas|lancetas?|lancetero|esfigmomanometro|pulsioximetro|bascula|humidificador|vaporizador|aspirador nasal)\b/i,
+  cos: /\b(crema (?:hidratante|facial|corporal|de manos)|gel (?:limpiador|facial)|agua micelar|espuma limpiadora|serum|protector solar|fps|spf|contorno de ojos|mascarilla|limpiador|tonico|acido hialuronico|niacinamida|retinol|ceramidas|locion|emulsion|exfoliante|desmaquillante|balsamo labial|protector labial|bruma)\b/i,
+  sup: /\b(vitamina [a-z]|multivitaminico|omega ?-?3|colageno|probioticos?|magnesio|zinc|melatonina|creatina|proteina|gomitas?|calcio|hierro|biotina|ashwagandha|curcuma|colageno hidrolizado|espirulina|glutamina|bcaa|aminoacidos|coenzima q ?10|acido folico|electrolitos|whey)\b/i,
+  beb: /\b(suero oral|electrolit|electrolitos|bebida|sabor|isotonica|rehidratante|nutricion oral|agua alcalina|formula infantil|bebida (?:de )?proteina)\b/i,
+  hig: /\b(pasta dental|crema dental|shampoo|champu|desodorante|jabon|enjuague bucal|cepillo dental|hilo dental|toallas humedas|acondicionador|gel antibacterial|toallas sanitarias|tampones|panales|cotonetes|rastrillo|repelente|preservativos?|jabon liquido)\b/i,
+  acc: /\b(parches? termicos?|venda|faja|munequera|bolsa termica|cubrebocas|tapabocas|rodillera|tobillera|collarin|cabestrillo|muletas?|baston|medias de compresion|pastillero)\b/i
 };
 const CAT_ORDER = ['dis', 'cos', 'hig', 'beb', 'acc', 'sup', 'med'];
 const CAP_TITLE = s => s.toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase());
@@ -1286,6 +1325,10 @@ function extractRaw(text, opts) {
     const sp = sc.find(/\b(?:fps|spf) ?\d+\+?/gi);
     if (sp) { const n = sp.text.replace(/^\D+/, '').replace(/\s+/g, ''); F.fps = n; if (!F.atributo) F.atributo = 'FPS ' + n; }
   }
+  if (cat === 'sup') {
+    sc.find(/\bsabor(?: a)?\b/gi);
+    for (const [k, canon] of FLAVORS) { if (sc.find(new RegExp('\\b' + k + '\\b', 'gi'))) { F.sabor = canon; break; } }
+  }
   if (cat === 'beb') {
     for (const [re, canon] of BEB_ATTR) { if (sc.find(new RegExp(re.source, 'gi'))) { F.atributo = canon; break; } }
     sc.find(/\bsabor(?: a)?\b/gi);
@@ -1365,6 +1408,7 @@ const api = {
   S,
   SMALL,
   TYPE_DICT,
+  FORM_SUG,
   UNIT,
   UNIT_MAP,
   VIAS,

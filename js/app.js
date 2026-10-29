@@ -246,7 +246,8 @@ function fieldHTML(fd) {
   } else if (fd.type === 'area') {
     ctl = `<textarea id="f-${fd.key}" data-key="${fd.key}"${desc} rows="2" placeholder="${esc(fd.ph || '')}">${esc(val)}</textarea>`;
   } else {
-    ctl = `<input type="text" id="f-${fd.key}" data-key="${fd.key}"${desc} value="${esc(val)}" placeholder="${esc(fd.ph || '')}" autocomplete="off">`;
+    const dl = fd.sug && fd.sug.length ? ` list="dl-${fd.key}"` : '';
+    ctl = `<input type="text" id="f-${fd.key}" data-key="${fd.key}"${desc}${dl} value="${esc(val)}" placeholder="${esc(fd.ph || '')}" autocomplete="off">` + (dl ? `<datalist id="dl-${fd.key}">${fd.sug.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>` : '');
   }
   const areaAi = fd.key === 'area' ? `<div class="area-ai"><button type="button" class="btn btn--quiet" id="area-ai">Sugerir con IA</button><div id="area-ai-out" aria-live="polite"></div></div>` : '';
   return `<div class="field">${label}${ctl}${fd.hint ? `<p class="hint" id="hint-${fd.key}">${esc(fd.hint)}</p>` : ''}${areaAi}<div class="fmeta" id="fm-${fd.key}"></div></div>`;

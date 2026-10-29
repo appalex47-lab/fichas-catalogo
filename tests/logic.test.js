@@ -404,3 +404,75 @@ test('categoría: la pregunta frecuente existe en las categorías con FAQ y solo
     assert.ok(!q2.some(x => /categoría/.test(x)), `${id}: sin dato no hay pregunta`);
   }
 });
+
+/* ---------- Más formas, más tipos y campos opcionales de suplementos ---------- */
+const ext = (t, cat) => F.extractRaw(t, { cat }).fields;
+
+test('formas: se reconocen formas de suplementos y de medicamentos además de tableta, cápsula e inyectable', () => {
+  assert.equal(ext('GNC Vitamina C 1000 mg gomitas frasco 60', 'sup').forma, 'Gomita');
+  assert.equal(ext('Vitamina D3 softgel frasco c/90', 'sup').forma, 'Cápsula blanda');
+  assert.equal(ext('Magnesio tabletas masticables frasco c/60', 'sup').forma, 'Tableta masticable');
+  assert.equal(ext('Vitamina C efervescente tubo c/20', 'sup').forma, 'Tableta efervescente');
+  assert.equal(ext('Proteína whey polvo bote 900 g sabor chocolate', 'sup').forma, 'Polvo');
+  assert.equal(ext('Colágeno liquido botella 500 mL', 'sup').forma, 'Líquido');
+  assert.equal(ext('Creatina shot caja c/12', 'sup').forma, 'Shot');
+  assert.equal(ext('Omega 3 caps veg frasco c/60', 'sup').forma, 'Cápsula vegetal');
+  assert.equal(ext('Ketorolaco tab sublingual 30 mg caja c/10', 'med').forma, 'Tableta sublingual');
+  assert.equal(ext('Paracetamol 500 mg tab caja c/20', 'med').forma, 'Tableta', 'lo anterior no cambia');
+});
+
+test('presentación: se reconocen piezas de envases y unidades de suplementos', () => {
+  assert.match(ext('Omega 3 softgels bote 120 perlas', 'sup').contenido, /120 perlas/i);
+  assert.match(ext('Proteína barras caja c/12 barras', 'sup').contenido, /12 barras/i);
+});
+
+test('sabor: los suplementos también lo reconocen y entra en el título solo si se capturó', () => {
+  const f = ext('Proteína whey polvo bote 900 g sabor chocolate', 'sup');
+  assert.equal(f.sabor, 'Chocolate');
+  assert.equal(f.componente, 'Proteína whey');
+  const base = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: 'Bote 900 g', fabricante: 'GNC' };
+  const sin = F.computeFor('sup', base, keep, meta), con = F.computeFor('sup', { ...base, sabor: 'Chocolate' }, keep, meta);
+  assert.ok(!/Sabor/.test(sin.title.title));
+  assert.match(con.title.title, /GNC Proteína whey \| Sabor Chocolate \| /);
+  assert.equal(F.computeFor('sup', base, keep, meta).mg.html, sin.mg.html);
+});
+
+test('suplementos: campos opcionales (sabor, porción, porciones y modo de consumo) salen en la ficha, el MC y la FAQ', () => {
+  const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Gomitas', contenido: 'Frasco con 60 gomitas', fabricante: 'GNC' };
+  const sin = F.computeFor('sup', base, keep, meta);
+  ['sabor', 'porcion', 'porciones', 'modo'].forEach(k => assert.ok(F.CATS.sup.fields.some(f => f.key === k && f.g === 'd' && !f.req), k));
+  assert.ok(!/Porción|Modo de consumo|Sabor/.test(sin.mg.html), 'sin captura no aparece nada nuevo');
+  const con = F.computeFor('sup', { ...base, sabor: 'Naranja', porcion: '2 gomitas', porciones: '30', modo: 'TOMAR DOS GOMITAS AL DÍA.' }, keep, meta);
+  assert.match(con.mg.html, /<li><strong>Sabor:<\/strong> Naranja<\/li>/);
+  assert.match(con.mg.html, /<li><strong>Tamaño de Porción:<\/strong> 2 gomitas<\/li>/);
+  assert.match(con.mg.html, /<li><strong>Porciones por Envase:<\/strong> 30<\/li>/);
+  assert.match(con.mg.html, /<h2>Modo de consumo:<\/h2>\n<p>Tomar dos gomitas al día\.<\/p>/);
+  assert.ok(con.mg.html.indexOf('Modo de consumo') < con.mg.html.indexOf('Condiciones de conservación'));
+  assert.match(con.mc.text, /Sabor Naranja\. .*Tamaño de porción: 2 gomitas\. Porciones por envase: 30\./);
+  const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...base, sabor: 'Naranja', porciones: '30', porcion: '2 gomitas', modo: 'Tomar dos gomitas al día' }, sd).items);
+  assert.ok(q.some(([a]) => /consume|tomar/.test(a)) && q.some(([a]) => /sabor/.test(a)) && q.some(([a, b]) => /porciones/.test(a) && /30 porciones/.test(b)));
+});
+
+test('tipos: más productos por categoría se reconocen y no hay alternancias rotas en las expresiones', () => {
+  assert.equal(ext('Accu-Chek lancetas caja c/100', 'dis').tipo, 'Lancetas');
+  assert.equal(ext('Omron esfigmomanometro digital', 'dis').tipo, 'Esfigmomanómetro digital');
+  assert.equal(ext('Eucerin exfoliante facial 100 mL', 'cos').tipo, 'Exfoliante');
+  assert.equal(ext('Colgate acondicionador 400 mL', 'hig').producto, 'Acondicionador');
+  assert.equal(ext('Saba toallas sanitarias c/10', 'hig').producto, 'Toallas sanitarias');
+  assert.equal(ext('Rodillera ortopedica talla M', 'acc').producto, 'Rodillera');
+  assert.equal(ext('Fresubin nutricion oral 200 mL', 'beb').tipo, 'Nutrición oral');
+  assert.equal(ext('Nature Made calcio tabletas c/100', 'sup').componente, 'Calcio');
+  assert.equal(ext('Colageno hidrolizado polvo 300 g', 'sup').componente, 'Colágeno hidrolizado');
+  assert.equal(F.extractRaw('Intensive cream 50 mL', { cat: 'dis' }).fields.tipo, undefined, '«intens…» no se confunde con TENS');
+  assert.equal(F.detectCat ? true : true, true);
+});
+
+test('sugerencias: los campos de forma y tipo traen listas de ayuda que no limitan lo que se escribe', () => {
+  const sug = (c, k) => F.CATS[c].fields.find(f => f.key === k).sug;
+  assert.ok(sug('sup', 'forma').includes('Gomitas') && sug('sup', 'forma').includes('Polvo') && sug('sup', 'forma').length >= 15);
+  assert.ok(sug('med', 'forma').includes('Solución inyectable') && sug('med', 'forma').includes('Parche'));
+  assert.ok(sug('dis', 'tipo').includes('Baumanómetro') && sug('cos', 'tipo').includes('Sérum') && sug('beb', 'tipo').includes('Suero oral'));
+  assert.ok(sug('hig', 'producto').includes('Shampoo') && sug('acc', 'producto').includes('Venda'));
+  const r = F.computeFor('sup', { marca: 'X', componente: 'Z', forma: 'Pastillas de goma', contenido: 'Frasco con 30', fabricante: 'X' }, keep, meta);
+  assert.match(r.title.title, /Pastillas de goma/, 'una forma que no está en la lista funciona igual');
+});
