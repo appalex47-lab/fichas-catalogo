@@ -476,3 +476,57 @@ test('sugerencias: los campos de forma y tipo traen listas de ayuda que no limit
   const r = F.computeFor('sup', { marca: 'X', componente: 'Z', forma: 'Pastillas de goma', contenido: 'Frasco con 30', fabricante: 'X' }, keep, meta);
   assert.match(r.title.title, /Pastillas de goma/, 'una forma que no está en la lista funciona igual');
 });
+
+/* ---------- Meta title largo: versión corta ---------- */
+test('meta title largo: sugiere una versión corta quitando primero la tienda y no la aplica sola', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
+  const r = F.computeFor('sup', v, keep, m).meta;
+  assert.equal(r.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL | Farmacias Especializadas');
+  assert.ok(r.mt.over && r.mt.len === 78);
+  assert.deepEqual(r.mt.short, { text: 'Supportan DKN Capuchino Proteína | Solución, 200 mL', len: 51, dropped: ['Farmacias Especializadas'] });
+  assert.ok(!r.mt.shortened, 'no se aplica sin que la persona lo pida');
+  assert.ok(r.warns.some(w => /supera el límite de 60/.test(w)));
+  assert.deepEqual(r.notes, []);
+});
+
+test('meta title largo: con la opción de la persona o la de la categoría usa la versión corta y deja de avisar', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
+  const porProducto = F.computeFor('sup', v, keep, m, { mtShort: true }).meta;
+  assert.equal(porProducto.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL');
+  assert.deepEqual([porProducto.mt.shortened, porProducto.mt.over, porProducto.mt.autoShort], [true, false, false]);
+  assert.equal(porProducto.mt.original.length, 78);
+  assert.ok(!porProducto.warns.some(w => /supera el límite/.test(w)));
+  assert.match(porProducto.notes[0], /se omitió «Farmacias Especializadas»/);
+  m.cats.sup.mt.auto = true;
+  const auto = F.computeFor('sup', v, keep, m).meta;
+  assert.equal(auto.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL');
+  assert.equal(auto.mt.autoShort, true);
+});
+
+test('meta title largo: quita bloques de atrás hacia adelante, nunca el primero ni corta palabras, y no ofrece nada que no sirva', () => {
+  const t = { a: 'Marca Producto Muy Largo Con Muchas Palabras', b: 'Bloque B', c: 'Bloque C', tienda: 'Tienda' };
+  assert.deepEqual(F.shortenMeta('{a}\n{b}\n{c}\n{tienda}', ' | ', t, 60), { text: 'Marca Producto Muy Largo Con Muchas Palabras | Bloque B', len: 55, dropped: ['Tienda', 'Bloque C'] });
+  assert.equal(F.shortenMeta('{a}\n{b}\n{c}\n{tienda}', ' | ', t, 30), null, 'el primer bloque solo ya no cabe');
+  assert.equal(F.shortenMeta('{a}', ' | ', t, 10), null, 'un solo bloque no se acorta');
+  assert.equal(F.shortenMeta('{b}\n{c}', ' | ', t, 60), null, 'si ya cabe no hay nada que acortar');
+  assert.equal(F.shortenMeta('{b}\n{c}', ' | ', t, 0), null, 'sin límite no se acorta');
+});
+
+test('meta title largo: el CSV usa la versión corta de los productos que la eligieron y avisa de los que siguen largos', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas'; m.cats.sup.confirmed = true;
+  const mk = (sku, over) => ({ sku, cat: 'sup', v: { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' }, ...over });
+  const ex = F.magentoBatch([mk('LARGO'), mk('CORTO', { mtShort: true })], keep, m, {});
+  const col = sku => ex.rows.find(r => r[0] === sku)[ex.header.indexOf('meta_title')];
+  assert.equal(col('LARGO').length, 78);
+  assert.ok(col('CORTO').length <= 60 && !/Farmacias/.test(col('CORTO')));
+  assert.deepEqual([ex.excluded.mtLargos, ex.excluded.mtCortos], [1, 1]);
+});
+
+test('meta: un segmento opcional vacío del título (el sabor de suplementos) no deja hueco en {seg2}', () => {
+  const m = F.defMeta(); m.tienda = 'Tienda';
+  const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
+  assert.equal(F.computeFor('sup', base, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda');
+  assert.equal(F.computeFor('sup', { ...base, sabor: 'Naranja' }, keep, m).meta.mt.text, 'GNC Vitamina C | Sabor Naranja | Tienda');
+});

@@ -638,12 +638,12 @@ function buildMg(c, v) {
   return { blocked: null, omitted, html: faq.html ? c.mg(v) + '\n<br />\n' + faq.html : c.mg(v), faq: faq.items, meta };
 }
 
-function computeFor(catId, raw, keep, metaCfg) {
+function computeFor(catId, raw, keep, metaCfg, flags) {
   const c = CATS[catId];
   const vt = values(c, raw, 'mL', keep);
   const vm = values(c, raw, 'ml', keep);
   const title = buildTitle(c, vt.v);
-  const meta = buildMeta(c, vt.v, title, metaCfg && metaCfg.cats && metaCfg.cats[catId], metaCfg && metaCfg.tienda);
+  const meta = buildMeta(c, vt.v, title, metaCfg && metaCfg.cats && metaCfg.cats[catId], metaCfg && metaCfg.tienda, flags);
   return { c, vt, vm, title, mc: buildMC(c, vt.v), mg: buildMg(c, vm.v), meta };
 }
 
@@ -898,18 +898,49 @@ function renderMetaTpl(tpl, sep, tokens) {
   return { text: text.trim(), unknown: [...unknown], skipped, blocks: lines.length };
 }
 
-function buildMeta(c, v, title, cfg, tienda) {
+/* Versión corta de un meta title que supera el límite: se omite primero el bloque de la tienda y luego los últimos bloques,
+ * de atrás hacia adelante. Nunca se corta una palabra ni se quita el primer bloque. Solo devuelve algo si así llega al límite. */
+function shortenMeta(tpl, sep, tokens, max) {
+  const lines = String(tpl || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (!max || lines.length < 2) return null;
+  const render = idx => renderMetaTpl(idx.map(i => lines[i]).join('\n'), sep, tokens);
+  const isStore = i => /\{tienda(?::\w+)?\}/.test(lines[i]);
+  const rest = lines.map((_, i) => i).slice(1);
+  const order = [...rest.filter(isStore), ...rest.filter(i => !isStore(i)).reverse()];
+  let keep = lines.map((_, i) => i);
+  const dropped = [];
+  for (const i of order) {
+    if (render(keep).text.length <= max) break;
+    keep = keep.filter(x => x !== i);
+    const shown = render([i]).text;
+    if (shown) dropped.push(shown);
+  }
+  const r = render(keep);
+  if (!dropped.length || !r.text || r.text.length > max) return null;
+  return { text: r.text, len: r.text.length, dropped };
+}
+
+function buildMeta(c, v, title, cfg, tienda, flags) {
   const conf = cfg || defMetaCat(c.id);
   const tokens = { titulo: title.title, categoria: c.name, tienda: (tienda || '').trim(), receta_txt: v.receta === 'si' ? 'con receta médica' : '' };
   const dv = dedupeFields(v);
   c.fields.forEach(fd => { tokens[fd.key] = dv[fd.key] || ''; });
-  for (let i = 1; i <= 4; i++) tokens['seg' + i] = (title.segs[i - 1] && title.segs[i - 1].text) || '';
+  /* {seg1} a {seg4} son los segmentos del título que sí tienen texto, en orden: un segmento opcional vacío (por ejemplo el sabor) no deja un hueco. */
+  const segTexts = title.segs.map(x => x && x.text).filter(Boolean);
+  for (let i = 1; i <= 4; i++) tokens['seg' + i] = segTexts[i - 1] || '';
   const out = {}, warns = [];
   [['mt', 'Meta title'], ['md', 'Meta description'], ['alt', 'Alt de imagen']].forEach(([k, label]) => {
     const t = conf[k] || { tpl: '', sep: ' ', max: 0 };
     const r = renderMetaTpl(t.tpl, t.sep, tokens);
     const max = Number(t.max) || 0;
-    out[k] = { text: r.text, len: r.text.length, max, over: !!(max && r.text.length > max), unknown: r.unknown, skipped: r.skipped, blocks: r.blocks };
+    let text = r.text, shortInfo = null, shortened = false;
+    if (k === 'mt' && max && text.length > max) {
+      shortInfo = shortenMeta(t.tpl, t.sep, tokens, max);
+      if (shortInfo && ((flags && flags.mtShort) || t.auto)) { text = shortInfo.text; shortened = true; }
+    }
+    out[k] = { text, len: text.length, max, over: !!(max && text.length > max), unknown: r.unknown, skipped: r.skipped, blocks: r.blocks };
+    if (shortInfo) out[k].short = shortInfo;
+    if (shortened) { out[k].shortened = true; out[k].original = r.text; out[k].autoShort = !!t.auto && !(flags && flags.mtShort); }
     if (r.unknown.length) warns.push(`${label}: token desconocido ${r.unknown.map(x => '{' + x + '}').join(', ')}.`);
     if (out[k].over) warns.push(`${label}: ${r.text.length} caracteres, supera el límite de ${max}.`);
     const red = (k === 'alt' || !conf.confirmed) ? scanRed(r.text, c.id) : [];
@@ -918,6 +949,7 @@ function buildMeta(c, v, title, cfg, tienda) {
     if (k !== 'alt' && c.id === 'med' && !conf.confirmed && COMERCIAL_RE.test(r.text)) warns.push(`${label}: lenguaje comercial en un medicamento. Confirma con Regulatorio que sea aceptable.`);
   });
   out.warns = warns;
+  out.notes = out.mt.shortened ? [`Meta title acortado: se omitió ${out.mt.short.dropped.map(x => '«' + x + '»').join(', ')}.`] : [];
   out.confirmed = !!conf.confirmed;
   return out;
 }
@@ -1015,14 +1047,14 @@ function relations(entries) {
 }
 
 function magentoBatch(items, keep, metaCfg, opts) {
-  const ex = { sinSku: 0, bloqueadas: 0, faltantes: 0, lenguaje: 0, duplicadas: 0, sinMeta: 0, sinImagen: 0, altLargos: 0, ia: 0 };
+  const ex = { sinSku: 0, bloqueadas: 0, faltantes: 0, lenguaje: 0, duplicadas: 0, sinMeta: 0, sinImagen: 0, altLargos: 0, mtLargos: 0, mtCortos: 0, ia: 0 };
   const bySku = new Map(), entries = new Map();
   const attr = String(opts.attr || '').trim() || 'categoria_prod';
   for (const it of items) {
     const sku = String(it.sku || '').trim();
     if (!sku) { ex.sinSku++; continue; }
     if (!opts.incIA && Object.values(it.ai || {}).some(v => v === 'sugerido' || v === 'imagen')) { ex.ia++; continue; }
-    const res = computeFor(it.cat, it.v, keep, metaCfg);
+    const res = computeFor(it.cat, it.v, keep, metaCfg, { mtShort: !!it.mtShort });
     if (res.mg.blocked) { ex.bloqueadas++; continue; }
     if (res.title.missing.length && !opts.incFaltantes) { ex.faltantes++; continue; }
     if (opts.excLenguaje) { const L = lint(res.c, it.v); if (langCount(L)) { ex.lenguaje++; continue; } }
@@ -1033,6 +1065,8 @@ function magentoBatch(items, keep, metaCfg, opts) {
     if (res.meta.confirmed) {
       set('short_description', res.meta.md.text);
       set('meta_title', res.meta.mt.text);
+      if (res.meta.mt.over) ex.mtLargos++;
+      if (res.meta.mt.shortened) ex.mtCortos++;
       set('meta_description', res.meta.md.text);
     } else ex.sinMeta++;
     MAG_ONES.forEach(k => set(k, '1'));
@@ -1419,6 +1453,7 @@ const api = {
   buildMeta,
   buildMg,
   buildFaq,
+  shortenMeta,
   relations,
   complementEligible,
   AREAS,

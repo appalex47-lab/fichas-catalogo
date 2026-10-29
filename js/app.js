@@ -131,6 +131,7 @@ const state = {
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
+  mtShort: false,
   clasif: Clasif.normalize(store.get('fichas.clasif.v1', null)),
   keepText: store.get('fichas.keep.v1', 'GNC, OMRON, GSK'),
   chgOpen: false, out: null,
@@ -350,7 +351,7 @@ function renderOutputs() {
   const c = CATS[state.cat];
   trackChanges();
   state.gotos = [];
-  const r = computeFor(state.cat, state.v, keepSet(), state.meta);
+  const r = computeFor(state.cat, state.v, keepSet(), state.meta, { mtShort: state.mtShort });
   state.out = r;
   updateNavAvailability();
   if (!hasAny(c)) {
@@ -416,7 +417,7 @@ function statusOf(r) {
   return ['ok', 'Completo'];
 }
 function evalItem(it, keep, resIn) {
-  const res = resIn || computeFor(it.cat, it.v, keep, state.meta);
+  const res = resIn || computeFor(it.cat, it.v, keep, state.meta, { mtShort: !!it.mtShort });
   const L = lint(res.c, it.v);
   const sourceMap = Anomalies.sourceMapFor(it);
   const quality = Quality.audit(it.cat, it.v, { sourceMap, provenanceMap: it.provenance || {}, leftover: it.note ? String(it.note).split(/\s+/) : [] });
@@ -662,7 +663,7 @@ const uxCtx = () => ({ CATS, cat: state.cat, values: state.v });
 function formItem() {
   const c = CATS[state.cat], v = {};
   c.fields.forEach(fd => { const x = state.v[fd.key]; if (x != null && String(x).trim()) v[fd.key] = x; });
-  return { id: state._editingId || undefined, cat: state.cat, v, sku: String(state.sku || '').trim(), img: String(state.img || '').trim(), ai: { ...state.aiFlags } };
+  return { id: state._editingId || undefined, cat: state.cat, v, sku: String(state.sku || '').trim(), img: String(state.img || '').trim(), ai: { ...state.aiFlags }, mtShort: !!state.mtShort };
 }
 const humanReviewKeys = () => Object.keys(state.aiFlags || {}).filter(k => (state.aiFlags[k] === 'sugerido' || state.aiFlags[k] === 'imagen') && String(state.v[k] || '').trim());
 const isDirty = () => UX.itemSig(formItem()) !== state._baseSig;
@@ -1032,7 +1033,7 @@ document.addEventListener('click', e => {
 function startEdit(id, then) {
   const it = state.lote.find(x => x.id === id);
   if (!it) { notify('No encontré ese producto en el lote.', 'warn'); return false; }
-  state.cat = it.cat; state.v = { ...it.v }; state.sku = it.sku || ''; state._editingProvenance = it.provenance || {}; state._editingId = it.id; state.img = it.img || ''; state.aiFlags = { ...(it.ai || {}) }; state.aiSuggest = [];
+  state.cat = it.cat; state.v = { ...it.v }; state.sku = it.sku || ''; state._editingProvenance = it.provenance || {}; state._editingId = it.id; state.img = it.img || ''; state.aiFlags = { ...(it.ai || {}) }; state.mtShort = !!it.mtShort; state.aiSuggest = [];
   catOpen = false;
   resetTracking();
   // El producto permanece en el lote hasta que se guarden los cambios: si se cierra la página o se limpia el formulario no se pierde.
@@ -1049,7 +1050,7 @@ $('#add').addEventListener('click', () => {
   if (!hasAny(c)) { notify('Captura al menos la marca para agregar el producto.', 'warn'); const f = $('#f-marca'); if (f) f.focus(); return; }
   const v = {};
   c.fields.forEach(fd => { if (state.v[fd.key]) v[fd.key] = state.v[fd.key]; });
-  const newItem = { id: state._editingId || uid(), sku: state.sku.trim(), img: state.img.trim(), cat: state.cat, v, ai: { ...state.aiFlags } };
+  const newItem = { id: state._editingId || uid(), sku: state.sku.trim(), img: state.img.trim(), cat: state.cat, v, ai: { ...state.aiFlags }, mtShort: !!state.mtShort };
   const prevItem = state._editingId ? state.lote.find(x => x.id === state._editingId) : null;
   /* Autocorrección segura (nivel 3): solo reglas deterministas o equivalencias confirmadas, nunca datos críticos. El original queda guardado y se puede revertir. */
   const autoFix = Knowledge && Knowledge.settings().autoCorrect ? Knowledge.safeCorrections(newItem) : [];
@@ -1063,7 +1064,7 @@ $('#add').addEventListener('click', () => {
   const saved = persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
   try { saveQualitySnapshot(state._editingId ? 'producto_actualizado' : 'producto_agregado'); } catch (err) { if (window.console) console.error(err); }
   const wasEditing = !!state._editingId;
-  state.v = {}; state.sku = ''; state.img = ''; state.aiFlags = {}; state.aiSuggest = []; state._editingId = null; state._editingProvenance = null;
+  state.v = {}; state.sku = ''; state.img = ''; state.mtShort = false; state.aiFlags = {}; state.aiSuggest = []; state._editingId = null; state._editingProvenance = null;
   resetTracking();
   renderForm(); renderOutputs(); renderLote(); renderAiSuggest(); resetPhotos(); syncAddButton();
   learnFromSave(newItem, prevItem, autoFix);
@@ -1078,7 +1079,7 @@ $('#clear').addEventListener('click', async () => {
     const ok = await confirmDialog({ title: '¿Limpiar el formulario?', message: state._editingId ? 'Perderás los cambios sin guardar. El producto conserva su versión anterior en el lote.' : 'Perderás lo capturado, que todavía no está en el lote.', confirmLabel: 'Limpiar', danger: true });
     if (!ok) return;
   }
-  state.v = {}; state.sku = ''; state.img = ''; state.aiFlags = {}; state.aiSuggest = []; state._editingId = null; state._editingProvenance = null;
+  state.v = {}; state.sku = ''; state.img = ''; state.mtShort = false; state.aiFlags = {}; state.aiSuggest = []; state._editingId = null; state._editingProvenance = null;
   resetTracking();
   renderForm(); renderOutputs(); renderAiSuggest(); resetPhotos(); syncAddButton();
   notify('Formulario limpio.', 'ok');
@@ -1166,7 +1167,7 @@ $('#extract').addEventListener('click', () => {
   const res = extractRaw(raw, extractOpts($('#raw-cat').value));
   if (!res.cat) { st.className = 'status bad'; st.textContent = 'No se pudo detectar la categoría. Elígela en la lista y vuelve a extraer.'; return; }
   const c = CATS[res.cat];
-  state.cat = res.cat; state.v = { ...res.fields }; state.aiFlags = {}; state.aiSuggest = [];
+  state.cat = res.cat; state.v = { ...res.fields }; state.mtShort = false; state.aiFlags = {}; state.aiSuggest = [];
   const dictNear = [];
   if (Normalization.dictionarySuggestions) {
     const d = extractOpts(res.cat).dic;
@@ -1335,6 +1336,14 @@ function metaBlock(label, o, key, copy, hint) {
     <div class="meta-row"><span class="${o.max ? (o.over ? 'count-off' : 'count-ok') : ''}">${o.len} caracteres${o.max ? ` de ${o.max}` : ''}</span>
     ${copy ? `<button class="btn" data-copy="${key}" ${o.text ? '' : 'disabled'}>Copiar</button>` : ''}</div></div>`;
 }
+const metaNotes = m => (m.notes || []).length ? `<div class="note note--info"><p>${m.notes.map(esc).join(' ')}</p></div>` : '';
+/* Meta title largo: sugerencia de versión corta (la persona decide) o aviso de que ya se acortó. */
+function metaShortUI(m) {
+  const mt = m.mt, drop = x => x.map(d => '«' + esc(d) + '»').join(', ');
+  if (mt.shortened) return `<div class="note note--info" id="meta-short"><p><strong>Se usa la versión corta</strong> (${mt.len} de ${mt.max} caracteres)${mt.autoShort ? ', por la configuración de esta categoría' : ''}. Se omitió ${drop(mt.short.dropped)}. Texto completo (${mt.original.length}): ${esc(mt.original)}</p>${mt.autoShort ? '' : '<button type="button" class="btn btn--quiet" data-mtshort="off">Volver al texto completo</button>'}</div>`;
+  if (mt.short) return `<div class="note note--info" id="meta-short"><p><strong>Versión corta sugerida</strong> (${mt.short.len} de ${mt.max} caracteres): ${esc(mt.short.text)}<br>Se omitiría ${drop(mt.short.dropped)}.</p><button type="button" class="btn" data-mtshort="on">Usar versión corta</button></div>`;
+  return '';
+}
 const metaWarns = m => m.warns.length ? `<div class="note note--warn"><p><strong>Revisar</strong></p><ul>${m.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '';
 const SEV_LABEL = { error: 'Error', warning: 'Aviso', info: 'Informativo' };
 const seoStatusCls = st => ({ critico: 'bad', revisar: 'warn', pendiente: 'info', listo: 'ok', sin_evaluar: 'info' }[st] || 'info');
@@ -1448,8 +1457,8 @@ function panelEval(a) {
 function panelMeta(r) {
   const m = r.meta;
   return (m.confirmed ? '' : `<div class="note note--info"><p>La estructura de meta de esta categoría no está confirmada. En el CSV de Magento, meta_title, meta_description y short_description van vacías. Configúrala en <button class="linkbtn" data-setopen="magento">Ajustes, pestaña Magento</button>. <button class="linkbtn why" data-why="metaunconf">¿Por qué?</button></p></div>`)
-    + metaWarns(m)
-    + metaBlock('Meta title', m.mt, 'mt', true)
+    + metaWarns(m) + metaNotes(m)
+    + metaBlock('Meta title', m.mt, 'mt', true) + metaShortUI(m)
     + metaBlock('Meta description', m.md, 'md', true, 'En el CSV de Magento, short_description lleva este mismo texto.')
     + metaBlock('Alt de la imagen principal', m.alt, 'alt', true, 'Va en base_image_label.');
 }
@@ -1471,6 +1480,8 @@ function renderExport(assessed) {
   if (ex.relations && state.exp.incRel !== false) { const r = ex.relations; if (r.upsell + r.related + r.crosssell) notes.push(`Relacionados en el CSV: ${r.upsell} con alternativas (upsell_skus), ${r.related} con relacionados (related_skus) y ${r.crosssell} con compatibles (crosssell_skus). Solo apuntan a SKU que se exportan en este mismo archivo.`); }
   if (e.sinMeta) notes.push(`${e.sinMeta} van sin meta title, meta description ni short_description porque la estructura de su categoría no está confirmada.`);
   if (e.sinImagen) notes.push(`${e.sinImagen} van con base_image vacío. El alt viaja solo en base_image_label. Si en la prueba no se aplica, agrega la ruta de la imagen.`);
+  if (e.mtLargos) notes.push(`${e.mtLargos} meta title superan el límite de caracteres. Abre el producto en la pestaña Meta y alt para usar la versión corta, o activa el acortamiento automático en Ajustes.`);
+  if (e.mtCortos) notes.push(`${e.mtCortos} meta title van en su versión corta.`);
   if (e.altLargos) notes.push(`${e.altLargos} alt superan el límite de caracteres.`);
   if (state.exp.enc === 'cp1252' && ex.rows.length) {
     const lost = encodeCp1252(batchCsv(ex)).lost;
@@ -1516,6 +1527,7 @@ function renderMetaCfg() {
     </div>
     <p class="hint meta-tokens-hint">Cada línea es un bloque. Si falta un dato, la línea se omite. {seg1} a {seg4} son los segmentos del título optimizado. Agrega <code>:lc</code> para minúscula inicial, por ejemplo <code>{contenido:lc}</code>. Agrega <code>:o</code> para que un dato opcional no elimine la línea si falta. {receta_txt} da «con receta médica» si declaraste que sí requiere receta. Tokens de esta categoría: ${tokens.map(t => `<code>${esc(t)}</code>`).join(' ')}</p>
     ${block('mt', 'Meta title', 'Sin líneas, no se genera.')}
+    <label class="check" style="margin:-4px 0 14px"><input type="checkbox" id="meta-auto" ${cfg.mt.auto ? 'checked' : ''}><span>Acortar el meta title automáticamente cuando supere el límite. Omite primero el bloque de la tienda y luego los últimos bloques; nunca corta palabras. Apagado, solo se sugiere.</span></label>
     ${block('md', 'Meta description', 'Se copia también a short_description.')}
     ${block('alt', 'Alt de la imagen principal', 'Describe lo que se ve en la imagen con marca, producto y presentación. Sin "imagen de", sin promesas y sin repetir palabras. Máximo 125 caracteres.')}
     <div class="actions">
@@ -1533,12 +1545,19 @@ function metaInput(e) {
   else if (t.dataset.mmax) cfg[t.dataset.mmax].max = Math.max(0, parseInt(t.value, 10) || 0);
   else if (t.id === 'meta-tienda') state.meta.tienda = t.value;
   else if (t.id === 'meta-ok') { cfg.confirmed = t.checked; }
+  else if (t.id === 'meta-auto') { cfg.mt.auto = t.checked; }
   else if (t.id === 'meta-cat') { state.metaEditCat = t.value; renderMetaCfg(); return; }
   else return;
   saveMeta(); renderMetaPreview(); renderOutputs(); renderExport();
 }
 document.addEventListener('toggle', e => { const d = e.target; if (d && d.dataset && d.dataset.seoopen) state.seoOpen[d.dataset.seoopen] = d.open; if (d && d.dataset && d.dataset.evalopen) state.evalOpen[d.dataset.evalopen] = d.open; }, true);
 document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-gotab]'); if (t) setTab(t.dataset.gotab); });
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-mtshort]'); if (!b) return;
+  state.mtShort = b.dataset.mtshort === 'on';
+  renderOutputs();
+  notify(state.mtShort ? 'Se usará la versión corta del meta title. Guarda el producto para conservarlo.' : 'Se usará el texto completo del meta title.', 'ok');
+});
 $('#meta-body').addEventListener('input', metaInput);
 $('#meta-body').addEventListener('change', metaInput);
 $('#exp-attr').addEventListener('input', e => { state.exp.attr = e.target.value.trim(); saveExp(); renderExport(); });
