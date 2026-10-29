@@ -250,11 +250,12 @@ function fieldHTML(fd) {
 function renderForm() {
   const c = CATS[state.cat];
   renderCatStep();
-  const a = c.fields.filter(x => x.g !== 'd'), b = c.fields.filter(x => x.g === 'd');
+  const a = c.fields.filter(x => x.g !== 'd' && x.g !== 'i'), b = c.fields.filter(x => x.g === 'd'), internal = c.fields.filter(x => x.g === 'i');
   $('#form').innerHTML =
     `<p class="legend"><span class="req">*</span> Requerido por la estructura de la categoría.</p>` +
     a.map(fieldHTML).join('') +
-    `<details class="more" open><summary>Datos para las descripciones</summary>${b.map(fieldHTML).join('')}</details>`;
+    `<details class="more" open><summary>Datos para las descripciones</summary>${b.map(fieldHTML).join('')}</details>` +
+    (internal.length ? `<details class="more" id="internal-fields"${internal.some(fd => state.v[fd.key]) || state.areaSuggest ? ' open' : ''}><summary>Datos internos (no salen en la ficha, en el CSV ni en Magento)</summary>${internal.map(fieldHTML).join('')}</details>` : '');
   $('#sku').value = state.sku;
   $('#img').value = state.img;
   renderAreaSuggest();
