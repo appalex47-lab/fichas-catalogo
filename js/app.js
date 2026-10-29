@@ -30,6 +30,7 @@ const {
   toSheet
 } = window.Fichas;
 const Catalog = window.FichasCatalog;
+const Clasif = window.FichasClasif;
 const Anomalies = window.FichasAnomalies || { provenanceFor: () => ({}), detectBatch: () => [], summarize: () => ({ total:0,error:0,warning:0,info:0,byType:{} }), event: () => ({}) };
 const Normalization = window.FichasNormalization || {};
 const Canonical = window.FichasCanonical || { canonicalize: () => ({ schema: 'fichas.canonical.v1', version: '1.0', identity: {}, fields: {}, derived: {}, quality: {}, provenance: {}, anomalyTypes: [] }) };
@@ -117,6 +118,8 @@ async function hydratePersistentState(){
   if(Array.isArray(lot) && lot.length && (!Array.isArray(state.lote) || !state.lote.length)){ state.lote=lot; persist('fichas.lote.v1',lot); }
   const cat=await idbGet('fichas.catalog.v1');
   if(cat && Array.isArray(cat.entries) && cat.entries.length && !state.catalog.entries.length){ state.catalog=Catalog.normalize(cat); persist('fichas.catalog.v1',state.catalog); }
+  const cls=await idbGet('fichas.clasif.v1');
+  if(cls && Array.isArray(cls.rows) && cls.rows.length && !state.clasif.rows.length){ state.clasif=Clasif.normalize(cls); persist('fichas.clasif.v1',state.clasif); renderClasif(); }
   const audit=await idbGet('fichas.audit.v1');
   if(Array.isArray(audit) && audit.length && (!Array.isArray(state.audit) || !state.audit.length)){ state.audit=audit; persist('fichas.audit.v1',audit); }
   catalogSync(state.lote.filter(x => x.sku));
@@ -128,6 +131,7 @@ const state = {
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
+  clasif: Clasif.normalize(store.get('fichas.clasif.v1', null)),
   keepText: store.get('fichas.keep.v1', 'GNC, OMRON, GSK'),
   chgOpen: false, out: null,
   aiFlags: {}, aiSuggest: [], asst: [], aiModel: store.get('fichas.aimodel.v1', ''), aiAsstModel: store.get('fichas.aiasstmodel.v1', ''), aiLimit: store.get('fichas.ailimit.v1', 1000), aiVisionModel: store.get('fichas.aivisionmodel.v1', ''), photos: [], imgResult: null,
@@ -255,7 +259,7 @@ function renderForm() {
     `<p class="legend"><span class="req">*</span> Requerido por la estructura de la categoría.</p>` +
     a.map(fieldHTML).join('') +
     `<details class="more" open><summary>Datos para las descripciones</summary>${b.map(fieldHTML).join('')}</details>` +
-    (internal.length ? `<details class="more" id="internal-fields"${internal.some(fd => state.v[fd.key]) || state.areaSuggest ? ' open' : ''}><summary>Datos internos (no salen en la ficha, en el CSV ni en Magento)</summary>${internal.map(fieldHTML).join('')}</details>` : '');
+    (internal.length ? `<details class="more" id="internal-fields"${internal.some(fd => state.v[fd.key]) || state.areaSuggest ? ' open' : ''}><summary>Datos internos (no salen en la ficha, en el CSV ni en Magento)</summary>${internal.map(fieldHTML).join('')}<p class="hint" id="clasif-note" aria-live="polite"></p></details>` : '');
   $('#sku').value = state.sku;
   $('#img').value = state.img;
   renderAreaSuggest();
@@ -962,6 +966,7 @@ $('#form').addEventListener('input', e => {
 $('#form').addEventListener('change', e => {
   const k = e.target.dataset && e.target.dataset.key;
   if (!k) return;
+  if (k === 'principio') applyClasif();
   /* «change» llega al salir de un campo, justo antes del clic en un botón: si el valor ya estaba registrado por «input» no se vuelve a pintar,
    * porque reemplazar los botones entre el mousedown y el mouseup hacía que el primer clic se perdiera. */
   if (state.v[k] === e.target.value) return;
@@ -1038,6 +1043,7 @@ function startEdit(id, then) {
 }
 
 $('#add').addEventListener('click', () => {
+  applyClasif();
   const c = CATS[state.cat];
   if (!hasAny(c)) { notify('Captura al menos la marca para agregar el producto.', 'warn'); const f = $('#f-marca'); if (f) f.focus(); return; }
   const v = {};
@@ -2435,15 +2441,23 @@ function renderAreaSuggest() {
   const s = state.areaSuggest;
   if (!s) { out.innerHTML = ''; return; }
   if (s.error) { out.innerHTML = `<p class="hint">${esc(s.error)}</p>`; return; }
+  const src = s.source;
   const rows = s.areas.map((a, i) => `<li><span><b>${esc(a.area)}</b><span class="ai-why">${esc(a.motivo)}</span></span><button type="button" class="btn" data-areaapply="${i}">Aplicar</button></li>`);
-  if (s.atc) rows.push(`<li><span><b>Código ATC ${esc(s.atc)}</b><span class="ai-why">Verifícalo en el índice ATC de la OMS antes de aplicarlo.</span></span><button type="button" class="btn" data-areaapply="atc">Aplicar</button></li>`);
-  out.innerHTML = rows.length ? `<div class="note note--warn"><p><strong>Sugerencia de IA.</strong> Es una clasificación interna; no sale en ningún texto.</p></div><ul>${rows.join('')}</ul>` : '<p class="hint">La IA no pudo clasificar este producto con seguridad. Elige el área a mano.</p>';
+  if (s.atc) rows.push(`<li><span><b>Código ATC ${esc(s.atc)}</b><span class="ai-why">${src && src.verified ? 'Verificado en el diccionario.' : 'Verifícalo en el índice ATC de la OMS antes de aplicarlo.'}</span></span><button type="button" class="btn" data-areaapply="atc">Aplicar</button></li>`);
+  const head = src ? (src.verified ? `<strong>Diccionario verificado.</strong> Fuente: ${esc(src.fuente)}. Verificó: ${esc(src.por)}.` : '<strong>Diccionario, sin verificar.</strong> Compara el código con el índice ATC de la OMS y verifícalo en Ajustes, Clasificación.') : '<strong>Sugerencia de IA, sin verificar.</strong> Compara el código con el índice ATC de la OMS antes de aplicarlo.';
+  out.innerHTML = rows.length ? `<div class="note ${src && src.verified ? 'note--ok' : 'note--warn'}"><p>${head} Es una clasificación interna; no sale en ningún texto.</p></div><ul>${rows.join('')}</ul>` : '<p class="hint">No hay una clasificación segura para este producto. Elige el área a mano.</p>';
 }
 async function suggestArea() {
   const key = getKey(), btn = $('#area-ai');
   if (!key) { state.areaSuggest = { error: 'Falta la llave de Cohere. Agrégala en Ajustes (engrane), pestaña IA.' }; renderAreaSuggest(); return; }
   const c = CATS[state.cat];
   if (!hasAny(c)) { state.areaSuggest = { error: 'Captura primero la marca y el producto.' }; renderAreaSuggest(); return; }
+  const known = state.cat === 'med' ? Clasif.lookup(state.clasif, state.v.principio) : null;
+  if (known) {
+    const areas = [known.area, known.area2].filter(Boolean).map(a => ({ area: a, motivo: known.verified ? 'Del diccionario verificado' : 'Del diccionario, sin verificar' }));
+    state.areaSuggest = { areas, atc: known.atc, source: { verified: known.verified, fuente: known.row.fuente || 'sin fuente', por: known.row.por } };
+    renderAreaSuggest(); return;
+  }
   btn.disabled = true; $('#area-ai-out').innerHTML = '<p class="hint">Consultando a la IA...</p>';
   try {
     const name = computeFor(state.cat, state.v, keepSet(), state.meta).title.title;
@@ -2466,9 +2480,114 @@ document.addEventListener('click', e => {
     value = a.area;
   }
   state.v[field] = value;
+  if (field === 'atc' && !s.source && state.cat === 'med' && state.v.principio && !Clasif.find(state.clasif, state.v.principio)) {
+    Clasif.upsert(state.clasif, { principio: state.v.principio, atc: value, fuente: 'Sugerido por IA, sin verificar' });
+    saveClasif(); renderClasif();
+    setTimeout(() => toast('El ATC se guardó en el diccionario como sin verificar. Verifícalo en Ajustes, Clasificación.'), 1200);
+  }
   state.audit.push(Anomalies.event('area_aplicada_desde_ia', null, { field, value, sku: state.sku || '' })); state.audit = state.audit.slice(-500); persist('fichas.audit.v1', state.audit);
   renderForm(); renderOutputs();
   toast(`${labelOf(c, field)}: ${value}`);
+});
+
+/* ---------- Diccionario de clasificación (principio activo → ATC y área) ----------
+ * Solo las filas verificadas (fuente, persona y fecha) llenan solas el ATC y el área, y solo en campos vacíos. */
+const saveClasif = () => persist('fichas.clasif.v1', state.clasif);
+function applyClasif() {
+  const note = $('#clasif-note'); if (note) note.textContent = '';
+  if (state.cat !== 'med' || !state.v.principio) return false;
+  const l = Clasif.lookup(state.clasif, state.v.principio); if (!l) return false;
+  if (!l.verified) { if (note) note.textContent = `«${l.row.principio}» está en el diccionario sin verificar (ATC ${l.atc || 'sin código'}). No se aplica solo: usa «Sugerir con IA» para verlo.`; return false; }
+  const set = (k, v) => { if (!v || state.v[k]) return false; state.v[k] = v; const el = $('#f-' + k); if (el) el.value = v; return true; };
+  const changed = [set('atc', l.atc), set('area', l.area), set('area2', l.area2)].some(Boolean);
+  if (changed) {
+    if (note) note.textContent = `Completado desde el diccionario verificado. Fuente: ${l.row.fuente}. Verificó: ${l.row.por}.`;
+    state.audit.push(Anomalies.event('clasificacion_desde_diccionario', null, { principio: l.row.principio, atc: l.atc, fuente: l.row.fuente, por: l.row.por })); state.audit = state.audit.slice(-500); persist('fichas.audit.v1', state.audit);
+    renderOutputs();
+  }
+  return changed;
+}
+function inputDialog(o) {
+  return new Promise(resolve => {
+    const prev = document.activeElement, id = 'idlg-' + Math.random().toString(36).slice(2, 7);
+    const scrim = document.createElement('div'); scrim.className = 'cdlg-scrim'; scrim.id = 'input-dlg';
+    scrim.innerHTML = `<div class="cdlg" role="dialog" aria-modal="true" aria-labelledby="${id}-t"><h3 id="${id}-t">${esc(o.title)}</h3><p>${esc(o.message)}</p>${o.fields.map(f => `<div class="field"><label for="${id}-${f.key}">${esc(f.label)}</label><input type="text" id="${id}-${f.key}" data-k="${f.key}" value="${esc(f.value || '')}" autocomplete="off" placeholder="${esc(f.ph || '')}"></div>`).join('')}<p class="status bad" id="${id}-e" role="alert"></p><div class="actions"><button type="button" class="btn" data-id="no">Cancelar</button><button type="button" class="btn btn--primary" data-id="yes">${esc(o.confirmLabel || 'Aceptar')}</button></div></div>`;
+    document.body.appendChild(scrim);
+    const done = v => { document.removeEventListener('keydown', onKey, true); scrim.remove(); if (prev && prev.focus) { try { prev.focus(); } catch (_) {} } resolve(v); };
+    function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); done(null); } }
+    document.addEventListener('keydown', onKey, true);
+    scrim.addEventListener('click', e => {
+      const b = e.target.closest && e.target.closest('[data-id]'); if (!b) return;
+      if (b.dataset.id === 'no') return done(null);
+      const vals = Object.fromEntries([...scrim.querySelectorAll('input[data-k]')].map(i => [i.dataset.k, i.value.trim()]));
+      const err = o.validate ? o.validate(vals) : '';
+      if (err) { scrim.querySelector('[role="alert"]').textContent = err; return; }
+      done(vals);
+    });
+    const first = scrim.querySelector('input'); if (first) first.focus();
+  });
+}
+const cloneClasif = () => JSON.parse(JSON.stringify(state.clasif));
+function renderClasif() {
+  const box = $('#cl-body'); if (!box) return;
+  const rows = state.clasif.rows;
+  if (!rows.length) { box.innerHTML = '<div class="empty-state"><p><strong>El diccionario está vacío.</strong></p><p class="hint">Agrega filas a mano, importa un CSV o descarga la plantilla con los principios activos de tu lote.</p></div>'; return; }
+  const ver = rows.filter(r => r.estado === 'verificado').length;
+  box.innerHTML = `<p class="hint"><strong>${rows.length}</strong> fila(s) · <strong>${ver}</strong> verificada(s) · ${rows.length - ver} sin verificar.</p>`
+    + rows.slice().sort((a, b) => a.principio.localeCompare(b.principio)).map(r => {
+      const area = r.area || Clasif.areaFromAtc(r.atc) || 'sin área', v = r.estado === 'verificado';
+      return `<div class="cl-row" data-key="${esc(r.key)}"><div><b>${esc(r.principio)}</b> <span class="tag tag--${v ? 'ok' : 'warn'}">${v ? 'Verificado' : 'Sin verificar'}</span><br><span class="hint">ATC ${esc(r.atc || '—')} · ${esc(area)}${r.area2 ? ' · ' + esc(r.area2) : ''}<br>Fuente: ${esc(r.fuente || 'sin fuente')}${v ? ` · Verificó ${esc(r.por)} el ${esc(String(r.el).slice(0, 10))}` : ''}</span></div>`
+        + `<div class="ops"><button type="button" class="btn btn--quiet" data-cl="${v ? 'unverify' : 'verify'}">${v ? 'Quitar verificación' : 'Verificar'}</button><button type="button" class="btn btn--quiet" data-cl="edit">Editar ATC</button><button type="button" class="btn btn--quiet" data-cl="del">Quitar</button></div></div>`;
+    }).join('');
+}
+const clStatus = (msg, bad) => { const s = $('#cl-status'); if (s) { s.className = 'status' + (bad ? ' bad' : ''); s.textContent = msg; } };
+$('#cl-add').addEventListener('click', () => {
+  const r = Clasif.upsert(state.clasif, { principio: $('#cl-principio').value, atc: $('#cl-atc').value, fuente: $('#cl-fuente').value });
+  if (!r.ok) { clStatus(r.reason, true); return; }
+  saveClasif(); renderClasif(); clStatus(`«${r.row.principio}» agregado sin verificar.`);
+  ['cl-principio', 'cl-atc', 'cl-fuente'].forEach(id => { $('#' + id).value = ''; });
+});
+$('#cl-export').addEventListener('click', e => withBusy(e.currentTarget, async () => {
+  if (!state.clasif.rows.length) { clStatus('No hay filas para exportar.', true); return; }
+  await saveFile('diccionario-clasificacion.csv', '﻿' + Clasif.toCsv(state.clasif), 'text/csv;charset=utf-8');
+}, 'exportar el diccionario'));
+$('#cl-tpl').addEventListener('click', e => withBusy(e.currentTarget, async () => {
+  const faltan = Clasif.missing(state.clasif, state.lote.filter(it => it.cat === 'med').map(it => it.v && it.v.principio));
+  if (!faltan.length) { clStatus('Todos los principios activos del lote ya están en el diccionario.'); return; }
+  const tmp = Clasif.empty(); faltan.forEach(p => Clasif.upsert(tmp, { principio: p, fuente: 'Pendiente de verificar en el índice ATC de la OMS' }));
+  await saveFile('plantilla-clasificacion.csv', '﻿' + Clasif.toCsv(tmp), 'text/csv;charset=utf-8');
+  clStatus(`Plantilla con ${faltan.length} principio(s) activo(s). Llena el código ATC, verifícalo y súbela con «Importar CSV».`);
+}, 'descargar la plantilla'));
+$('#cl-import-btn').addEventListener('click', () => $('#cl-import').click());
+$('#cl-import').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const res = Clasif.fromCsv(state.clasif, await f.text());
+    if (res.error) { clStatus(res.error, true); return; }
+    saveClasif(); renderClasif();
+    clStatus(`Importadas ${res.added} fila(s) nuevas y ${res.updated} actualizadas.${res.skipped ? ` ${res.skipped} omitidas por datos inválidos.` : ''}${res.downgraded ? ` ${res.downgraded} marcadas «verificado» entraron sin verificar por falta de fuente, persona, fecha o ATC válido.` : ''}`, !!res.skipped);
+  } catch (err) { clStatus(UX.friendlyError(err, 'importar el diccionario').message, true); }
+});
+$('#cl-body').addEventListener('click', async e => {
+  const b = e.target.closest && e.target.closest('[data-cl]'); if (!b) return;
+  const key = b.closest('[data-key]').dataset.key, row = state.clasif.rows.find(r => r.key === key); if (!row) return;
+  if (b.dataset.cl === 'del') Clasif.remove(state.clasif, key);
+  else if (b.dataset.cl === 'unverify') Clasif.unverify(state.clasif, key);
+  else if (b.dataset.cl === 'verify') {
+    const v = await inputDialog({ title: `Verificar «${row.principio}»`, message: `Compara el código ${row.atc || '(sin código)'} con la fuente oficial y anota dónde lo verificaste.`, confirmLabel: 'Marcar verificado',
+      fields: [{ key: 'fuente', label: 'Fuente', value: /pendiente|memoria|sugerido/i.test(row.fuente) ? '' : row.fuente, ph: 'Índice ATC OMS 2025' }, { key: 'por', label: 'Quién verificó', ph: 'Nombre' }],
+      validate: x => Clasif.verify(cloneClasif(), key, x).reason || '' });
+    if (!v) return;
+    Clasif.verify(state.clasif, key, v);
+    state.audit.push(Anomalies.event('clasificacion_verificada', null, { principio: row.principio, atc: row.atc, fuente: v.fuente, por: v.por })); state.audit = state.audit.slice(-500); persist('fichas.audit.v1', state.audit);
+  } else if (b.dataset.cl === 'edit') {
+    const v = await inputDialog({ title: `Editar el ATC de «${row.principio}»`, message: 'Si cambias el código de una fila verificada, vuelve a «sin verificar».', confirmLabel: 'Guardar',
+      fields: [{ key: 'atc', label: 'Código ATC', value: row.atc, ph: 'A10BX16' }],
+      validate: x => Clasif.upsert(cloneClasif(), { principio: row.principio, atc: x.atc }).reason || '' });
+    if (!v) return;
+    Clasif.upsert(state.clasif, { principio: row.principio, atc: v.atc });
+  }
+  saveClasif(); renderClasif();
 });
 
 /* ---------- Catálogo interno y complementos ----------
@@ -2636,5 +2755,5 @@ document.querySelectorAll('button:not([type])').forEach(b => { b.type = 'button'
 renderConnectorCategories(); renderConnectorSource();
 $('#exp-ia').checked = !!state.exp.incIA; $('#exp-rel').checked = state.exp.incRel !== false; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL;
 renderMetaCfg();
-resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); catalogSync(state.lote.filter(x => x.sku)); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
+resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); catalogSync(state.lote.filter(x => x.sku)); renderClasif(); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
 })();

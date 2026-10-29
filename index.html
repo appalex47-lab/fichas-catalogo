@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/styles.css?v=12.0">
+<link rel="stylesheet" href="styles/styles.css?v=13.0">
 </head>
 <body>
 <a class="skip" href="#h-prod">Saltar al contenido</a>
@@ -277,6 +277,7 @@
   <div class="tabs" role="tablist" aria-label="Tipo de ajuste">
     <button class="stab" role="tab" data-settab="formato" aria-selected="true">Formato</button>
     <button class="stab" role="tab" data-settab="dic" aria-selected="false">Diccionarios</button>
+    <button class="stab" role="tab" data-settab="clasif" aria-selected="false">Clasificación</button>
     <button class="stab" role="tab" data-settab="ia" aria-selected="false">IA</button>
     <button class="stab" role="tab" data-settab="conexiones" aria-selected="false">Conexiones</button>
     <button class="stab" role="tab" data-settab="magento" aria-selected="false">Magento</button>
@@ -308,6 +309,17 @@
       </div>
       <label class="check"><input type="checkbox" id="dic-pos"><span>Sugerir como marca el texto que aparece antes de la primera dosis</span></label>
       <div class="actions"><button class="btn" id="dic-learn">Agregar al diccionario los valores del lote</button></div>
+    </section>
+    <section data-setpanel="clasif" hidden>
+      <p class="sub" style="margin-bottom:12px">Relaciona cada principio activo con su código ATC. Es un dato interno: no sale en la ficha, en el CSV ni en Magento. Se guarda solo en este navegador.</p>
+      <div class="note note--info"><p><strong>Cómo se usa.</strong> Solo las filas <b>verificadas</b> llenan solas el ATC y el área del formulario, y solo si están vacíos. Una fila sin verificar se muestra como sugerencia, pero nunca se aplica sola. Para verificar una fila, compara su código con el <a href="https://atcddd.fhi.no/atc_ddd_index/" target="_blank" rel="noopener">índice ATC/DDD de la OMS</a> y anota la fuente y quién lo verificó. Si cambias el código de una fila verificada, vuelve a «sin verificar».</p></div>
+      <div class="field"><label for="cl-principio">Principio activo</label><input type="text" id="cl-principio" autocomplete="off" placeholder="Tirzepatida"></div>
+      <div class="field"><label for="cl-atc">Código ATC</label><input type="text" id="cl-atc" autocomplete="off" placeholder="A10BX16"></div>
+      <div class="field"><label for="cl-fuente">Fuente</label><input type="text" id="cl-fuente" autocomplete="off" placeholder="Índice ATC OMS 2025"></div>
+      <div class="actions"><button class="btn btn--primary" id="cl-add">Agregar fila (sin verificar)</button></div>
+      <div class="actions"><button class="btn" id="cl-export">Exportar CSV</button><button class="btn" id="cl-import-btn">Importar CSV</button><input type="file" id="cl-import" accept=".csv,text/csv,text/plain" hidden><button class="btn" id="cl-tpl">Plantilla con mis principios activos</button></div>
+      <p class="status" id="cl-status" role="status" aria-live="polite"></p>
+      <div id="cl-body"></div>
     </section>
     <section data-setpanel="ia" hidden>
       <p class="sub" style="margin-bottom:12px">Cohere completa datos crudos y alimenta el asistente de uso.</p>
@@ -403,26 +415,27 @@
   <div class="asst-form"><textarea id="asst-in" placeholder="Pregunta cómo usar la herramienta" aria-label="Pregunta"></textarea><button class="btn btn--primary" id="asst-send">Enviar</button></div>
   <p class="asst-note">Las respuestas de IA pueden fallar. Para temas regulatorios, consulta a Regulatorio.</p>
 </aside>
-<script src="js/logic.js?v=12.0"></script>
-<script src="js/catalog.js?v=12.0"></script>
-<script src="js/quality.js?v=12.0"></script>
-<script src="js/normalization.js?v=12.0"></script>
-<script src="js/anomalies.js?v=12.0"></script>
-<script src="js/canonical.js?v=12.0"></script>
-<script src="js/health.js?v=12.0"></script>
-<script src="js/integration.js?v=12.0"></script>
-<script src="js/sync.js?v=12.0"></script>
-<script src="js/connector.js?v=12.0"></script>
-<script src="js/assist.js?v=12.0"></script>
-<script src="js/ai.js?v=12.0"></script>
-<script src="js/rules.js?v=12.0"></script>
-<script src="js/seo.js?v=12.0"></script>
-<script src="js/content.js?v=12.0"></script>
-<script src="js/magento-readiness.js?v=12.0"></script>
-<script src="js/score360.js?v=12.0"></script>
-<script src="js/knowledge-db.js?v=12.0"></script>
-<script src="js/knowledge.js?v=12.0"></script>
-<script src="js/ux.js?v=12.0"></script>
-<script src="js/app.js?v=12.0"></script>
+<script src="js/logic.js?v=13.0"></script>
+<script src="js/catalog.js?v=13.0"></script>
+<script src="js/clasif.js?v=13.0"></script>
+<script src="js/quality.js?v=13.0"></script>
+<script src="js/normalization.js?v=13.0"></script>
+<script src="js/anomalies.js?v=13.0"></script>
+<script src="js/canonical.js?v=13.0"></script>
+<script src="js/health.js?v=13.0"></script>
+<script src="js/integration.js?v=13.0"></script>
+<script src="js/sync.js?v=13.0"></script>
+<script src="js/connector.js?v=13.0"></script>
+<script src="js/assist.js?v=13.0"></script>
+<script src="js/ai.js?v=13.0"></script>
+<script src="js/rules.js?v=13.0"></script>
+<script src="js/seo.js?v=13.0"></script>
+<script src="js/content.js?v=13.0"></script>
+<script src="js/magento-readiness.js?v=13.0"></script>
+<script src="js/score360.js?v=13.0"></script>
+<script src="js/knowledge-db.js?v=13.0"></script>
+<script src="js/knowledge.js?v=13.0"></script>
+<script src="js/ux.js?v=13.0"></script>
+<script src="js/app.js?v=13.0"></script>
 </body>
 </html>
