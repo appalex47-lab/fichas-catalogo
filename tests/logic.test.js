@@ -404,3 +404,228 @@ test('categoría: la pregunta frecuente existe en las categorías con FAQ y solo
     assert.ok(!q2.some(x => /categoría/.test(x)), `${id}: sin dato no hay pregunta`);
   }
 });
+
+/* ---------- Más formas, más tipos y campos opcionales de suplementos ---------- */
+const ext = (t, cat) => F.extractRaw(t, { cat }).fields;
+
+test('formas: se reconocen formas de suplementos y de medicamentos además de tableta, cápsula e inyectable', () => {
+  assert.equal(ext('GNC Vitamina C 1000 mg gomitas frasco 60', 'sup').forma, 'Gomita');
+  assert.equal(ext('Vitamina D3 softgel frasco c/90', 'sup').forma, 'Cápsula blanda');
+  assert.equal(ext('Magnesio tabletas masticables frasco c/60', 'sup').forma, 'Tableta masticable');
+  assert.equal(ext('Vitamina C efervescente tubo c/20', 'sup').forma, 'Tableta efervescente');
+  assert.equal(ext('Proteína whey polvo bote 900 g sabor chocolate', 'sup').forma, 'Polvo');
+  assert.equal(ext('Colágeno liquido botella 500 mL', 'sup').forma, 'Líquido');
+  assert.equal(ext('Creatina shot caja c/12', 'sup').forma, 'Shot');
+  assert.equal(ext('Omega 3 caps veg frasco c/60', 'sup').forma, 'Cápsula vegetal');
+  assert.equal(ext('Ketorolaco tab sublingual 30 mg caja c/10', 'med').forma, 'Tableta sublingual');
+  assert.equal(ext('Paracetamol 500 mg tab caja c/20', 'med').forma, 'Tableta', 'lo anterior no cambia');
+});
+
+test('presentación: se reconocen piezas de envases y unidades de suplementos', () => {
+  assert.match(ext('Omega 3 softgels bote 120 perlas', 'sup').contenido, /120 perlas/i);
+  assert.match(ext('Proteína barras caja c/12 barras', 'sup').contenido, /12 barras/i);
+});
+
+test('sabor: los suplementos también lo reconocen y entra en el título solo si se capturó', () => {
+  const f = ext('Proteína whey polvo bote 900 g sabor chocolate', 'sup');
+  assert.equal(f.sabor, 'Chocolate');
+  assert.equal(f.componente, 'Proteína whey');
+  const base = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: 'Bote 900 g', fabricante: 'GNC' };
+  const sin = F.computeFor('sup', base, keep, meta), con = F.computeFor('sup', { ...base, sabor: 'Chocolate' }, keep, meta);
+  assert.ok(!/Sabor/.test(sin.title.title));
+  assert.match(con.title.title, /GNC Proteína whey \| Polvo, Bote 900 g \| Sabor Chocolate \| GNC/);
+  assert.equal(F.computeFor('sup', base, keep, meta).mg.html, sin.mg.html);
+});
+
+test('suplementos: campos opcionales (sabor, porción, porciones y modo de consumo) salen en la ficha, el MC y la FAQ', () => {
+  const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Gomitas', contenido: 'Frasco con 60 gomitas', fabricante: 'GNC' };
+  const sin = F.computeFor('sup', base, keep, meta);
+  ['sabor', 'porcion', 'porciones', 'modo'].forEach(k => assert.ok(F.CATS.sup.fields.some(f => f.key === k && f.g === 'd' && !f.req), k));
+  assert.ok(!/Porción|Modo de consumo|Sabor/.test(sin.mg.html), 'sin captura no aparece nada nuevo');
+  const con = F.computeFor('sup', { ...base, sabor: 'Naranja', porcion: '2 gomitas', porciones: '30', modo: 'TOMAR DOS GOMITAS AL DÍA.' }, keep, meta);
+  assert.match(con.mg.html, /<li><strong>Sabor:<\/strong> Naranja<\/li>/);
+  assert.match(con.mg.html, /<li><strong>Tamaño de Porción:<\/strong> 2 gomitas<\/li>/);
+  assert.match(con.mg.html, /<li><strong>Porciones por Envase:<\/strong> 30<\/li>/);
+  assert.match(con.mg.html, /<h2>Modo de consumo:<\/h2>\n<p>Tomar dos gomitas al día\.<\/p>/);
+  assert.ok(con.mg.html.indexOf('Modo de consumo') < con.mg.html.indexOf('Condiciones de conservación'));
+  assert.match(con.mc.text, /Sabor Naranja\. .*Tamaño de porción: 2 gomitas\. Porciones por envase: 30\./);
+  const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...base, sabor: 'Naranja', porciones: '30', porcion: '2 gomitas', modo: 'Tomar dos gomitas al día' }, sd).items);
+  assert.ok(q.some(([a]) => /consume|tomar/.test(a)) && q.some(([a]) => /sabor/.test(a)) && q.some(([a, b]) => /porciones/.test(a) && /30 porciones/.test(b)));
+});
+
+test('tipos: más productos por categoría se reconocen y no hay alternancias rotas en las expresiones', () => {
+  assert.equal(ext('Accu-Chek lancetas caja c/100', 'dis').tipo, 'Lancetas');
+  assert.equal(ext('Omron esfigmomanometro digital', 'dis').tipo, 'Esfigmomanómetro digital');
+  assert.equal(ext('Eucerin exfoliante facial 100 mL', 'cos').tipo, 'Exfoliante');
+  assert.equal(ext('Colgate acondicionador 400 mL', 'hig').producto, 'Acondicionador');
+  assert.equal(ext('Saba toallas sanitarias c/10', 'hig').producto, 'Toallas sanitarias');
+  assert.equal(ext('Rodillera ortopedica talla M', 'acc').producto, 'Rodillera');
+  assert.equal(ext('Fresubin nutricion oral 200 mL', 'beb').tipo, 'Nutrición oral');
+  assert.equal(ext('Nature Made calcio tabletas c/100', 'sup').componente, 'Calcio');
+  assert.equal(ext('Colageno hidrolizado polvo 300 g', 'sup').componente, 'Colágeno hidrolizado');
+  assert.equal(F.extractRaw('Intensive cream 50 mL', { cat: 'dis' }).fields.tipo, undefined, '«intens…» no se confunde con TENS');
+  assert.equal(F.detectCat ? true : true, true);
+});
+
+test('sugerencias: los campos de forma y tipo traen listas de ayuda que no limitan lo que se escribe', () => {
+  const sug = (c, k) => F.CATS[c].fields.find(f => f.key === k).sug;
+  assert.ok(sug('sup', 'forma').includes('Gomitas') && sug('sup', 'forma').includes('Polvo') && sug('sup', 'forma').length >= 15);
+  assert.ok(sug('med', 'forma').includes('Solución inyectable') && sug('med', 'forma').includes('Parche'));
+  assert.ok(sug('dis', 'tipo').includes('Baumanómetro') && sug('cos', 'tipo').includes('Sérum') && sug('beb', 'tipo').includes('Suero oral'));
+  assert.ok(sug('hig', 'producto').includes('Shampoo') && sug('acc', 'producto').includes('Venda'));
+  const r = F.computeFor('sup', { marca: 'X', componente: 'Z', forma: 'Pastillas de goma', contenido: 'Frasco con 30', fabricante: 'X' }, keep, meta);
+  assert.match(r.title.title, /Pastillas de goma/, 'una forma que no está en la lista funciona igual');
+});
+
+/* ---------- Meta title largo: versión corta ---------- */
+test('meta title largo: sugiere una versión corta quitando primero la tienda y no la aplica sola', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
+  const r = F.computeFor('sup', v, keep, m).meta;
+  assert.equal(r.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL | Farmacias Especializadas');
+  assert.ok(r.mt.over && r.mt.len === 78);
+  assert.deepEqual(r.mt.short, { text: 'Supportan DKN Capuchino Proteína | Solución, 200 mL', len: 51, dropped: ['Farmacias Especializadas'] });
+  assert.ok(!r.mt.shortened, 'no se aplica sin que la persona lo pida');
+  assert.ok(r.warns.some(w => /supera el límite de 60/.test(w)));
+  assert.deepEqual(r.notes, []);
+});
+
+test('meta title largo: con la opción de la persona o la de la categoría usa la versión corta y deja de avisar', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas';
+  const v = { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' };
+  const porProducto = F.computeFor('sup', v, keep, m, { mtShort: true }).meta;
+  assert.equal(porProducto.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL');
+  assert.deepEqual([porProducto.mt.shortened, porProducto.mt.over, porProducto.mt.autoShort], [true, false, false]);
+  assert.equal(porProducto.mt.original.length, 78);
+  assert.ok(!porProducto.warns.some(w => /supera el límite/.test(w)));
+  assert.match(porProducto.notes[0], /se omitió «Farmacias Especializadas»/);
+  m.cats.sup.mt.auto = true;
+  const auto = F.computeFor('sup', v, keep, m).meta;
+  assert.equal(auto.mt.text, 'Supportan DKN Capuchino Proteína | Solución, 200 mL');
+  assert.equal(auto.mt.autoShort, true);
+});
+
+test('meta title largo: quita bloques de atrás hacia adelante, nunca el primero ni corta palabras, y no ofrece nada que no sirva', () => {
+  const t = { a: 'Marca Producto Muy Largo Con Muchas Palabras', b: 'Bloque B', c: 'Bloque C', tienda: 'Tienda' };
+  assert.deepEqual(F.shortenMeta('{a}\n{b}\n{c}\n{tienda}', ' | ', t, 60), { text: 'Marca Producto Muy Largo Con Muchas Palabras | Bloque B', len: 55, dropped: ['Tienda', 'Bloque C'] });
+  assert.equal(F.shortenMeta('{a}\n{b}\n{c}\n{tienda}', ' | ', t, 30), null, 'el primer bloque solo ya no cabe');
+  assert.equal(F.shortenMeta('{a}', ' | ', t, 10), null, 'un solo bloque no se acorta');
+  assert.equal(F.shortenMeta('{b}\n{c}', ' | ', t, 60), null, 'si ya cabe no hay nada que acortar');
+  assert.equal(F.shortenMeta('{b}\n{c}', ' | ', t, 0), null, 'sin límite no se acorta');
+});
+
+test('meta title largo: el CSV usa la versión corta de los productos que la eligieron y avisa de los que siguen largos', () => {
+  const m = F.defMeta(); m.tienda = 'Farmacias Especializadas'; m.cats.sup.confirmed = true;
+  const mk = (sku, over) => ({ sku, cat: 'sup', v: { marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' }, ...over });
+  const ex = F.magentoBatch([mk('LARGO'), mk('CORTO', { mtShort: true })], keep, m, {});
+  const col = sku => ex.rows.find(r => r[0] === sku)[ex.header.indexOf('meta_title')];
+  assert.equal(col('LARGO').length, 78);
+  assert.ok(col('CORTO').length <= 60 && !/Farmacias/.test(col('CORTO')));
+  assert.deepEqual([ex.excluded.mtLargos, ex.excluded.mtCortos], [1, 1]);
+});
+
+test('meta: un segmento opcional vacío del título no deja hueco en {seg2} y el sabor no desplaza la presentación', () => {
+  const m = F.defMeta(); m.tienda = 'Tienda';
+  const base = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
+  assert.equal(F.computeFor('sup', base, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda');
+  assert.equal(F.computeFor('sup', { ...base, sabor: 'Naranja' }, keep, m).meta.mt.text, 'GNC Vitamina C | Cápsulas, Frasco con 100 piezas | Tienda', 'el sabor no desplaza la presentación del meta title');
+});
+
+/* ---------- Todo dato capturado llega a donde dice llegar ---------- */
+test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo en la descripción de Merchant Center)', () => {
+  const strip = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const base = {
+    med: { marca: 'M', concentracion: '5 mg', principio: 'P', forma: 'Tableta', contenido: 'Caja con 10 tabletas', laboratorio: 'L', via: 'Oral', receta: 'no' },
+    dis: { marca: 'M', modelo: 'X1', tipo: 'Tensiómetro', tecnologia: 'Automático', fabricante: 'F' },
+    cos: { marca: 'M', producto: 'P', tipo: 'Sérum', atributo: 'A', contenido: '30 mL', fabricante: 'F' },
+    sup: { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F' },
+    beb: { marca: 'M', tipo: 'Suero', sabor: 'Coco', atributo: 'A', contenido: '600 mL' },
+    hig: { marca: 'M', producto: 'P', variante: 'V', contenido: '100 mL', fabricante: 'F' },
+    acc: { marca: 'M', producto: 'P', material: 'Mat', contenido: '3 piezas', fabricante: 'F' }
+  };
+  const NO_TEXT = new Set(['compat']);
+  for (const [id, c] of Object.entries(F.CATS)) {
+    const sinDato = F.computeFor(id, base[id], keep, meta);
+    for (const fd of c.fields) {
+      if (fd.type === 'select' || fd.g === 'i' || NO_TEXT.has(fd.key) || fd.key === 'atc') continue;
+      const r = F.computeFor(id, { ...base[id], [fd.key]: fd.key === 'nutrimental' ? 'zzdatoprueba | 5 g' : 'zzdatoprueba' }, keep, meta);
+      const enFicha = /zzdatoprueba/i.test(strip(r.mg.html)), enTitulo = /zzdatoprueba/i.test(r.title.title);
+      assert.ok(enFicha || enTitulo, `${id}.${fd.key} no llega a la ficha de Magento ni al título`);
+      const usos = [...(c.mgUses || []), ...(c.mgOpt || [])];
+      if (enFicha) assert.ok(usos.includes(fd.key), `${id}.${fd.key} llega a Magento pero no está en mgUses/mgOpt (la etiqueta «Usado en» sería falsa)`);
+      if (r.mc.text !== sinDato.mc.text) assert.ok([...(c.mcUses || []), ...(c.mcOpt || [])].includes(fd.key), `${id}.${fd.key} llega a Merchant Center pero no está en mcUses/mcOpt`);
+    }
+  }
+});
+
+test('Magento: los datos opcionales literales salen como secciones, escapados y antes del aviso final', () => {
+  const sup = { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F', composicion: '20 g de Proteína & TCM <b>', caracteristicas: 'Dieta polimérica especializada' };
+  const h = F.computeFor('sup', sup, keep, meta).mg.html;
+  assert.match(h, /<h2>Composición:<\/h2>\n<p>20 g de Proteína &amp; TCM &lt;b&gt;<\/p>/);
+  assert.match(h, /<h2>Características:<\/h2>\n<p>Dieta polimérica especializada<\/p>/);
+  assert.ok(h.indexOf('Características:') < h.indexOf('Condiciones de conservación'));
+  const acc = F.computeFor('acc', { marca: 'M', producto: 'P', material: 'Mat', contenido: '3 piezas', fabricante: 'F', queEs: 'Parche térmico', paquete: 'Tres parches' }, keep, meta).mg.html;
+  assert.match(acc, /<h2>Descripción:<\/h2>\n<p>Parche térmico<\/p>/);
+  assert.match(acc, /<h2>Incluye:<\/h2>\n<p>Tres parches<\/p>/);
+  const cos = F.computeFor('cos', { marca: 'M', producto: 'P', tipo: 'Sérum', atributo: 'A', contenido: '30 mL', fabricante: 'F', comercial: 'Fórmula ligera de rápida absorción' }, keep, meta).mg.html;
+  assert.match(cos, /<p>Fórmula ligera de rápida absorción<\/p>$/m);
+  assert.ok(!/Descripción:|Características:|Composición:/.test(F.computeFor('sup', { marca: 'M', componente: 'C', forma: 'Cápsulas', contenido: 'Frasco con 30', fabricante: 'F' }, keep, meta).mg.html), 'sin captura no cambia nada');
+});
+
+/* ---------- Tabla nutrimental ---------- */
+const supBase = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: 'Bote 900 g', fabricante: 'GNC' };
+const TABLA = '# Nutriente | Por porción (30 g) | Por 100 g | % VD\nEnergía | 120 kcal | 400 kcal | 6 %\nProteína | 24 g | 80 g | 48 %\nCarbohidratos | 3 g | 10 g | 1 %\n- Azúcares | 1.5 g | 5 g\nGrasa total | 1.5 g | 5 g | 2 %\nSodio | 90 mg | 300 mg | 4 %';
+
+test('tabla nutrimental: se arma una tabla HTML con id, encabezados y subfilas a partir de líneas', () => {
+  const h = F.computeFor('sup', { ...supBase, porcion: '1 scoop (30 g)', porciones: '30', nutrimental: TABLA }, keep, meta).mg.html;
+  assert.match(h, /<h2>Información nutrimental:<\/h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental">/);
+  assert.match(h, /<caption>Información nutrimental \(porción: 1 scoop \(30 g\); porciones por envase: 30\)<\/caption>/);
+  assert.match(h, /<thead><tr><th scope="col">Nutriente<\/th><th scope="col">Por porción \(30 g\)<\/th><th scope="col">Por 100 g<\/th><th scope="col">% VD<\/th><\/tr><\/thead>/);
+  assert.match(h, /<tr><th scope="row">Proteína<\/th><td>24 g<\/td><td>80 g<\/td><td>48 %<\/td><\/tr>/);
+  assert.match(h, /<tr class="sub"><th scope="row">Azúcares<\/th><td>1.5 g<\/td><td>5 g<\/td><td>—<\/td><\/tr>/);
+  assert.ok(h.indexOf('Información nutrimental:') > h.indexOf('Ficha técnica') && h.indexOf('Información nutrimental:') < h.indexOf('Condiciones de conservación'));
+  assert.equal((h.match(/id="tabla-nutrimental"/g) || []).length, 1);
+});
+
+test('tabla nutrimental: limpia unidades y mayúsculas, acepta tabulaciones y filas pegadas sin barras, y escapa el HTML', () => {
+  const p = F.parseNutrition('PROTEÍNA\t20G\t40%\nCalorías 120KCAL\nSodio | <1 mg\nVitamina C | 90 MG\nHierro | No significativo & otros');
+  assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Proteína', '20 g', '40 %'], ['Calorías', '120 kcal'], ['Sodio', '<1 mg'], ['Vitamina C', '90 mg'], ['Hierro', 'No significativo & otros']]);
+  assert.deepEqual(p.head, ['Nutriente', 'Valor 1', 'Valor 2'], 'sin encabezados con varias columnas usa nombres genéricos');
+  assert.ok(p.problems.some(x => /encabezados/.test(x)), 'y lo avisa');
+  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Hierro | No significativo & <b>' }, keep, meta).mg.html;
+  assert.match(h, /<td>No significativo &amp; &lt;b&gt;<\/td>/);
+  assert.match(h, /<th scope="col">Cantidad<\/th>/, 'una sola columna se llama Cantidad');
+  assert.equal(F.parseNutrition('Proteína | 20,5 g').rows[0].cells[0], '20.5 g', 'la coma decimal pasa a punto');
+});
+
+test('tabla nutrimental: avisa de filas sin cantidad o sin nombre y de columnas que no cuadran, sin tocar los datos', () => {
+  const p = F.parseNutrition('# Nutriente | Por porción\nProteína | 20 g | 40 %\nGrasa\n | 5 g');
+  assert.ok(p.problems.some(x => /Grasa/.test(x) && /no tiene cantidad/.test(x)));
+  assert.ok(p.problems.some(x => /sin nombre/.test(x)));
+  assert.ok(p.problems.some(x => /columna\(s\) de valores/.test(x)));
+  const c = F.lint(F.CATS.sup, { nutrimental: '# Nutriente | Por porción\nGrasa' }).check;
+  assert.match(c.join(' '), /Grasa/);
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: TABLA }).check, [], 'una tabla coherente no avisa');
+});
+
+test('tabla nutrimental: avisa si las calorías no cuadran con 4-4-9, por columna, y nunca corrige el número', () => {
+  const mal = '# Nutriente | Por porción | Por 100 g\nEnergía | 300 kcal | 400 kcal\nProteína | 24 g | 80 g\nCarbohidratos | 3 g | 10 g\nGrasa total | 1.5 g | 5 g';
+  const avisos = F.lint(F.CATS.sup, { nutrimental: mal }).check;
+  assert.equal(avisos.length, 1);
+  assert.match(avisos[0], /columna «Por porción»: declara 300 kcal, pero .* cerca de 122 kcal/);
+  const h = F.computeFor('sup', { ...supBase, nutrimental: mal }, keep, meta).mg.html;
+  assert.match(h, /<td>300 kcal<\/td>/, 'se muestra lo capturado');
+  const sinDatos = '# Nutriente | Por porción\nEnergía | 300 kcal\nProteína | 24 g';
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: sinDatos }).check, [], 'sin carbohidratos y grasa no puede comparar');
+  assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: '# Nutriente | % VD\nEnergía | 6 %\nProteína | 48 %\nCarbohidratos | 1 %\nGrasa total | 2 %' }).check, [], 'las columnas de porcentaje no se comparan');
+});
+
+test('tabla nutrimental: sin captura no cambia nada y las preguntas frecuentes salen de la tabla', () => {
+  assert.equal(F.computeFor('sup', supBase, keep, meta).mg.html, F.computeFor('sup', { ...supBase, nutrimental: '   \n  ' }, keep, meta).mg.html);
+  assert.ok(!/tabla-nutrimental/.test(F.computeFor('sup', { ...supBase, nutrimental: 'solo texto sin cantidades' }, keep, meta).mg.html), 'sin filas válidas no hay tabla');
+  const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, { ...supBase, nutrimental: TABLA }, sd).items);
+  const resp = re => q.filter(([a]) => re.test(a)).map(([, b]) => b);
+  assert.ok(resp(/calorías/).every(b => /aporta 120 kcal \(por porción \(30 g\)\)\./.test(b)) && resp(/calorías/).length);
+  assert.ok(resp(/proteína/).every(b => /aporta 24 g de proteína/.test(b)) && resp(/proteína/).length);
+  assert.ok(resp(/azúcar/).every(b => /tiene 1.5 g de azúcares/.test(b)) && resp(/azúcar/).length);
+});

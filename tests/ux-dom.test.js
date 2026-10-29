@@ -415,3 +415,21 @@ test('relacionados: la opción de exportar viene activa y el detalle del lote mu
   assert.doesNotMatch(a.text('#exp-summary'), /con alternativas/);
   assert.deepEqual(a.errors, []);
 });
+
+test('meta title largo: la pestaña Meta sugiere la versión corta y «Usar versión corta» la aplica y la guarda con el producto', { skip }, async () => {
+  const a = boot();
+  a.fill('meta-tienda', 'Farmacias Especializadas');
+  const setCat = id => { const r = a.d.querySelector(`#cats input[value="${id}"]`); r.checked = true; r.dispatchEvent(new a.w.Event('change', { bubbles: true })); };
+  setCat('sup');
+  Object.entries({ marca: 'Supportan DKN', componente: 'Capuchino Proteína', forma: 'Solución', contenido: '200 mL', fabricante: 'Fresenius Kabi' }).forEach(([k, v]) => a.fill('f-' + k, v));
+  a.fill('sku', 'SUP-1');
+  a.d.getElementById('tab-meta').click(); await wait(30);
+  assert.match(a.text('#meta-short'), /Versión corta sugerida \(51 de 60 caracteres\)/);
+  assert.match(a.text('#meta-mt'), /78 caracteres de 60/);
+  a.d.querySelector('[data-mtshort="on"]').click(); await wait(30);
+  assert.match(a.text('#meta-mt'), /51 caracteres de 60/);
+  assert.match(a.text('#meta-short'), /Se usa la versión corta/);
+  a.d.getElementById('add').click(); await wait(40);
+  assert.equal(JSON.parse(a.w.localStorage.getItem('fichas.lote.v1'))[0].mtShort, true);
+  assert.deepEqual(a.errors, []);
+});

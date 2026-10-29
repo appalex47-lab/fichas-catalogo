@@ -176,6 +176,36 @@ Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**
 - **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe el título del producto (que incluye marca, principio activo, concentración, presentación y laboratorio) y esos mismos datos sueltos; no recibe receta, categoría, SKU ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
 - El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
 
+## Qué datos llegan a la ficha de Magento
+
+Los datos de texto opcionales («Datos para las descripciones») salen en el HTML de Magento como secciones aparte, con el texto literal que capturaste y solo si lo capturaste. Antes algunos solo llegaban a la descripción de Merchant Center. Ahora: medicamentos («Leyenda adicional»), dispositivos («Especificaciones adicionales»), dermocosméticos («Ingredientes o activos destacados» y la frase comercial al final), suplementos («Composición», «Características» y «Modo de consumo»), bebidas («Descripción», «Características» y «Leyenda»), cuidado personal («Ingredientes» y «Características») y accesorios («Descripción», «Características» e «Incluye»). El «Usado en» de cada campo del formulario indica a qué textos alimenta, y una prueba automática comprueba que todo dato capturado llegue a la ficha o al título.
+
+## Tabla nutrimental de suplementos
+
+El campo opcional «Información nutrimental» (suplementos, en «Datos para las descripciones») arma una tabla HTML en la ficha de Magento, con `id="tabla-nutrimental"` y `class="tabla-nutrimental"` para que tu tema la estile. Se captura tal cual la etiqueta, una fila por línea:
+
+```
+# Nutriente | Por porción (30 g) | Por 100 g | % VD
+Energía | 120 kcal | 400 kcal | 6 %
+Proteína | 24 g | 80 g | 48 %
+- Azúcares | 1.5 g | 5 g
+```
+
+- La línea que empieza con `#` son los encabezados. Es obligatoria solo si hay más de una columna de valores (por porción, por 100 g, % VD, en cualquier combinación). Con una sola columna se llama «Cantidad».
+- Una fila que empieza con guion es una subfila (azúcares dentro de carbohidratos). También se entienden filas pegadas con tabulaciones desde una hoja de cálculo o sin barras («Proteína 20 g 40 %»).
+- **No se calcula ni se corrige nada.** Se limpian las unidades (`20G` → `20 g`), la coma decimal y las mayúsculas sostenidas de los nombres. Los valores como `<1 mg` o `No significativo` se muestran tal cual.
+- **Avisos** (sin bloquear): una fila sin cantidad o sin nombre, encabezados que no cuadran con las columnas, y calorías que no se parecen a 4·proteína + 4·carbohidratos + 9·grasa (tolerancia del 20 %, se revisa cada columna con valores en gramos y kcal).
+- El título de la tabla (`caption`) incluye el tamaño de porción y las porciones por envase si los capturaste.
+- Las preguntas frecuentes agregan «¿Cuántas calorías tiene…?», «¿Cuánta proteína tiene…?» y «¿Cuánta azúcar tiene…?», con el valor de la primera columna de la tabla.
+- No encontré una fuente que confirme qué estructura de información nutrimental exige la normativa para suplementos (la NOM-051 se aplica a alimentos y bebidas preenvasados), por eso la tabla copia el formato de cada etiqueta. Valida con tu equipo regulatorio cualquier leyenda obligatoria.
+
+## Formas, tipos y campos de suplementos
+
+- **Forma:** es un campo de texto libre; se puede escribir cualquier valor. Los campos de forma (medicamentos y suplementos) y de tipo (dispositivos, dermocosméticos, bebidas, cuidado personal y accesorios) muestran una lista de ayuda al escribir, que no limita lo que capturas.
+- **Reconocimiento en datos crudos:** además de tableta, cápsula e inyectable, se reconocen tableta masticable, efervescente y sublingual, cápsula blanda (softgel o perla) y vegetal, gomita, polvo, líquido, shot, barra, chicle, pastilla, granulado, spray, aceite y emulsión. También más envases (bote, tarro, lata, pouch, vial) y unidades (perlas, softgels, barras, shots, chicles, porciones).
+- **Tipos nuevos:** dispositivos (lancetas, esfigmomanómetro, estetoscopio, pulsioxímetro, báscula, humidificador…), dermocosméticos (exfoliante, desmaquillante, bálsamo labial, bruma…), cuidado personal (acondicionador, toallas sanitarias, tampones, pañales, repelente…), accesorios (rodillera, tobillera, collarín, muletas, pastillero…), bebidas (nutrición oral, bebida de proteína, agua alcalina, fórmula infantil…) y suplementos (calcio, hierro, biotina, ashwagandha, cúrcuma, colágeno hidrolizado, proteína whey, BCAA…). Las palabras clave que detectan la categoría también se ampliaron.
+- **Suplementos, campos opcionales nuevos:** «Sabor» (entra en el título solo si lo capturas; también se reconoce en los datos crudos), «Tamaño de porción», «Porciones por envase» y «Modo de consumo» (tal como está en el empaque, como sección aparte). Salen en la ficha técnica, en la descripción de Merchant Center y en las preguntas frecuentes, y no cambian nada si quedan vacíos.
+
 ## Diccionario de clasificación (Ajustes, pestaña Clasificación)
 
 Relaciona cada **principio activo** con su **código ATC** y su área. Es un dato interno: no sale en la ficha, en el CSV ni en Magento. Se guarda solo en este navegador (exporta e importa CSV para pasarlo a otro).
