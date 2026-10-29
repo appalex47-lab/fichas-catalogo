@@ -125,3 +125,18 @@ test('formulario: forma y tipo traen una lista de ayuda y aceptan cualquier otro
   assert.ok([...a.d.querySelectorAll('#dl-forma option')].map(o => o.value).includes('Solución inyectable'));
   assert.deepEqual(a.errors, []);
 });
+
+test('campana: muestra los productos nuevos, el contador y se cierra con Escape', { skip }, async () => {
+  const a = boot();
+  assert.equal(a.d.getElementById('bell-n').hidden, true);
+  await addBeb(a, 'FRE-200', 'Fresubin');
+  assert.equal(a.d.getElementById('bell-n').textContent, '1');
+  a.d.getElementById('bell').click();
+  assert.equal(a.d.getElementById('bell-pop').hidden, false);
+  assert.match(a.text('#bell-pop'), /Productos nuevos sin cargar \(1\)/);
+  a.d.querySelector('[data-bell-dismiss="FRE-200"]').click();
+  assert.equal(a.d.getElementById('bell-n').hidden, true);
+  a.d.dispatchEvent(new a.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(a.d.getElementById('bell-pop').hidden, true);
+  assert.deepEqual(a.errors, []);
+});

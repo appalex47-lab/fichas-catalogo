@@ -127,3 +127,56 @@ test('catálogo: el nombre para mostrar es corto y el título completo se conser
   assert.equal(e.nombre, 'Fresubin Nutrición oral 200 mL');
   assert.equal(e.titulo, 'Fresubin Nutrición oral | Sabor Vainilla | 200 mL');
 });
+
+/* ---------- Campana de notificaciones ---------- */
+test('campana: un producto nuevo sin exportar avisa aparte y descartar lo oculta', () => {
+  const c = C.empty();
+  C.upsert(c, nutri('FRE-1', 'Fresubin'), 'Fresubin', AT);
+  assert.deepEqual(C.alerts(c).map(a => [a.type, a.sku]), [['nuevo', 'FRE-1']]);
+  assert.ok(C.dismiss(c, 'FRE-1'));
+  assert.deepEqual(C.alerts(c), []);
+});
+
+test('campana: un cross sell nuevo avisa solo al principal y solo con SKU ya cargados', () => {
+  const c = C.empty();
+  C.upsert(c, otc('OTC-1', 'Marca A'), 'Principal OTC', AT);
+  C.upsert(c, nutri('FRE-1', 'Fresubin'), 'Fresubin', AT);
+  C.markExported(c, ['OTC-1', 'FRE-1'], AT);
+  assert.deepEqual(C.alerts(c), [], 'recién exportados no avisan');
+  C.upsert(c, rx('MOU-1', 'Mounjaro'), 'Mounjaro', AT);
+  C.markExported(c, ['MOU-1'], AT);
+  assert.deepEqual(C.alerts(c).map(a => a.sku), [], 'al exportarse queda al día');
+  assert.ok(C.link(c, 'MOU-1', 'FRE-1', { by: 'manual', at: AT }).ok);
+  const a = C.alerts(c);
+  assert.deepEqual(a.map(x => [x.type, x.sku]), [['rel', 'MOU-1']], 'Fresubin no recibe aviso');
+  assert.deepEqual(a[0].add.crosssell, ['FRE-1']);
+  const csv = C.relUpdateCsv(c, ['MOU-1']);
+  assert.equal(csv.rows.length, 1);
+  assert.equal(csv.rows[0][csv.header.indexOf('sku')], 'MOU-1');
+  assert.equal(csv.rows[0][csv.header.indexOf('crosssell_skus')], 'FRE-1');
+  assert.equal(csv.rows[0].filter(Boolean).length, 2, 'solo SKU y vínculos');
+  C.markExported(c, ['MOU-1'], AT);
+  assert.deepEqual(C.alerts(c), []);
+});
+
+test('campana: relacionados y alternativas avisan a ambos lados y un vínculo a un producto sin cargar no avisa', () => {
+  const c = C.empty();
+  const med = (sku, marca) => item(sku, 'med', { marca, principio: 'Paracetamol', concentracion: '500 mg', forma: 'Tableta', contenido: 'Caja con 10', receta: 'no', especialidad: 'no' });
+  C.upsert(c, med('A', 'Tempra'), 'Tempra', AT);
+  C.markExported(c, ['A'], AT);
+  C.upsert(c, med('B', 'Dolex'), 'Dolex', AT);
+  assert.deepEqual(C.alerts(c).filter(x => x.type === 'rel'), [], 'B aún no está en Magento');
+  C.markExported(c, ['B'], AT);
+  const rel = C.alerts(c).filter(x => x.type === 'rel');
+  assert.deepEqual(rel.map(x => x.sku), ['A'], 'A ya estaba cargado y gana una alternativa; B se exportó con ella');
+  assert.deepEqual(rel[0].add.upsell, ['B']);
+});
+
+test('campana: lo exportado antes de existir la campana toma su estado como punto de partida', () => {
+  const c = C.empty();
+  C.upsert(c, nutri('FRE-1', 'Fresubin'), 'Fresubin', AT);
+  c.entries[0].exportedAt = AT;
+  assert.equal(C.baseline(c), 1);
+  assert.deepEqual(C.alerts(c), []);
+  assert.equal(C.baseline(c), 0);
+});

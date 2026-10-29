@@ -834,3 +834,12 @@ test('alérgenos: avisa si los ingredientes mencionan alérgenos que «Alérgeno
   assert.match(F.lint(F.CATS.sup, { ingredientes: 'Suero de leche' }).check.join(' '), /mencionan leche, pero «Alérgenos» no lo menciona/);
   assert.equal(F.computeFor('sup', { ...fresubin, alergenos: '' }, keep, meta).mg.html.includes('Alérgenos:'), false, 'la herramienta no inventa la declaración');
 });
+
+test('lint: el tipo y el contenido no se mezclan y los laboratorios se llaman Laboratorio fuera de dispositivos y accesorios', () => {
+  const chk = (id, raw) => F.lint(F.CATS[id], raw).check.join(' ');
+  assert.match(chk('sup', { componente: '200 mL', contenido: 'Fórmula hipercalórica' }), /parece una cantidad[\s\S]*no lleva una cantidad/);
+  assert.equal(chk('sup', { componente: 'Fórmula hipercalórica', contenido: '200 mL' }), '');
+  assert.equal(chk('sup', { componente: 'Vitamina B12 1000 mcg', contenido: 'Frasco con 30' }), '');
+  const lbl = (id) => F.CATS[id].fields.find(f => f.key === 'fabricante').label;
+  assert.deepEqual(['cos', 'sup', 'beb', 'hig', 'dis', 'acc'].map(lbl), ['Laboratorio', 'Laboratorio', 'Laboratorio', 'Laboratorio', 'Fabricante', 'Fabricante']);
+});

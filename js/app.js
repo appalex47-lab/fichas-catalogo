@@ -2740,6 +2740,7 @@ async function offerLinks(sku, force) {
   if (e && Catalog.isParent(e)) await offerChildren(e, force);
 }
 function renderCatalog() {
+  renderBell();
   const box = $('#cat-body'); if (!box) return;
   const c = state.catalog, L = Catalog.STATUS_LABEL;
   if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en el lote se agregan aquí solos. Vaciar el lote no los borra.</p></div>'; return; }
@@ -2757,6 +2758,39 @@ function renderCatalog() {
     + `<div class="actions"><button type="button" class="btn" id="cat-review"${pend || waiting ? '' : ' disabled'}>Revisar pendientes</button></div>`
     + `<div class="lote-wrap"><table class="lote-table"><thead><tr><th>SKU</th><th>Producto</th><th>Rol</th><th>Estado</th><th>Vínculos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* ---------- Campana: productos ya cargados cuyos vínculos cambiaron y productos nuevos sin cargar ---------- */
+const bellList = (o, sign) => Catalog.REL_KINDS.filter(k => o[k].length).map(k => `${sign}${o[k].length} ${Catalog.REL_LABEL[k]} (${o[k].map(esc).join(', ')})`).join(' · ');
+function renderBell() {
+  const pop = $('#bell-pop'), n = $('#bell-n'); if (!pop) return;
+  if (Catalog.baseline(state.catalog)) saveCatalog();
+  const all = Catalog.alerts(state.catalog), rel = all.filter(x => x.type === 'rel'), nuevo = all.filter(x => x.type === 'nuevo');
+  n.textContent = all.length; n.hidden = !all.length;
+  $('#bell').setAttribute('aria-label', all.length ? `Notificaciones: ${all.length} pendientes` : 'Notificaciones: ninguna pendiente');
+  const li = (a, body, chk) => `<li><label>${chk ? `<input type="checkbox" data-bell-sel="${esc(a.sku)}" checked>` : ''}<span><b>${esc(a.sku)}</b> ${esc(a.name)}<span class="bell-d">${body}</span></span></label> <button type="button" class="linkbtn" data-bell-dismiss="${esc(a.sku)}">Descartar</button></li>`;
+  pop.innerHTML = !all.length ? '<p class="hint">No hay notificaciones. Aquí aparecerán los productos que ya cargaste a Magento y recibieron vínculos nuevos, y los productos nuevos que aún no cargas.</p>'
+    : (rel.length ? `<h3>Actualizar vínculos en Magento (${rel.length})</h3><ul>${rel.map(a => li(a, [bellList(a.add, '+'), bellList(a.rem, '−')].filter(Boolean).join(' · '), true)).join('')}</ul>`
+      + '<div class="actions"><button type="button" class="btn" id="bell-dl">Descargar CSV de actualización</button></div><p class="hint">Lleva solo el SKU y las columnas de vínculos al día. Quitar un vínculo en Magento se hace a mano: una columna vacía puede no borrarlo. No lo he probado con una importación real.</p>' : '')
+    + (nuevo.length ? `<h3>Productos nuevos sin cargar (${nuevo.length})</h3><ul>${nuevo.map(a => li(a, 'Aún no se exporta. Se carga con el CSV normal en Exportar.', false)).join('')}</ul>` : '');
+}
+$('#bell').addEventListener('click', () => { const pop = $('#bell-pop'); pop.hidden = !pop.hidden; $('#bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) renderBell(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#bell-pop').hidden) { $('#bell-pop').hidden = true; $('#bell').setAttribute('aria-expanded', 'false'); $('#bell').focus(); } });
+document.addEventListener('click', e => { const w = e.target.closest && e.target.closest('.bell-wrap'); if (!w && $('#bell-pop') && !$('#bell-pop').hidden) { $('#bell-pop').hidden = true; $('#bell').setAttribute('aria-expanded', 'false'); } });
+$('#bell-pop').addEventListener('click', e => {
+  const d = e.target.closest('[data-bell-dismiss]');
+  if (d) { if (Catalog.dismiss(state.catalog, d.dataset.bellDismiss)) { saveCatalog(); renderBell(); } return; }
+  if (e.target.closest('#bell-dl')) {
+    const skus = [...$('#bell-pop').querySelectorAll('[data-bell-sel]:checked')].map(x => x.dataset.bellSel);
+    if (!skus.length) { toast('Marca al menos un producto.', 'warn'); return; }
+    const ex = Catalog.relUpdateCsv(state.catalog, skus);
+    if (!ex.rows.length) { toast('No hay vínculos que cargar.', 'warn'); return; }
+    const csv = toSheet([ex.header, ...ex.rows], ',', '\r\n') + '\r\n';
+    withBusy(e.target.closest('#bell-dl'), async () => {
+      await saveFile('Actualizacion_vinculos_Magento.csv', state.exp.enc === 'utf8' ? csv : encodeCp1252(csv).bytes);
+      Catalog.markExported(state.catalog, ex.rows.map(r => r[0]), catalogNow()); saveCatalog(); renderCatalog();
+    }, 'descargar el CSV de actualización');
+  }
+});
+
 document.addEventListener('click', async e => {
   const t = e.target.closest && e.target.closest('[data-cat-find],[data-cat-parent],[data-cat-del],[data-cat-unlink],#cat-review'); if (!t) return;
   const c = state.catalog;
