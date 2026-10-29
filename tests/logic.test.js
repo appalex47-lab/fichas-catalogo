@@ -346,3 +346,17 @@ test('relaciones: el CSV las llena solo con opts.relations y solo con SKU del mi
   assert.ok(on.contract.ok);
   assert.deepEqual(on.relations, { upsell: 2, related: 0, crosssell: 0 });
 });
+
+test('área terapéutica y ATC: campos de medicamentos y área en las demás categorías, sin tocar los textos', () => {
+  assert.ok(['area', 'area2', 'atc'].every(k => F.CATS.med.fields.some(f => f.key === k)));
+  assert.ok(Object.keys(F.CATS).filter(id => id !== 'med').every(id => F.CATS[id].fields.some(f => f.key === 'area')));
+  const base = F.computeFor('med', medFaq, keep, meta);
+  const con = F.computeFor('med', { ...medFaq, area: 'Diabetes y metabolismo', area2: 'Control de peso', atc: 'a10bx 16' }, keep, meta);
+  assert.equal(con.mg.html, base.mg.html);
+  assert.equal(con.title.title, base.title.title);
+  assert.equal(con.vt.v.atc, 'A10BX16');
+  assert.deepEqual(F.lint(F.CATS.med, { atc: 'A10BX16' }).check, []);
+  assert.match(F.lint(F.CATS.med, { atc: 'ZZZ' }).check.join(' '), /formato esperado/);
+  ['A', 'A10', 'A10B', 'A10BX', 'A10BX16'].forEach(c => assert.ok(F.ATC_RE.test(c), c));
+  ['a10', 'A1', 'A10BX1', '10A', ''].forEach(c => assert.ok(!F.ATC_RE.test(c), c));
+});

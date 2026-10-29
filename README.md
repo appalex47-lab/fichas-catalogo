@@ -165,6 +165,16 @@ Los productos con SKU que guardas quedan también en un **catálogo interno**, a
 - **La IA solo propone** sobre una lista cerrada de productos del catálogo (máximo 150, los más recientes) y se le envían solo nombres y categorías. Nada se vincula sin tu confirmación; cada vínculo queda en la auditoría con quién lo propuso (IA o manual) y cuándo. Las llamadas cuentan en el límite mensual.
 - **Exportación:** los complementos confirmados salen en `crosssell_skus` del producto principal, sumados a los de «Insumos compatibles». Solo se escriben SKU que van en el mismo archivo o que ya exportaste antes desde esta herramienta.
 
+## Área terapéutica y código ATC
+
+Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**. Sirve para ordenar el catálogo y como contexto para proponer complementos.
+
+- **Medicamentos:** «Área terapéutica», «Segunda área terapéutica» (por ejemplo diabetes y control de peso) y «Código ATC». **Demás categorías:** «Área de uso o necesidad» (por ejemplo Hidratación o Nutrición y vitaminas).
+- Las áreas salen de una lista cerrada (16 opciones, definida en `AREAS` de `js/logic.js`).
+- El **código ATC** (Anatómica, Terapéutica y Química, de la OMS) tiene de 1 a 5 niveles, por ejemplo A, A10, A10B, A10BX o A10BX16. La herramienta valida el formato, lo pasa a mayúsculas y avisa si no lo cumple. No lo compara con el índice oficial, así que verifícalo allí.
+- **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe marca, principio activo, concentración, forma, vía y tipo; no recibe receta, laboratorio ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
+- El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
+
 ## Datos crudos (extracción por reglas)
 
 Toma un SKU sucio y llena el formulario, o las filas de una carga masiva con una columna de datos crudos. Solo copia lo que aparece en el texto:

@@ -107,6 +107,11 @@ const LEGEND = {
 };
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
+/* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
+const AREAS = ['Diabetes y metabolismo', 'Control de peso', 'Cardiovascular', 'Digestivo y gastrointestinal', 'Respiratorio y alergias', 'Dolor e inflamación', 'Infecciones', 'Salud mental y neurología', 'Hormonal y salud sexual', 'Piel y dermatología', 'Ojos y oídos', 'Oncología e inmunología', 'Nutrición y vitaminas', 'Hidratación', 'Higiene y cuidado personal', 'Otra'];
+const areaOpts = () => [['', 'Sin declarar'], ...AREAS.map(x => [x, x])];
+/* Código ATC de la OMS, de 1 a 5 niveles: A, A10, A10B, A10BX, A10BX16. */
+const ATC_RE = /^[A-Z](?:\d{2}(?:[A-Z](?:[A-Z](?:\d{2})?)?)?)?$/;
 /* ---------- Categorías ---------- */
 const CATS = {
   med: {
@@ -122,6 +127,9 @@ const CATS = {
       F('via','Vía de administración',{req:1,g:'d',ph:'Subcutánea'}),
       F('receta','¿Requiere receta médica?',{req:1,g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí requiere receta'],['no','No requiere receta']],hint:'Dato regulatorio obligatorio. Sin él no se genera el HTML de Magento.'}),
       F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'}),
+      F('area','Área terapéutica',{g:'d',type:'select',opts:areaOpts(),hint:'Clasificación interna. No sale en ningún texto de la ficha.'}),
+      F('area2','Segunda área terapéutica',{g:'d',type:'select',opts:areaOpts(),hint:'Solo si el producto tiene dos usos, por ejemplo diabetes y control de peso.'}),
+      F('atc','Código ATC',{g:'d',raw:1,upper:1,ph:'A10BX16',hint:'Clasificación Anatómica, Terapéutica y Química de la OMS. Opcional. Verifícalo en el índice ATC oficial.'}),
       F('especialidad','¿Es de alta especialidad?',{g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí es de alta especialidad'],['no','No es de alta especialidad']],hint:'No cambia ningún texto. Un medicamento con receta, de alta especialidad o sin declarar nunca se recomienda como complemento de otro producto.'}),
       F('indicaciones','Indicaciones',{g:'d',type:'area',sentence:1,hint:'Cópialas tal cual del inserto o del registro sanitario. Aparece en una sección aparte y en las preguntas frecuentes.'}),
       F('posologia','Posología o cómo se usa',{g:'d',type:'area',sentence:1,hint:'Dosis y frecuencia tal como están en el inserto. Aparece en una sección aparte.'}),
@@ -452,6 +460,7 @@ const CATS = {
 };
 
 Object.keys(CATS).forEach(id => { CATS[id].id = id; });
+Object.keys(CATS).forEach(id => { if (id !== 'med') CATS[id].fields.push(F('area', 'Área de uso o necesidad', { g: 'd', type: 'select', opts: areaOpts(), hint: 'Clasificación interna, por ejemplo Hidratación o Nutrición y vitaminas. No sale en ningún texto de la ficha.' })); });
 const labelOf = (c, k) => (c.fields.find(x => x.key === k) || {}).label || k;
 
 /* ---------- Cálculo ---------- */
@@ -463,7 +472,8 @@ function values(c, raw, style, keep) {
     const orig = String(r).replace(/\s+/g, ' ').trim();
     let t = orig;
     if (t) {
-      if (fd.raw) { /* lista de ingredientes: se conserva tal cual */ }
+      if (fd.upper) t = t.toUpperCase().replace(/\s+/g, '');
+      else if (fd.raw) { /* lista de ingredientes: se conserva tal cual */ }
       else if (fd.sentence) t = normUnits(sentenceCase(t, keep), style);
       else {
         t = fixCaps(t, keep, fd.pres ? 'sentence' : 'title');
@@ -680,6 +690,7 @@ function lint(c, raw) {
       if (!raw.precauciones) out.check.push('Protector solar sin precauciones. Captura las leyendas del empaque.');
     } else if (nivel) out.check.push('Capturaste un nivel de protección sin FPS.');
   }
+  if (raw.atc && !ATC_RE.test(String(raw.atc).toUpperCase().replace(/\s+/g, ''))) out.check.push(`El código ATC "${raw.atc}" no tiene el formato esperado. Ejemplos: A10, A10BX, A10BX16.`);
   return out;
 }
 
@@ -1355,6 +1366,8 @@ const api = {
   buildFaq,
   relations,
   complementEligible,
+  AREAS,
+  ATC_RE,
   buildTitle,
   cap,
   capNouns,

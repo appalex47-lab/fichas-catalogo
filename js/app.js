@@ -244,7 +244,8 @@ function fieldHTML(fd) {
   } else {
     ctl = `<input type="text" id="f-${fd.key}" data-key="${fd.key}"${desc} value="${esc(val)}" placeholder="${esc(fd.ph || '')}" autocomplete="off">`;
   }
-  return `<div class="field">${label}${ctl}${fd.hint ? `<p class="hint" id="hint-${fd.key}">${esc(fd.hint)}</p>` : ''}<div class="fmeta" id="fm-${fd.key}"></div></div>`;
+  const areaAi = fd.key === 'area' ? `<div class="area-ai"><button type="button" class="btn btn--quiet" id="area-ai">Sugerir con IA</button><div id="area-ai-out" aria-live="polite"></div></div>` : '';
+  return `<div class="field">${label}${ctl}${fd.hint ? `<p class="hint" id="hint-${fd.key}">${esc(fd.hint)}</p>` : ''}${areaAi}<div class="fmeta" id="fm-${fd.key}"></div></div>`;
 }
 function renderForm() {
   const c = CATS[state.cat];
@@ -256,6 +257,7 @@ function renderForm() {
     `<details class="more" open><summary>Datos para las descripciones</summary>${b.map(fieldHTML).join('')}</details>`;
   $('#sku').value = state.sku;
   $('#img').value = state.img;
+  renderAreaSuggest();
 }
 
 /* Resultado */
@@ -659,7 +661,7 @@ function formItem() {
 const humanReviewKeys = () => Object.keys(state.aiFlags || {}).filter(k => (state.aiFlags[k] === 'sugerido' || state.aiFlags[k] === 'imagen') && String(state.v[k] || '').trim());
 const isDirty = () => UX.itemSig(formItem()) !== state._baseSig;
 /* Punto de partida del seguimiento de cambios: al cargar, limpiar, agregar o editar un producto. */
-function resetTracking() { state._prevV = { ...state.v }; state.changes = []; state._baseSig = UX.itemSig(formItem()); }
+function resetTracking() { state.areaSuggest = null; state._prevV = { ...state.v }; state.changes = []; state._baseSig = UX.itemSig(formItem()); }
 /* Antes/Después/Origen/Fecha de cada dato (solo de esta sesión; la auditoría guardada no almacena valores). */
 function trackChanges() {
   const c = CATS[state.cat], prev = state._prevV || {};
@@ -2425,6 +2427,49 @@ window.__fichasKnowledge = () => ({ engine: Knowledge, issues: kIssues, rev: () 
 /* Contadores de caché (solo lectura): permiten comprobar que filtrar o expandir no recalcula el lote. */
 window.__fichasStats = () => ({ assess: { ...assessStats }, current: { ...currentMemo.stats } });
 
+/* ---------- Área terapéutica sugerida por IA ----------
+ * Clasificación interna con lista cerrada. La IA solo propone; el valor entra al formulario cuando la persona pulsa «Aplicar». */
+function renderAreaSuggest() {
+  const out = $('#area-ai-out'); if (!out) return;
+  const s = state.areaSuggest;
+  if (!s) { out.innerHTML = ''; return; }
+  if (s.error) { out.innerHTML = `<p class="hint">${esc(s.error)}</p>`; return; }
+  const rows = s.areas.map((a, i) => `<li><span><b>${esc(a.area)}</b><span class="ai-why">${esc(a.motivo)}</span></span><button type="button" class="btn" data-areaapply="${i}">Aplicar</button></li>`);
+  if (s.atc) rows.push(`<li><span><b>Código ATC ${esc(s.atc)}</b><span class="ai-why">Verifícalo en el índice ATC de la OMS antes de aplicarlo.</span></span><button type="button" class="btn" data-areaapply="atc">Aplicar</button></li>`);
+  out.innerHTML = rows.length ? `<div class="note note--warn"><p><strong>Sugerencia de IA.</strong> Es una clasificación interna; no sale en ningún texto.</p></div><ul>${rows.join('')}</ul>` : '<p class="hint">La IA no pudo clasificar este producto con seguridad. Elige el área a mano.</p>';
+}
+async function suggestArea() {
+  const key = getKey(), btn = $('#area-ai');
+  if (!key) { state.areaSuggest = { error: 'Falta la llave de Cohere. Agrégala en Ajustes (engrane), pestaña IA.' }; renderAreaSuggest(); return; }
+  const c = CATS[state.cat];
+  if (!hasAny(c)) { state.areaSuggest = { error: 'Captura primero la marca y el producto.' }; renderAreaSuggest(); return; }
+  btn.disabled = true; $('#area-ai-out').innerHTML = '<p class="hint">Consultando a la IA...</p>';
+  try {
+    const name = computeFor(state.cat, state.v, keepSet(), state.meta).title.title;
+    const r = await AI.aiArea({ apiKey: key, model: aiModel(), cat: state.cat, name, fields: state.v, onCall: () => bumpCalls('comp') });
+    state.areaSuggest = { areas: r.areas, atc: state.cat === 'med' ? r.atc : '' };
+  } catch (err) { state.areaSuggest = { error: UX.friendlyError(err, 'sugerir el área').message }; }
+  renderAreaSuggest();
+  const b = $('#area-ai'); if (b) b.disabled = false;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('#area-ai, [data-areaapply]'); if (!b) return;
+  if (b.id === 'area-ai') { suggestArea(); return; }
+  const s = state.areaSuggest; if (!s || !s.areas) return;
+  const k = b.dataset.areaapply, c = CATS[state.cat], has = key => c.fields.some(f => f.key === key);
+  let field, value;
+  if (k === 'atc') { if (!has('atc')) return; field = 'atc'; value = s.atc; }
+  else {
+    const a = s.areas[Number(k)]; if (!a) return;
+    field = !state.v.area ? 'area' : (!state.v.area2 && has('area2') && state.v.area !== a.area ? 'area2' : 'area');
+    value = a.area;
+  }
+  state.v[field] = value;
+  state.audit.push(Anomalies.event('area_aplicada_desde_ia', null, { field, value, sku: state.sku || '' })); state.audit = state.audit.slice(-500); persist('fichas.audit.v1', state.audit);
+  renderForm(); renderOutputs();
+  toast(`${labelOf(c, field)}: ${value}`);
+});
+
 /* ---------- Catálogo interno y complementos ----------
  * Los productos guardados quedan en un catálogo aparte del lote (vaciar el lote no lo borra). Un complemento sin producto
  * principal queda «esperando» (estado interno, no se exporta). La IA solo propone; cada vínculo lo confirma una persona. */
@@ -2478,7 +2523,7 @@ async function proposeLinks(mode, subject, candidates) {
   if (!key) return { ai: false, matches: new Map() };
   const limited = candidates.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 150);
   try {
-    const res = await AI.aiComplements({ apiKey: key, model: aiModel(), mode, subject: { name: subject.nombre, cat: subject.cat }, candidates: limited.map((c, i) => ({ id: i + 1, name: c.nombre, cat: c.cat })), onCall: () => bumpCalls('comp') });
+    const res = await AI.aiComplements({ apiKey: key, model: aiModel(), mode, subject: { name: subject.nombre, cat: subject.cat, area: subject.area, area2: subject.area2, atc: subject.atc }, candidates: limited.map((c, i) => ({ id: i + 1, name: c.nombre, cat: c.cat, area: c.area, area2: c.area2, atc: c.atc })), onCall: () => bumpCalls('comp') });
     return { ai: true, matches: new Map(res.map(r => [limited[r.id - 1].sku, r.motivo])) };
   } catch (err) {
     toast('La IA no pudo proponer complementos: ' + UX.friendlyError(err, 'proponer complementos').message + ' Elige a mano.', 'warn');
@@ -2562,7 +2607,7 @@ function renderCatalog() {
     const role = !e.elegible ? 'Principal' : e.padre ? 'Complemento y principal' : 'Complemento posible';
     const chip = (p, ch, name) => `<span class="tag tag--info">${esc(name)} <button type="button" class="linkbtn" data-cat-unlink="${esc(p)}|${esc(ch)}" aria-label="Quitar vínculo con ${esc(name)}">×</button></span>`;
     const rel = [kids.length ? `<div><b>Complementos:</b> ${kids.map(k => chip(e.sku, k.sku, k.nombre)).join(' ')}</div>` : '', pars.length ? `<div><b>Complemento de:</b> ${pars.map(k => chip(k.sku, e.sku, k.nombre)).join(' ')}</div>` : ''].join('');
-    return `<tr data-sku="${esc(e.sku)}"><td data-label="SKU">${esc(e.sku)}</td><td class="t" data-label="Producto">${esc(e.nombre)}</td><td data-label="Rol">${esc(role)}</td><td data-label="Estado"><span class="status status--${st === 'esperando' ? 'warn' : st === 'vinculado' ? 'ok' : 'info'}">${esc(L[st])}</span></td><td data-label="Vínculos">${rel}</td>`
+    return `<tr data-sku="${esc(e.sku)}"><td data-label="SKU">${esc(e.sku)}</td><td class="t" data-label="Producto">${esc(e.nombre)}${[e.area, e.area2].filter(Boolean).length ? `<span class="ld-why">${esc([e.area, e.area2].filter(Boolean).join(' · '))}${e.atc ? ' · ATC ' + esc(e.atc) : ''}</span>` : ''}</td><td data-label="Rol">${esc(role)}</td><td data-label="Estado"><span class="status status--${st === 'esperando' ? 'warn' : st === 'vinculado' ? 'ok' : 'info'}">${esc(L[st])}</span></td><td data-label="Vínculos">${rel}</td>`
       + `<td class="ops"><button type="button" class="btn btn--quiet" data-cat-find="${esc(e.sku)}">Buscar</button>${e.elegible ? `<button type="button" class="btn btn--quiet" data-cat-parent="${esc(e.sku)}" aria-pressed="${!!e.padre}">${e.padre ? 'Quitar de principales' : 'Marcar como principal'}</button>` : ''}<button type="button" class="btn btn--quiet" data-cat-del="${esc(e.sku)}">Quitar</button></td></tr>`;
   }).join('');
   box.innerHTML = `<p class="hint"><strong>${c.entries.length}</strong> producto(s) · <strong>${c.links.length}</strong> vínculo(s) · <strong>${waiting}</strong> esperando producto principal${pend ? ` · ${pend} sin evaluar` : ''}.</p>`

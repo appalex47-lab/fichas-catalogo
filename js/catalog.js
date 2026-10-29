@@ -52,7 +52,7 @@ function upsert(cat, item, title, at) {
   const elegible = eligibleOf(item.cat, v);
   let e = find(cat, sku), isNew = !e, removed = [];
   if (!e) { e = { sku, addedAt: at, comp: 'sin_evaluar' }; cat.entries.push(e); }
-  Object.assign(e, { cat: item.cat, nombre: String(title || v.marca || sku), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', elegible, updatedAt: at });
+  Object.assign(e, { cat: item.cat, nombre: String(title || v.marca || sku), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at });
   if (!elegible) {
     /* Si dejó de ser elegible (por ejemplo, se declaró que requiere receta), pierde sus vínculos como complemento. */
     removed = cat.links.filter(l => lk(l.c) === lk(sku));

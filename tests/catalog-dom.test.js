@@ -87,3 +87,26 @@ test('catálogo: «No es complemento» lo saca de la lista y «Quitar vínculo»
   a.d.querySelector('[data-cat-unlink]').click(); await wait(20);
   assert.equal(catalog(a).links.length, 0);
 });
+
+test('área terapéutica: sin llave avisa, con llave propone y solo se aplica al pulsar «Aplicar»', { skip }, async () => {
+  const a = boot();
+  setCat(a, 'med');
+  a.fillMed('Mounjaro', 'Caja con 4 plumas', 'MOU-1', { principio: 'Tirzepatida', receta: 'si', especialidad: 'si' });
+  a.d.getElementById('area-ai').click(); await wait(20);
+  assert.match(a.text('#area-ai-out'), /Falta la llave de Cohere/);
+  a.w.localStorage.setItem('cohere_api_key_local', 'k');
+  a.w.fetch = async () => ({ ok: true, status: 200, json: async () => ({ message: { content: [{ type: 'text', text: JSON.stringify({ areas: [{ area: 'Diabetes y metabolismo', motivo: 'antidiabético' }, { area: 'Control de peso', motivo: 'obesidad' }, { area: 'Inventada', motivo: 'x' }], atc: 'A10BX16' }) }] } }) });
+  a.d.getElementById('area-ai').click(); await wait(40);
+  assert.match(a.text('#area-ai-out'), /Diabetes y metabolismo/);
+  assert.equal(a.d.getElementById('f-area').value, '', 'la sugerencia no se aplica sola');
+  a.d.querySelectorAll('[data-areaapply]')[0].click(); await wait(20);
+  assert.equal(a.d.getElementById('f-area').value, 'Diabetes y metabolismo');
+  a.d.getElementById('area-ai').click(); await wait(40);
+  a.d.querySelectorAll('[data-areaapply]')[1].click(); await wait(20);
+  assert.equal(a.d.getElementById('f-area2').value, 'Control de peso');
+  a.d.querySelector('[data-areaapply="atc"]').click(); await wait(20);
+  assert.equal(a.d.getElementById('f-atc').value, 'A10BX16');
+  a.d.getElementById('add').click(); await wait(40);
+  assert.match(a.text('#cat-body'), /Diabetes y metabolismo · Control de peso · ATC A10BX16/);
+  assert.deepEqual(a.errors, []);
+});

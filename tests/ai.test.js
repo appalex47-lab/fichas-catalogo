@@ -254,3 +254,28 @@ test('complementos: el prompt no deja que la IA recomiende sustitutos ni consejo
   assert.match(m[0].content, /sin consejos médicos/);
   assert.match(JSON.parse(m[1].content).tarea, /producto principal/);
 });
+
+test('área terapéutica: solo áreas de la lista cerrada, máximo dos, ATC solo si tiene formato válido', async () => {
+  const F = require('../js/logic.js');
+  const r = AI.verifyArea({ areas: [{ area: 'diabetes y metabolismo', motivo: 'm' }, { area: 'Control de peso', motivo: 'x'.repeat(400) }, { area: 'Cardiovascular', motivo: 'tercera' }, { area: 'Inventada', motivo: 'no' }, { area: 'Diabetes y metabolismo', motivo: 'repetida' }], atc: ' a10bx16 ' });
+  assert.deepEqual(r.areas.map(x => x.area), ['Diabetes y metabolismo', 'Control de peso']);
+  assert.ok(r.areas[1].motivo.length <= 160);
+  assert.equal(r.atc, 'A10BX16');
+  assert.equal(AI.verifyArea({ areas: [], atc: 'XYZ123' }).atc, '');
+  assert.deepEqual(AI.verifyArea(null), { areas: [], atc: '' });
+  assert.ok(F.AREAS.every(a => AI.verifyArea({ areas: [{ area: a, motivo: '' }], atc: '' }).areas.length === 1), 'toda el área de la lista se reconoce');
+  const calls = [];
+  const out = await AI.aiArea({ apiKey: 'k', cat: 'med', name: 'Mounjaro 2.5 mg', fields: { marca: 'Mounjaro', principio: 'Tirzepatida', receta: 'si', laboratorio: 'Eli Lilly' }, fetchImpl: async (u, init) => { calls.push(JSON.parse(init.body)); return okFetch({ areas: [{ area: 'Diabetes y metabolismo', motivo: 'antidiabético' }], atc: 'A10BX16' })(); } });
+  assert.equal(out.atc, 'A10BX16');
+  const user = JSON.parse(calls[0].messages[1].content);
+  assert.deepEqual(Object.keys(user.producto.datos).sort(), ['marca', 'principio'], 'no se envían receta ni laboratorio');
+  assert.ok(user.areas_permitidas.includes('Hidratación'));
+});
+
+test('complementos: el área y el ATC viajan como contexto cuando existen', () => {
+  const m = AI.buildComplementMessages({ mode: 'child', subject: { name: 'Fresubin', cat: 'beb', area: 'Nutrición y vitaminas' }, candidates: [{ id: 1, name: 'Mounjaro', cat: 'med', area: 'Diabetes y metabolismo', area2: 'Control de peso', atc: 'A10BX16' }] });
+  const p = JSON.parse(m[1].content);
+  assert.equal(p.producto.area, 'Nutrición y vitaminas');
+  assert.equal(p.candidatos[0].area, 'Diabetes y metabolismo / Control de peso');
+  assert.equal(p.candidatos[0].atc, 'A10BX16');
+});
