@@ -165,9 +165,27 @@ async function aiExtract(o) {
 /* ---------- Fotos del empaque ---------- */
 const MAX_IMAGES = 3;
 /* Campos que se pueden leer de un empaque. Nunca la receta. */
-const IMG_FIELDS = ['marca', 'producto', 'tipo', 'principio', 'concentracion', 'volumen', 'forma', 'contenido', 'via', 'laboratorio', 'fabricante', 'modelo', 'sabor', 'atributo', 'componente', 'variante', 'material', 'inci', 'modo', 'precauciones', 'fps'];
+const IMG_FIELDS = ['marca', 'producto', 'tipo', 'principio', 'concentracion', 'volumen', 'forma', 'contenido', 'via', 'laboratorio', 'fabricante', 'modelo', 'sabor', 'atributo', 'componente', 'variante', 'material', 'inci', 'modo', 'precauciones', 'fps',
+  'nutrimental', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'porcion', 'porciones'];
+/* Campos que solo se leen en una categoría (en dermocosméticos y cuidado personal «ingredientes» es otro dato y no se lee de la foto). */
+const IMG_BY_CAT = { sup: ['ingredientes'] };
+const imgAllowed = cat => new Set([...IMG_FIELDS, ...(IMG_BY_CAT[cat] || [])]);
 /* Textos que deben ser copia literal de lo que se lee. */
-const VERBATIM = new Set(['inci', 'modo', 'precauciones']);
+const VERBATIM = new Set(['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos']);
+/* Tablas: varias líneas con barras. Cada cantidad con su unidad y cada palabra deben estar en lo leído. */
+const TABLE_KEYS = new Set(['nutrimental']);
+const cleanLines = s => String(s ?? '').replace(/\r/g, '').split('\n').map(l => l.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+const PAIR_RE = /(\d+(?:[.,]\d+)?)\s*(kcal|kj|mcg|µg|ug|mg|ui|iu|ml|cal|g|l|%)(?![a-z])/g;
+const pairs = t => new Set([...fold(String(t || '')).toLowerCase().matchAll(PAIR_RE)].map(m => m[1].replace(',', '.') + ({ 'µg': 'mcg', ug: 'mcg', iu: 'ui' }[m[2]] || m[2])));
+const TABLE_WORDS = new Set(['nutriente', 'cantidad', 'por', 'porcion', 'vd', 'valor', 'de', 'la', 'el']);
+/* null si la tabla es coherente con la transcripción; si no, el motivo. */
+function tableProblem(valor, leido) {
+  const lp = pairs(leido), lt = new Set(tok(leido));
+  const missingPair = [...pairs(valor)].find(p => !lp.has(p));
+  if (missingPair) return `la cantidad «${missingPair}» no está en lo leído`;
+  const missingWord = tok(valor).find(t => !lt.has(t) && !TABLE_WORDS.has(t));
+  return missingWord ? `la palabra «${missingWord}» no está en lo leído` : null;
+}
 
 function fitSize(w, h, max) {
   const s = Math.min(1, max / Math.max(w, h, 1));
@@ -181,14 +199,15 @@ Reglas:
 3. Incluye solo campos de "campos_permitidos" de esa categoría.
 4. "texto_leido" es la transcripción EXACTA de lo que se ve en la foto. "valor" usa solo esas palabras (puedes corregir mayúsculas). Para inci, modo y precauciones, "valor" debe ser idéntico a "texto_leido".
 5. Si algo no se lee con claridad, no lo incluyas o pon "legible": false. Nunca lo completes, lo adivines ni lo traduzcas.
-6. No incluyas datos que no estén visibles en las fotos. No indiques si el producto requiere receta.`;
+6. No incluyas datos que no estén visibles en las fotos. No indiques si el producto requiere receta.
+7. Para ingredientes, alergenos, advertencias y atributos, "valor" es idéntico a "texto_leido". Para nutrimental, "valor" es la tabla en líneas con barras: una primera línea opcional de encabezados que empieza con "#" (por ejemplo "# Nutriente | Por porción | Por 100 g | % VD") y luego una línea por nutriente "Nombre | cantidad | cantidad". Una subfila empieza con "-". Las cantidades y unidades deben ser exactamente las de la etiqueta; nunca calcules, conviertas ni completes valores.`;
 
 /* o: { cat, text, images: [dataUrl] } */
 function buildVisionMessages(o) {
   const cat = o.cat && CATS[o.cat] ? o.cat : null;
   const categorias = (cat ? [cat] : Object.keys(CATS)).map(id => ({
     id, nombre: CATS[id].name,
-    campos_permitidos: CATS[id].fields.filter(f => IMG_FIELDS.includes(f.key)).map(f => ({ clave: f.key, etiqueta: f.label }))
+    campos_permitidos: CATS[id].fields.filter(f => imgAllowed(id).has(f.key)).map(f => ({ clave: f.key, etiqueta: f.label }))
   }));
   const content = [{ type: 'text', text: JSON.stringify({ categoria_conocida: cat, categorias, texto_adicional: clean(o.text || '') || null }) }];
   (o.images || []).slice(0, MAX_IMAGES).forEach(u => content.push({ type: 'image_url', image_url: { url: u, detail: 'high' } }));
@@ -202,17 +221,19 @@ function verifyVision(data, opts) {
   const cat = (opts.cat && CATS[opts.cat]) ? opts.cat : ((data && CATS[data.categoria]) ? data.categoria : null);
   const out = { cat, campos: [], rechazados: [] };
   if (!cat) return out;
-  const allowed = new Set(CATS[cat].fields.map(f => f.key).filter(k => IMG_FIELDS.includes(k)));
+  const okKeys = imgAllowed(cat), allowed = new Set(CATS[cat].fields.map(f => f.key).filter(k => okKeys.has(k)));
   const seen = new Set();
   ((data && data.campos) || []).forEach(c => {
-    const campo = mapKey(cat, clean(c && c.campo)), valor = clean(c && c.valor), leido = clean(c && c.texto_leido);
+    const campo = mapKey(cat, clean(c && c.campo)), isTable = TABLE_KEYS.has(campo);
+    const valor = isTable ? cleanLines(c && c.valor) : clean(c && c.valor), leido = isTable ? cleanLines(c && c.texto_leido) : clean(c && c.texto_leido);
     const rej = motivo => out.rechazados.push({ campo, valor, motivo });
     if (!allowed.has(campo)) return rej('campo no permitido');
     if (c && c.legible === false) return rej('no se lee con claridad');
     if (!valor || !leido) return rej('falta el valor o el texto leído');
     const verbatim = VERBATIM.has(campo);
-    if (valor.length > (verbatim ? 1500 : 80)) return rej('demasiado largo');
-    if (verbatim) { if (norm(valor) !== norm(leido)) return rej('no es una copia literal de lo leído'); }
+    if (valor.length > (isTable ? 3000 : verbatim ? 1500 : 80)) return rej('demasiado largo');
+    if (isTable) { const why = tableProblem(valor, leido); if (why) return rej(why); }
+    else if (verbatim) { if (norm(valor) !== norm(leido)) return rej('no es una copia literal de lo leído'); }
     else {
       const lt = new Set(tok(leido)), vt = tok(valor);
       if (!vt.length || !vt.every(t => lt.has(t))) return rej('el valor no coincide con lo leído');
@@ -258,7 +279,7 @@ Metas: en medicamentos siguen la estructura de la agencia de SEO. Las demás cat
 Ajustes (engrane arriba a la derecha): Formato (siglas que se mantienen en mayúsculas), Diccionarios (marcas, principios activos y laboratorios, sugerir marca por posición y aprender del lote), IA (llave y modelo de Cohere) y Magento (código del atributo del título, codificación del archivo y estructura de metas y alt por categoría).
 Botón «¿Por qué?»: aparece junto a los avisos, los bloqueos de Magento, los datos faltantes y los motivos de exclusión de la exportación. Abre el asistente con la explicación calculada para el producto actual, sin usar IA.
 Asistente: las preguntas sobre la pantalla (por qué se bloquea Magento, qué falta para exportar, qué significan los avisos) se responden con los datos de la herramienta, sin IA. Las demás se consultan con Cohere. Las respuestas pueden traer botones de acción (ir a un campo, abrir Ajustes, filtrar el lote).
-Fotos del empaque: en «Rellenar desde datos crudos» se pueden agregar hasta 3 fotos del producto y la IA (modelo con visión) lee marca, producto, tipo, contenido, fabricante y, en cosméticos, ingredientes, modo de uso, precauciones y FPS. Las fotos se reducen en el navegador, se envían solo a Cohere y no se guardan. Lo leído se muestra junto a lo que la IA transcribió para que lo compares con la foto, se aplica solo lo que aceptas, queda marcado como IA sin confirmar y no se exporta a Magento hasta confirmarlo en el lote. La IA nunca indica si un producto requiere receta.
+Fotos del empaque: en «Rellenar desde datos crudos» se pueden agregar hasta 3 fotos del producto y la IA (modelo con visión) lee marca, producto, tipo, contenido, fabricante y, en cosméticos, ingredientes, modo de uso, precauciones y FPS, y en suplementos la tabla nutrimental, los ingredientes, los alérgenos y las advertencias. Las fotos se reducen en el navegador, se envían solo a Cohere y no se guardan. Lo leído se muestra junto a lo que la IA transcribió para que lo compares con la foto, se aplica solo lo que aceptas, queda marcado como IA sin confirmar y no se exporta a Magento hasta confirmarlo en el lote. La IA nunca indica si un producto requiere receta.
 Documento de reglas: el botón «Reglas» (libro, junto al engrane) abre el documento de reglas de construcción de fichas para Asuntos Regulatorios. Se genera con el mismo código que valida las fichas: estructuras y plantillas por categoría, listas de términos del semáforo de claims, leyendas fijas, bloqueos de Magento, reglas de exportación y uso de IA. Cada regla indica su origen y si la herramienta la bloquea, avisa, corrige o solo la documenta. Se puede descargar en HTML o imprimir como PDF, e incluye una huella que cambia cuando cambia cualquier regla y un bloque de firma. No es asesoría legal y no está aprobado hasta que lo firme Regulatorio.
 Conteo de llamadas: Ajustes, pestaña IA, muestra cuántas llamadas a Cohere se han hecho este mes desde este navegador y cuántas respuestas se resolvieron sin IA. Ahí se configuran el límite mensual de la llave y un modelo más ligero para el asistente.
 Límites: la herramienta no se conecta a Magento y no da asesoría regulatoria. Los textos aprobados no se modifican.`;
@@ -372,6 +393,7 @@ async function aiArea(o) {
 }
 
 const api = {
+  VERBATIM, TABLE_KEYS, IMG_BY_CAT, imgAllowed, tableProblem,
   ENDPOINT, DEFAULT_MODEL, DEFAULT_ASSISTANT_MODEL, DEFAULT_VISION_MODEL, MAX_IMAGES, IMG_FIELDS, KEY_STORAGE, BATCH, AI_EXTRACT, AI_SUGGEST, HELP_KB, ASSISTANT_RULES,
   buildExtractMessages, extractSchema, verifyItem, parseJsonLoose, httpMessage, chat, aiExtract, buildAssistantMessages, assistantSchema, assistantAnswer, AREA_RULES, areaSchema, buildAreaMessages, verifyArea, aiArea, COMPLEMENT_MAX, COMPLEMENT_RULES, complementSchema, buildComplementMessages, verifyComplements, aiComplements, fitSize, buildVisionMessages, verifyVision, visionExtract
 };

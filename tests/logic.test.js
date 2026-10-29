@@ -629,3 +629,35 @@ test('tabla nutrimental: sin captura no cambia nada y las preguntas frecuentes s
   assert.ok(resp(/proteína/).every(b => /aporta 24 g de proteína/.test(b)) && resp(/proteína/).length);
   assert.ok(resp(/azúcar/).every(b => /tiene 1.5 g de azúcares/.test(b)) && resp(/azúcar/).length);
 });
+
+/* ---------- Suplementos: ingredientes, alérgenos, advertencias, atributos, público y envase ---------- */
+test('suplementos: los campos de ficha nuevos son opcionales, literales y salen en su lugar', () => {
+  const base = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: '900 g', fabricante: 'GNC' };
+  ['ingredientes', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase'].forEach(k => assert.ok(F.CATS.sup.fields.some(f => f.key === k && f.g === 'd' && !f.req), k));
+  const sin = F.computeFor('sup', base, keep, meta).mg.html;
+  assert.ok(!/Ingredientes:|Alérgenos:|Advertencias:|Atributos:|Dirigido a|Tipo de Envase/.test(sin), 'sin captura no cambia nada');
+  const con = F.computeFor('sup', { ...base, envase: 'FCO', publico: 'Adultos', ingredientes: 'Concentrado de proteína de suero (LECHE), lecitina de SOYA, sucralosa', alergenos: 'CONTIENE LECHE Y SOYA.', advertencias: 'No se recomienda en embarazo ni lactancia. Consulte a su médico.', atributos: 'vegano, sin gluten; Sin azúcar añadida.' }, keep, meta).mg.html;
+  assert.match(con, /<li><strong>Tipo de Envase:<\/strong> Frasco<\/li>/);
+  assert.match(con, /<li><strong>Dirigido a:<\/strong> Adultos<\/li>/);
+  assert.match(con, /<h2>Ingredientes:<\/h2>\n<p>Concentrado de proteína de suero \(LECHE\), lecitina de SOYA, sucralosa<\/p>/, 'la lista se conserva tal cual, incluidas las mayúsculas');
+  assert.match(con, /<h2>Alérgenos:<\/h2>\n<p>Contiene leche y soya\.<\/p>/);
+  assert.match(con, /<h2>Atributos:<\/h2>\n<ul>\n  <li>Vegano<\/li>\n  <li>Sin gluten<\/li>\n  <li>Sin azúcar añadida<\/li>\n<\/ul>/);
+  assert.match(con, /<h2>Advertencias:<\/h2>\n<p>No se recomienda en embarazo ni lactancia\. Consulte a su médico\.<\/p>/);
+  const i = t => con.indexOf(t);
+  assert.ok(i('Ficha técnica') < i('Ingredientes:') && i('Ingredientes:') < i('Alérgenos:') && i('Alérgenos:') < i('Atributos:') && i('Atributos:') < i('Advertencias:') && i('Advertencias:') < i('Condiciones de conservación'));
+});
+
+test('suplementos: los campos de ficha nuevos alimentan las preguntas frecuentes solo si se capturaron', () => {
+  const base = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: '900 g', fabricante: 'GNC' };
+  const q = (v) => [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS.sup, v, sd).items);
+  const vacias = q(base).map(x => x[0]).join(' ');
+  assert.ok(!/ingredientes|alérgenos|atributos|advertencias|Para quién|dirigido/i.test(vacias));
+  const llenas = q({ ...base, ingredientes: 'Proteína de suero', alergenos: 'Contiene leche', atributos: 'Sin gluten', publico: 'Adultos', advertencias: 'Consulte a su médico' });
+  const resp = re => llenas.filter(([a]) => re.test(a)).map(x => x[1]);
+  assert.ok(resp(/ingredientes/).length && resp(/ingredientes/).every(b => b === 'Proteína de suero.'));
+  assert.ok(resp(/alérgenos/).length && resp(/alérgenos/).every(b => b === 'Contiene leche.'));
+  assert.ok(resp(/atributos|empaque/).every(b => b === 'Sin gluten.'));
+  assert.ok(resp(/quién|dirigido/).every(b => /dirigido a adultos/i.test(b)));
+  assert.ok(resp(/advertencias|precauciones/).every(b => b === 'Consulte a su médico.'));
+  assert.ok(F.computeFor('sup', { ...base, publico: 'Adultos' }, keep, meta).mc.text.includes('Dirigido a adultos'));
+});

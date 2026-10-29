@@ -1812,7 +1812,7 @@ $('#logo-clear').addEventListener('click', () => {
   toast('Logotipo quitado.');
 });
 
-const VERBATIM_KEYS = ['inci', 'modo', 'precauciones'];
+const VERBATIM_KEYS = ['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'nutrimental'];
 function renderImgReview() {
   const box = $('#img-review'), r = state.imgResult;
   if (!r) { box.innerHTML = ''; return; }
@@ -1821,8 +1821,8 @@ function renderImgReview() {
   box.innerHTML = `<div class="note note--warn"><p><strong>Datos leídos de la foto.</strong> Compáralos con la imagen y corrige lo necesario. Al aplicarlos quedan como «IA sin confirmar» y no se exportan a Magento hasta confirmarlos en el lote.</p></div>
     <div class="review">${r.campos.map((x, i) => `<div class="review-row">
       <label class="check"><input type="checkbox" data-imgon="${i}" ${x.existente ? '' : 'checked'}><span><b>${esc(labelOf(c, x.campo))}</b>${x.numeros ? ' <span class="ai-badge ai-badge--sug">Revisa los números</span>' : ''}${x.existente ? `<span class="ai-why">Ya tiene un dato: ${esc(x.existente)}</span>` : ''}</span></label>
-      ${VERBATIM_KEYS.includes(x.campo) ? `<textarea data-imgval="${i}" rows="3">${esc(x.valor)}</textarea>` : `<input type="text" data-imgval="${i}" value="${esc(x.valor)}" autocomplete="off">`}
-      <span class="ai-why">Leído en la foto: ${esc(x.leido)}</span></div>`).join('')}</div>
+      ${VERBATIM_KEYS.includes(x.campo) ? `<textarea data-imgval="${i}" rows="${x.campo === 'nutrimental' ? 8 : 3}">${esc(x.valor)}</textarea>` : `<input type="text" data-imgval="${i}" value="${esc(x.valor)}" autocomplete="off">`}
+      <span class="ai-why" style="white-space:pre-line">Leído en la foto: ${esc(x.leido)}</span></div>`).join('')}</div>
     <div class="actions"><button class="btn btn--primary" data-imgapply="1">Aplicar los seleccionados</button><button class="btn btn--quiet" data-imgcancel="1">Descartar</button></div>`;
 }
 function applyImgReview() {

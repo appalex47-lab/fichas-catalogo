@@ -279,3 +279,56 @@ test('complementos: el área y el ATC viajan como contexto cuando existen', () =
   assert.equal(p.candidatos[0].area, 'Diabetes y metabolismo / Control de peso');
   assert.equal(p.candidatos[0].atc, 'A10BX16');
 });
+
+/* ---------- Fotos: tabla nutrimental y leyendas de suplementos ---------- */
+const LEIDO_TABLA = 'INFORMACIÓN NUTRIMENTAL Tamaño de porción 1 scoop (30 g) Nutriente Por porción Por 100 g % VD Energía 120 kcal 400 kcal 6% Proteína 24 g 80 g 48% Carbohidratos 3 g 10 g 1% Azúcares 1.5 g 5 g Sodio 90 mg 300 mg 4%';
+const TABLA = '# Nutriente | Por porción | Por 100 g | % VD\nEnergía | 120 kcal | 400 kcal | 6 %\nProteína | 24 g | 80 g | 48 %\nCarbohidratos | 3 g | 10 g | 1 %\n- Azúcares | 1.5 g | 5 g\nSodio | 90 mg | 300 mg | 4 %';
+const campo = (campo, valor, texto_leido) => ({ campo, valor, texto_leido });
+
+test('fotos: la tabla nutrimental se acepta si cada cantidad con su unidad y cada palabra están en lo leído', () => {
+  const r = AI.verifyVision({ categoria: 'sup', campos: [campo('nutrimental', TABLA, LEIDO_TABLA)] }, { cat: 'sup' });
+  assert.equal(r.rechazados.length, 0, JSON.stringify(r.rechazados));
+  assert.equal(r.campos[0].campo, 'nutrimental');
+  assert.equal(r.campos[0].valor, TABLA, 'se conservan los saltos de línea');
+  assert.equal(r.campos[0].numeros, true, 'se pide revisar los números');
+});
+
+test('fotos: la tabla nutrimental se rechaza si cambia una cantidad, una unidad o inventa un nutriente', () => {
+  const rej = tabla => AI.verifyVision({ categoria: 'sup', campos: [campo('nutrimental', tabla, LEIDO_TABLA)] }, { cat: 'sup' }).rechazados.map(x => x.motivo);
+  assert.match(rej(TABLA.replace('24 g', '25 g'))[0], /«25g» no está en lo leído/);
+  assert.match(rej(TABLA.replace('90 mg', '90 g'))[0], /«90g» no está en lo leído/, 'una unidad distinta cuenta como otra cantidad');
+  assert.match(rej(TABLA + '\nFibra | 2 g')[0], /«2g»/);
+  assert.match(rej(TABLA.replace('Sodio | 90 mg', 'Potasio | 90 mg'))[0], /palabra «potasio»/);
+  assert.deepEqual(rej(TABLA.replace('1.5 g', '1,5 g')), [], 'la coma o el punto decimal no cambian la cantidad');
+  assert.match(rej(TABLA.replace('120 kcal', '120,0 kcal'))[0], /«120.0kcal»/, 'pero una cifra distinta, aunque valga lo mismo, se revisa');
+  const sinLeido = AI.verifyVision({ categoria: 'sup', campos: [{ campo: 'nutrimental', valor: TABLA }] }, { cat: 'sup' });
+  assert.match(sinLeido.rechazados[0].motivo, /falta el valor o el texto leído/);
+});
+
+test('fotos: ingredientes, alérgenos, advertencias y atributos deben ser copia literal, y ingredientes solo se lee en suplementos', () => {
+  const ok = AI.verifyVision({ categoria: 'sup', campos: [
+    campo('ingredientes', 'Proteína de suero (LECHE), lecitina de SOYA', 'Proteína de suero (LECHE), lecitina de SOYA'),
+    campo('alergenos', 'Contiene leche y soya', 'Contiene leche y soya'),
+    campo('advertencias', 'Consulte a su médico', 'Consulte a su médico'),
+    campo('atributos', 'Vegano, sin gluten', 'Vegano, sin gluten'),
+    campo('envase', 'Bote', 'Bote'), campo('publico', 'Adultos', 'Para adultos'), campo('porcion', '1 scoop (30 g)', 'Porción: 1 scoop (30 g)'), campo('porciones', '30', 'Porciones por envase: 30')
+  ] }, { cat: 'sup' });
+  assert.deepEqual(ok.rechazados, []);
+  assert.equal(ok.campos.length, 8);
+  const mal = AI.verifyVision({ categoria: 'sup', campos: [campo('alergenos', 'Contiene leche', 'Contiene leche y soya'), campo('ingredientes', 'Agua', 'Agua, sal')] }, { cat: 'sup' });
+  assert.deepEqual(mal.rechazados.map(x => x.motivo), ['no es una copia literal de lo leído', 'no es una copia literal de lo leído']);
+  const cos = AI.verifyVision({ categoria: 'cos', campos: [campo('ingredientes', 'Agua', 'Agua')] }, { cat: 'cos' });
+  assert.equal(cos.rechazados[0].motivo, 'campo no permitido', 'en cosméticos «ingredientes» es otro dato y no se lee');
+  const med = AI.verifyVision({ categoria: 'med', campos: [campo('nutrimental', TABLA, LEIDO_TABLA)] }, { cat: 'med' });
+  assert.equal(med.rechazados[0].motivo, 'campo no permitido');
+});
+
+test('fotos: el aviso enviado a la IA incluye los campos nuevos solo para suplementos y explica el formato de la tabla', () => {
+  const m = AI.buildVisionMessages({ cat: 'sup', images: ['data:image/jpeg;base64,AAAA'] });
+  const claves = JSON.parse(m[1].content[0].text).categorias[0].campos_permitidos.map(x => x.clave);
+  ['nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'envase', 'publico', 'porcion', 'porciones'].forEach(k => assert.ok(claves.includes(k), k));
+  assert.match(m[0].content, /nutrimental, "valor" es la tabla en líneas con barras/);
+  assert.match(m[0].content, /nunca calcules, conviertas ni completes/);
+  const cos = JSON.parse(AI.buildVisionMessages({ cat: 'cos', images: ['x'] })[1].content[0].text).categorias[0].campos_permitidos.map(x => x.clave);
+  assert.ok(!cos.includes('nutrimental') && !cos.includes('ingredientes'));
+});

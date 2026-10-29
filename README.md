@@ -199,6 +199,16 @@ Proteína | 24 g | 80 g | 48 %
 - Las preguntas frecuentes agregan «¿Cuántas calorías tiene…?», «¿Cuánta proteína tiene…?» y «¿Cuánta azúcar tiene…?», con el valor de la primera columna de la tabla.
 - No encontré una fuente que confirme qué estructura de información nutrimental exige la normativa para suplementos (la NOM-051 se aplica a alimentos y bebidas preenvasados), por eso la tabla copia el formato de cada etiqueta. Valida con tu equipo regulatorio cualquier leyenda obligatoria.
 
+## Más campos de la ficha de suplementos y lectura por foto
+
+- **Campos opcionales y literales** (suplementos, «Datos para las descripciones»): «Lista de ingredientes» (tal cual del empaque, respeta las mayúsculas), «Alérgenos», «Advertencias», «Atributos del empaque» (separados por comas, salen como lista), «Dirigido a» y «Tipo de envase» (con lista de ayuda). Salen en el HTML de Magento en este orden: tabla nutrimental, composición, ingredientes, alérgenos, atributos, características, modo de consumo, advertencias y condiciones de conservación. «Dirigido a» y «Tipo de envase» van como filas de la ficha técnica. También alimentan las preguntas frecuentes («¿Contiene alérgenos?», «¿Cuáles son los ingredientes…?», «¿Qué advertencias tiene…?», «¿Para quién es…?») y, si no se capturan, no cambian nada.
+- **Lectura de la tabla y las leyendas desde foto** (requiere llave de Cohere): en suplementos, «Extraer de las fotos» también lee la tabla nutrimental, los ingredientes, los alérgenos, las advertencias, los atributos, el público, el envase y la porción. Las mismas reglas de seguridad de siempre:
+  - Ingredientes, alérgenos, advertencias y atributos deben ser **copia literal** de la transcripción de la foto.
+  - La **tabla** debe cuadrar con la transcripción: cada cantidad con su unidad (`24 g`, `90 mg`) y cada palabra del nombre deben aparecer en lo leído. Una cantidad cambiada, una unidad distinta o un nutriente inventado se rechaza. Lo ilegible se descarta y no se calcula nada.
+  - Verás lo leído junto a la transcripción, en un cuadro editable, con el aviso «Revisa los números». Lo que apliques queda como «IA sin confirmar» y no se exporta a Magento hasta confirmarlo.
+  - Una limitación honesta: si la IA pone un valor en una columna equivocada (por ejemplo, el de por 100 g bajo «Por porción»), la verificación no lo detecta, porque la cantidad sí está en la etiqueta. Por eso hay que comparar con la foto.
+  - «Ingredientes» solo se lee en suplementos; en dermocosméticos sigue siendo «Ingredientes o activos destacados» y no se lee de la foto.
+
 ## Formas, tipos y campos de suplementos
 
 - **Forma:** es un campo de texto libre; se puede escribir cualquier valor. Los campos de forma (medicamentos y suplementos) y de tipo (dispositivos, dermocosméticos, bebidas, cuidado personal y accesorios) muestran una lista de ayuda al escribir, que no limita lo que capturas.

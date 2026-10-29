@@ -39,7 +39,7 @@ const FIELD_TYPE = Object.freeze({ marca: 'brand', principio: 'substance', compo
 const PRESENTATION_FIELDS = Object.freeze(['contenido', 'paquete', 'presentacion']);
 /* Tipos y campos críticos: nunca se autocorrigen (sustancias, concentraciones, relación marca/laboratorio, claims, datos regulatorios). */
 const CRITICAL_TYPES = Object.freeze(['substance', 'concentration', 'laboratory', 'brand', 'manufacturer']);
-const CRITICAL_FIELDS = Object.freeze(['principio', 'componente', 'concentracion', 'laboratorio', 'marca', 'fabricante', 'receta', 'leyenda', 'precauciones', 'modo', 'nutrimental', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'inci', 'fps', 'nivel', 'via']);
+const CRITICAL_FIELDS = Object.freeze(['principio', 'componente', 'concentracion', 'laboratorio', 'marca', 'fabricante', 'receta', 'leyenda', 'precauciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'inci', 'fps', 'nivel', 'via']);
 const AUTO_TYPES = Object.freeze(['pharmaceuticalForm', 'unit', 'presentation', 'category', 'subcategory']);
 /* Predicados cuyo objeto debe ser único para un sujeto: dos objetos distintos son un conflicto, no una elección. */
 const FUNCTIONAL = Object.freeze(['brand→laboratory', 'product→brand', 'product→laboratory', 'product→manufacturer', 'product→pharmaceuticalForm', 'product→presentation', 'product→concentration', 'product→category', 'product→subcategory']);
