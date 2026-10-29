@@ -176,6 +176,17 @@ Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**
 - **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe el título del producto (que incluye marca, principio activo, concentración, presentación y laboratorio) y esos mismos datos sueltos; no recibe receta, categoría, SKU ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
 - El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
 
+## Diccionario de clasificación (Ajustes, pestaña Clasificación)
+
+Relaciona cada **principio activo** con su **código ATC** y su área. Es un dato interno: no sale en la ficha, en el CSV ni en Magento. Se guarda solo en este navegador (exporta e importa CSV para pasarlo a otro).
+
+- **Solo lo verificado se aplica solo.** Una fila «verificada» llena el ATC y el área del formulario cuando capturas el principio activo, y solo en campos vacíos. Una fila «sin verificar» nunca se aplica sola: «Sugerir con IA» la muestra con el aviso.
+- **Qué significa verificar.** Comparar el código con la fuente oficial (el [índice ATC/DDD de la OMS](https://atcddd.fhi.no/atc_ddd_index/), de consulta gratuita) y anotar la fuente y quién lo verificó. La fecha se registra sola. Sin fuente, sin persona o con un ATC de formato inválido no se puede verificar, y una fila importada como «verificado» sin esos datos entra como «sin verificar». Si cambias el código de una fila verificada, vuelve a «sin verificar».
+- **El área sale del ATC** con una tabla fija (`ATC_AREAS` en `js/clasif.js`): por ejemplo A10 → Diabetes y metabolismo, N02 → Dolor e inflamación. Los nombres de los grupos son los de la OMS; el área es una agrupación propia. Una fila puede fijar su propia área o una segunda (por ejemplo Control de peso).
+- **Orden de uso:** diccionario primero (sin gastar llamadas) y, si el principio activo no está, la IA propone. Un ATC propuesto por la IA y aplicado queda en el diccionario como «sin verificar».
+- **Plantilla:** «Plantilla con mis principios activos» descarga los principios del lote que faltan. `docs/clasificacion-candidatos.csv` trae 13 candidatos comunes, todos **sin verificar**: los códigos los puse de memoria y hay que compararlos con la OMS antes de verificarlos.
+- **Alta especialidad y receta no se infieren.** No encontré un listado oficial de medicamentos de alta especialidad, así que es un dato que declara una persona. La receta sale del registro sanitario o del empaque.
+
 ## Datos crudos (extracción por reglas)
 
 Toma un SKU sucio y llena el formulario, o las filas de una carga masiva con una columna de datos crudos. Solo copia lo que aparece en el texto:
