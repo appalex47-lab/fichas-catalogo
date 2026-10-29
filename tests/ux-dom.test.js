@@ -399,3 +399,19 @@ test('UX: campos con nombre accesible, botones con tipo y región en vivo', { sk
   assert.equal(a.d.getElementById('ux-live').getAttribute('aria-live'), 'polite');
   assert.equal(a.d.querySelector('.skip').getAttribute('href'), '#h-prod');
 });
+
+test('relacionados: la opción de exportar viene activa y el detalle del lote muestra las alternativas', { skip }, async () => {
+  const a = boot();
+  assert.equal(a.d.getElementById('exp-rel').checked, true);
+  a.addMed('TEM-20', 'Tempra', 'Caja con 20 tabletas');
+  a.addMed('TYL-20', 'Tylenol', 'Caja con 20 tabletas');
+  await wait(50);
+  a.d.querySelector('#lote-body [data-toggle]').click();
+  await wait(50);
+  assert.match(a.text('#lote-body .lrow-detail'), /Alternativas \(mismo principio activo, concentración y presentación\): T(YL|EM)-20/);
+  assert.match(a.text('#exp-summary'), /1 con alternativas|2 con alternativas/);
+  a.d.getElementById('exp-rel').click();
+  await wait(50);
+  assert.doesNotMatch(a.text('#exp-summary'), /con alternativas/);
+  assert.deepEqual(a.errors, []);
+});

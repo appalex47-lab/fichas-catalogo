@@ -107,6 +107,11 @@ const LEGEND = {
 };
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
+/* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
+const AREAS = ['Diabetes y metabolismo', 'Control de peso', 'Cardiovascular', 'Digestivo y gastrointestinal', 'Respiratorio y alergias', 'Dolor e inflamación', 'Infecciones', 'Salud mental y neurología', 'Hormonal y salud sexual', 'Piel y dermatología', 'Ojos y oídos', 'Oncología e inmunología', 'Nutrición y vitaminas', 'Hidratación', 'Higiene y cuidado personal', 'Otra'];
+const areaOpts = () => [['', 'Sin declarar'], ...AREAS.map(x => [x, x])];
+/* Código ATC de la OMS, de 1 a 5 niveles: A, A10, A10B, A10BX, A10BX16. */
+const ATC_RE = /^[A-Z](?:\d{2}(?:[A-Z](?:[A-Z](?:\d{2})?)?)?)?$/;
 /* ---------- Categorías ---------- */
 const CATS = {
   med: {
@@ -119,9 +124,18 @@ const CATS = {
       F('forma','Forma farmacéutica',{req:1,pres:1,ph:'Solución inyectable'}),
       F('contenido','Presentación o piezas',{req:1,pres:1,ph:'30 o Caja con 4 plumas',hint:'Si capturas solo un número, se interpreta como piezas. Ejemplo: 30 → 30 piezas.'}),
       F('laboratorio','Laboratorio',{req:1,ph:'Eli Lilly'}),
+      F('categoria','Categoría',{ph:'Endocrinología',hint:'Categoría del árbol de la tienda, por ejemplo Endocrinología. Opcional. Aparece en la ficha técnica de Magento.'}),
       F('via','Vía de administración',{req:1,g:'d',ph:'Subcutánea'}),
       F('receta','¿Requiere receta médica?',{req:1,g:'d',type:'select',opts:[['','Sin declarar'],['si','Sí requiere receta'],['no','No requiere receta']],hint:'Dato regulatorio obligatorio. Sin él no se genera el HTML de Magento.'}),
-      F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'})
+      F('leyenda','Leyenda regulatoria adicional',{g:'d',type:'area',hint:'Solo si viene en la ficha de origen.'}),
+      F('area','Área terapéutica',{g:'i',type:'select',opts:areaOpts(),hint:'Dato interno. No sale en la ficha, en el CSV ni en Magento.'}),
+      F('area2','Segunda área terapéutica',{g:'i',type:'select',opts:areaOpts(),hint:'Solo si el producto tiene dos usos, por ejemplo diabetes y control de peso.'}),
+      F('atc','Código ATC',{g:'i',raw:1,upper:1,ph:'A10BX16',hint:'Clasificación Anatómica, Terapéutica y Química de la OMS. Opcional. Verifícalo en el índice ATC oficial.'}),
+      F('especialidad','¿Es de alta especialidad?',{g:'i',type:'select',opts:[['','Sin declarar'],['si','Sí es de alta especialidad'],['no','No es de alta especialidad']],hint:'Dato interno. No sale en la ficha, en el CSV ni en Magento. Un medicamento con receta, de alta especialidad o sin declarar nunca se recomienda como complemento de otro producto.'}),
+      F('indicaciones','Indicaciones',{g:'d',type:'area',sentence:1,hint:'Cópialas tal cual del inserto o del registro sanitario. Aparece en una sección aparte y en las preguntas frecuentes.'}),
+      F('posologia','Posología o cómo se usa',{g:'d',type:'area',sentence:1,hint:'Dosis y frecuencia tal como están en el inserto. Aparece en una sección aparte.'}),
+      F('poblacion','Población a la que va dirigido',{g:'d',type:'area',sentence:1,hint:'Por ejemplo, adultos o uso pediátrico, tal como indica el inserto.'}),
+      F('contraindicaciones','Contraindicaciones y advertencias',{g:'d',type:'area',sentence:1,hint:'Tal como están en el inserto. Aparece en una sección aparte.'})
     ],
     title: [
       seg('Marca + concentración / volumen', ['marca','concentracion','volumen'], v => join(' ', v.marca, join(' / ', v.concentracion, v.volumen))),
@@ -157,8 +171,10 @@ const CATS = {
       if (v.receta === 'si') p += ' ' + LEGEND.medReceta;
       return assemble(p, 'Ficha técnica del producto:', [
         ['Nombre Comercial', v.marca], ['Sustancia Activa', v.principio], ['Concentración', conc],
-        ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio]
+        ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio], ['Categoría', v.categoria]
       ], [
+        ...[['Indicaciones:', v.indicaciones], ['Cómo se usa:', v.posologia], ['Población a la que va dirigido:', v.poblacion], ['Contraindicaciones y advertencias:', v.contraindicaciones]]
+          .filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`),
         `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.medConservacion}</p>`,
         `<h2>Aviso legal y de seguridad:</h2>\n<ul>\n${LEGEND.medAviso.map(x => `  <li>${x}</li>`).join('\n')}\n</ul>`
       ]);
@@ -177,7 +193,8 @@ const CATS = {
       F('caracteristicas','Características técnicas verificables',{g:'d',type:'area'}),
       F('paquete','Contenido del paquete',{g:'d'}),
       F('presentacion','Presentación',{g:'d',pres:1}),
-      F('extra','Especificaciones adicionales',{g:'d',type:'area',hint:'Conectividad, memoria, muestra, etc.'})
+      F('extra','Especificaciones adicionales',{g:'d',type:'area',hint:'Conectividad, memoria, muestra, etc.'}),
+      F('compat','Insumos compatibles (SKU)',{g:'d',raw:1,hint:'SKU de los insumos o accesorios que van con este producto, separados por coma. Salen en crosssell_skus. No cambian ningún texto.'})
     ],
     title: [
       seg('Marca + modelo + tipo', ['marca','modelo','tipo']),
@@ -206,7 +223,7 @@ const CATS = {
       else p += (v.presentacion ? ` Se presenta en ${S(v.presentacion)}.` : '') + ' Debe utilizarse conforme al instructivo del fabricante.';
       return assemble(p, 'Especificaciones técnicas:', [
         ['Marca', v.marca], ['Modelo', v.modelo], ['Tipo de Dispositivo', v.tipo],
-        ['Tecnología / Zona de medición', v.tecnologia], ['Contenido del Paquete', v.paquete], ['Fabricante', v.fabricante]
+        ['Tecnología / Zona de medición', v.tecnologia], ['Contenido del Paquete', v.paquete], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ]);
     }
   },
@@ -264,7 +281,7 @@ const CATS = {
       if (v.fps || v.nivel) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel]])}\n</ul>`);
       return assemble(p, 'Detalles del producto:', [
         ['Marca', v.marca], ['Nombre del Producto', v.producto], ['Tipo de Producto', v.tipo],
-        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Fabricante', v.fabricante]
+        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ], extras);
     }
   },
@@ -305,7 +322,7 @@ const CATS = {
       p += ' ' + LEGEND.supResp;
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Componente o Tipo Principal', v.componente], ['Forma', v.forma],
-        ['Contenido Neto/Piezas', v.contenido], ['Fabricante', v.fabricante]
+        ['Contenido Neto/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ], [NOTA_SUP]);
     }
   },
@@ -350,7 +367,7 @@ const CATS = {
       }
       return assemble(p, 'Características de la bebida:', [
         ['Marca', v.marca], ['Tipo de Bebida', v.tipo], ['Sabor', sabor],
-        ['Atributo Verificado', v.atributo], ['Contenido', v.contenido]
+        ['Atributo Verificado', v.atributo], ['Contenido', v.contenido], ['Categoría', v.categoria]
       ]);
     }
   },
@@ -395,7 +412,7 @@ const CATS = {
       }
       return assemble(p, 'Información de cuidado personal:', [
         ['Marca', v.marca], ['Producto', v.producto], ['Variante o Característica Principal', v.variante],
-        ['Contenido', v.contenido], ['Fabricante', v.fabricante]
+        ['Contenido', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ]);
     }
   },
@@ -410,7 +427,8 @@ const CATS = {
       F('fabricante','Fabricante',{req:1,ph:'Essity'}),
       F('queEs','¿Qué es? Descripción objetiva',{g:'d',type:'area'}),
       F('caracteristicas','Características principales',{g:'d',type:'area'}),
-      F('paquete','Incluye',{g:'d'})
+      F('paquete','Incluye',{g:'d'}),
+      F('compat','Productos compatibles (SKU)',{g:'d',raw:1,hint:'SKU de los productos que van con este accesorio, separados por coma. Salen en crosssell_skus. No cambian ningún texto.'})
     ],
     title: [
       seg('Marca + producto o modelo', ['marca','producto']),
@@ -436,13 +454,19 @@ const CATS = {
       }
       return assemble(p, 'Especificaciones del accesorio:', [
         ['Marca', v.marca], ['Producto/Modelo', v.producto], ['Material o Compatibilidad', v.material],
-        ['Contenido/Piezas', v.contenido], ['Fabricante', v.fabricante]
+        ['Contenido/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ]);
     }
   }
 };
 
 Object.keys(CATS).forEach(id => { CATS[id].id = id; });
+Object.keys(CATS).forEach(id => {
+  if (id === 'med') return;
+  const f = CATS[id].fields, last = f.map(x => !x.g).lastIndexOf(true);
+  f.splice(last + 1, 0, F('categoria', 'Categoría', { ph: 'Nutrición clínica', hint: 'Categoría del árbol de la tienda, por ejemplo Nutrición clínica. Opcional. Aparece en la ficha técnica de Magento.' }));
+});
+Object.keys(CATS).forEach(id => { if (id !== 'med') CATS[id].fields.push(F('area', 'Área de uso o necesidad', { g: 'i', type: 'select', opts: areaOpts(), hint: 'Dato interno, por ejemplo Hidratación o Nutrición y vitaminas. No sale en la ficha, en el CSV ni en Magento.' })); });
 const labelOf = (c, k) => (c.fields.find(x => x.key === k) || {}).label || k;
 
 /* ---------- Cálculo ---------- */
@@ -454,7 +478,8 @@ function values(c, raw, style, keep) {
     const orig = String(r).replace(/\s+/g, ' ').trim();
     let t = orig;
     if (t) {
-      if (fd.raw) { /* lista de ingredientes: se conserva tal cual */ }
+      if (fd.upper) t = t.toUpperCase().replace(/\s+/g, '');
+      else if (fd.raw) { /* lista de ingredientes: se conserva tal cual */ }
       else if (fd.sentence) t = normUnits(sentenceCase(t, keep), style);
       else {
         t = fixCaps(t, keep, fd.pres ? 'sentence' : 'title');
@@ -516,6 +541,80 @@ function buildMC(c, v) {
 const recetaMeta = (c, v) => c.id === 'med' ? (v.receta === 'si' ? 'Sí' : v.receta === 'no' ? 'No' : '') : 'No aplica para esta categoría';
 const mgFull = g => '```html\n' + g.html + '\n```\n\n- Categoría detectada: ' + g.meta.categoria + '\n- Requiere receta médica: ' + g.meta.receta;
 
+/* Preguntas frecuentes. Cada pregunta existe solo si el dato que la responde fue capturado. Las respuestas son frases fijas
+   o copia literal de lo capturado; no se inventa texto y no se emite JSON-LD.
+   Para que el catálogo no se vea repetitivo, la pregunta y los conectores de las respuestas de plantilla tienen variantes
+   escritas aquí. La variante se elige con un hash de los datos del producto: el mismo producto sale siempre igual y productos
+   distintos varían. Las leyendas regulatorias y los textos literales nunca se parafrasean. */
+const faqName = (c, v) => c.id === 'med' ? v.marca : join(' ', v.marca, v.producto || v.modelo || v.componente || v.tipo);
+const FAQ_MIN = 2;
+const faqSeed = (c, v) => {
+  let h = 2166136261;
+  for (const ch of [c.id, v.marca, v.principio, v.producto, v.modelo, v.componente, v.tipo, v.concentracion, v.contenido].map(x => x || '').join('|')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return h;
+};
+const faqPres = (v, ...pre) => (v.forma || v.contenido) && pre.map(t => `${t} ${join(', ', v.forma && 'en ' + lc(v.forma), v.contenido && lc(v.contenido))}.`);
+/* Cada entrada: [variantes de la pregunta, respuesta]. La respuesta es un texto fijo o una lista de variantes de plantilla. */
+const FAQ_RULES = {
+  med: (v, n) => [
+    v.principio && [[`¿Qué contiene ${n}?`, `¿Cuál es el principio activo de ${n}?`, `¿Qué sustancia activa tiene ${n}?`],
+      [`${n} contiene ${join(' ', v.principio, join(' / ', v.concentracion, v.volumen))}.`, `Su sustancia activa es ${join(' ', v.principio, join(' / ', v.concentracion, v.volumen))}.`]],
+    v.indicaciones && [[`¿Para qué se usa ${n}?`, `¿En qué casos se usa ${n}?`, `¿Cuál es la indicación de ${n}?`], v.indicaciones],
+    v.posologia && [[`¿Cómo se usa ${n}?`, `¿Cuál es la dosis de ${n}?`, `¿Cómo se debe utilizar ${n}?`], v.posologia],
+    v.via && [[`¿Cómo se administra ${n}?`, `¿Por qué vía se administra ${n}?`], [`Se administra por vía ${lc(v.via)}.`, `Su vía de administración es ${lc(v.via)}.`]],
+    v.poblacion && [[`¿A quién va dirigido ${n}?`, `¿Quién puede usar ${n}?`, `¿Para qué población es ${n}?`], v.poblacion],
+    v.contraindicaciones && [[`¿Quién no debe usar ${n}?`, `¿Cuándo no se debe usar ${n}?`, `¿Qué contraindicaciones tiene ${n}?`], v.contraindicaciones],
+    v.receta === 'si' && [[`¿Es necesaria la receta médica para ${n}?`, `¿Se necesita receta médica para ${n}?`], `Sí. ${LEGEND.medReceta}`],
+    v.receta === 'no' && [[`¿Es necesaria la receta médica para ${n}?`, `¿Se necesita receta médica para ${n}?`], 'No requiere receta médica. Consulte a su médico y evite automedicarse.'],
+    faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`, `¿Qué presentación tiene ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
+    v.laboratorio && [[`¿Quién fabrica ${n}?`, `¿Qué laboratorio produce ${n}?`, `¿De qué laboratorio es ${n}?`], [`Es desarrollado por el laboratorio ${v.laboratorio}.`, `Lo desarrolla el laboratorio ${v.laboratorio}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
+    [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.medConservacion]
+  ],
+  cos: (v, n) => [
+    (v.ingredientes || v.atributo) && [[`¿Qué contiene ${n}?`, `¿Qué activos tiene ${n}?`], [`Contiene ${lc(v.ingredientes || v.atributo)}.`, `Su fórmula incluye ${lc(v.ingredientes || v.atributo)}.`]],
+    v.inci && [[`¿Cuál es la lista completa de ingredientes de ${n}?`, `¿Qué ingredientes (INCI) tiene ${n}?`], v.inci],
+    v.piel && [[`¿Para qué tipo de piel o necesidad es ${n}?`, `¿Quién puede usar ${n}?`], [`Está formulado para ${lc(v.piel)}.`, `Está desarrollado para ${lc(v.piel)}.`]],
+    v.modo && [[`¿Cómo se usa ${n}?`, `¿Cómo se aplica ${n}?`], v.modo],
+    v.precauciones && [[`¿Qué precauciones tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.precauciones],
+    (v.fps || v.nivel) && [[`¿Qué protección solar ofrece ${n}?`, `¿Qué FPS tiene ${n}?`], join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`)],
+    v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto producto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${v.fabricante}.`, `Lo desarrolla ${v.fabricante}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
+  ],
+  sup: (v, n) => [
+    (v.composicion || v.componente) && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(v.composicion || v.componente)}.`, `Su composición incluye ${lc(v.composicion || v.componente)}.`]],
+    faqPres(v, 'Se presenta', 'Su presentación es') && [[`¿En qué presentación se vende ${n}?`, `¿Cómo se presenta ${n}?`], faqPres(v, 'Se presenta', 'Su presentación es')],
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa elabora ${n}?`], [`Es elaborado por ${v.fabricante}.`, `Lo elabora ${v.fabricante}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
+    [[`¿${n} es un medicamento?`, `¿${n} reemplaza a un medicamento?`], LEGEND.supResp],
+    [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.supConservacion]
+  ],
+  dis: (v, n) => [
+    v.uso && [[`¿Para qué se usa ${n}?`, `¿Cuál es el uso previsto de ${n}?`], [`Está diseñado para el uso previsto de ${lc(v.uso)}.`, `Su uso previsto es ${lc(v.uso)}.`]],
+    v.tecnologia && [[`¿Qué tecnología tiene ${n}?`, `¿Cómo mide ${n}?`], [`Es de tecnología ${lc(v.tecnologia)}.`, `Su tecnología es ${lc(v.tecnologia)}.`]],
+    v.paquete && [[`¿Qué incluye el empaque de ${n}?`, `¿Qué trae ${n} en la caja?`], [`Incluye ${lc(v.paquete)}.`, `El empaque contiene ${lc(v.paquete)}.`]],
+    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
+    [[`¿Cómo se debe utilizar ${n}?`, `¿Cómo se usa ${n}?`], LEGEND.disMc]
+  ]
+};
+const faqGeneric = (v, n) => [
+  v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
+  v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+  v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
+];
+/* `seed` solo se pasa en pruebas para recorrer todas las variantes. */
+function buildFaq(c, v, seed) {
+  const n = faqName(c, v);
+  if (!n) return { items: [], html: '' };
+  const h = seed == null ? faqSeed(c, v) : seed;
+  const pick = (arr, i) => Array.isArray(arr) ? arr[(h + i) % arr.length] : arr;
+  const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a], i) => [pick(q, i), sentence(pick(a, i))]);
+  if (items.length < FAQ_MIN) return { items: [], html: '' };
+  return { items, html: '<h2>Preguntas frecuentes:</h2>\n' + items.map(([q, a]) => `<h3>${escT(q)}</h3>\n<p>${escT(a)}</p>`).join('\n') };
+}
+
 function buildMg(c, v) {
   const blocked = [];
   if (c.id === 'med' && !v.receta) blocked.push('Indica si el producto requiere receta médica. Es un dato regulatorio obligatorio.');
@@ -523,7 +622,8 @@ function buildMg(c, v) {
   const omitted = c.mgUses.filter(k => !v[k]).map(k => labelOf(c, k));
   const meta = { categoria: c.name, receta: recetaMeta(c, v) };
   if (blocked.length) return { blocked, omitted, html: '', meta };
-  return { blocked: null, omitted, html: c.mg(v), meta };
+  const faq = buildFaq(c, v);
+  return { blocked: null, omitted, html: faq.html ? c.mg(v) + '\n<br />\n' + faq.html : c.mg(v), faq: faq.items, meta };
 }
 
 function computeFor(catId, raw, keep, metaCfg) {
@@ -601,6 +701,7 @@ function lint(c, raw) {
       if (!raw.precauciones) out.check.push('Protector solar sin precauciones. Captura las leyendas del empaque.');
     } else if (nivel) out.check.push('Capturaste un nivel de protección sin FPS.');
   }
+  if (raw.atc && !ATC_RE.test(String(raw.atc).toUpperCase().replace(/\s+/g, ''))) out.check.push(`El código ATC "${raw.atc}" no tiene el formato esperado. Ejemplos: A10, A10BX, A10BX16.`);
   return out;
 }
 
@@ -710,6 +811,7 @@ function parseBulk(text, defaultCat) {
           if (x && !v[k]) v[k] = x;
         });
         if (v.receta) { const rc = parseReceta(v.receta); if (rc) v.receta = rc; else delete v.receta; }
+        if (v.especialidad) { const ae = parseReceta(v.especialidad); if (ae) v.especialidad = ae; else delete v.especialidad; }
         if (v.nivel) { const nv = { baja: 'Baja', media: 'Media', alta: 'Alta', 'muy alta': 'Muy alta' }[normHeader(v.nivel)]; if (nv) v.nivel = nv; else delete v.nivel; }
       }
       if (Object.keys(v).length) cat = mapCat;
@@ -748,7 +850,7 @@ const defMetaCat = id => ({
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
 const defMeta = () => ({ tienda: '', cats: Object.fromEntries(Object.keys(CATS).map(id => [id, defMetaCat(id)])) });
-const defExp = () => ({ attr: 'categoria_prod', enc: 'cp1252', incF: false, excL: false, incIA: false });
+const defExp = () => ({ attr: 'categoria_prod', enc: 'cp1252', incF: false, excL: false, incIA: false, incRel: true });
 const TITLE_MAX = 150; // Límite del título para Google Merchant Center (criterio de la herramienta)
 const ALT_BAD_START_RE = /^(imagen|foto|fotograf[ií]a)\b/i; // El alt no debe empezar con «imagen de» o «foto de»
 const COMERCIAL_RE = /\b(compra|comprar|compre|oferta|ofertas|descuento|descuentos|promoci[oó]n|env[ií]o gratis|mejor precio|barato|econ[oó]mic[oa])\b/i;
@@ -859,9 +961,50 @@ function validateMagentoExport(ex) {
   return { ok: errors.length === 0, errors };
 }
 
+/* Quién puede recomendarse como complemento. Fuera de medicamentos cualquier producto. Un medicamento solo si declaró
+   que no requiere receta y que no es de alta especialidad; sin declarar cuenta como no elegible. */
+const complementEligible = (cat, v) => cat !== 'med' || (!!v && v.receta === 'no' && v.especialidad === 'no');
+
+/* ---------- Productos relacionados, alternativas e insumos compatibles ----------
+ * Solo con productos del mismo lote y con reglas fijas:
+ * - Alternativas (upsell_skus): medicamento con el mismo principio activo, concentración, forma y presentación, y la misma
+ *   condición de receta, de otra marca. Una concentración o presentación distinta nunca es alternativa.
+ * - Relacionados (related_skus): misma categoría y la misma marca, o el mismo laboratorio o fabricante, que no sean alternativas.
+ * - Compatibles (crosssell_skus): los SKU que la persona capturó en «compat». Nunca se deducen, y solo los productos elegibles
+ *   como complemento (ver complementEligible) pueden aparecer. */
+const REL_MAX = 4;
+const relKey = x => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const relSet = x => relKey(x).split(' ').filter(Boolean).sort().join(' ');
+function relations(entries) {
+  const list = entries.filter(e => e && e.sku).map(e => {
+    const v = e.v || {};
+    return { sku: e.sku, cat: e.cat, elig: complementEligible(e.cat, v), marca: relKey(v.marca), org: relKey(v.laboratorio || v.fabricante), compat: String(v.compat || ''),
+      alt: e.cat === 'med' && v.principio && v.concentracion && v.forma && v.contenido && v.receta
+        ? [relSet(v.principio), relKey(join(' / ', v.concentracion, v.volumen)), relKey(v.forma), relKey(v.contenido), v.receta].join('|') : '' };
+  });
+  const bySku = new Map(list.map(e => [e.sku.toLowerCase(), e]));
+  const out = new Map();
+  for (const e of list) {
+    const others = list.filter(o => o.sku.toLowerCase() !== e.sku.toLowerCase());
+    const upsell = e.alt ? others.filter(o => o.alt === e.alt && o.marca !== e.marca) : [];
+    const used = new Set(upsell.map(o => o.sku.toLowerCase()));
+    const related = others.filter(o => o.cat === e.cat && !used.has(o.sku.toLowerCase()) && ((e.marca && o.marca === e.marca) || (e.org && o.org === e.org)))
+      .sort((a, b) => (b.marca === e.marca) - (a.marca === e.marca));
+    const cross = [...new Set(e.compat.split(/[\s,;|]+/).filter(Boolean).map(x => x.toLowerCase()))]
+      .filter(k => k !== e.sku.toLowerCase() && bySku.has(k) && bySku.get(k).elig).map(k => bySku.get(k));
+    const by = (a, b) => a.sku.localeCompare(b.sku);
+    out.set(e.sku.toLowerCase(), {
+      upsell: upsell.sort(by).slice(0, REL_MAX).map(o => o.sku),
+      related: related.slice(0, REL_MAX).map(o => o.sku),
+      crosssell: cross.map(o => o.sku)
+    });
+  }
+  return out;
+}
+
 function magentoBatch(items, keep, metaCfg, opts) {
   const ex = { sinSku: 0, bloqueadas: 0, faltantes: 0, lenguaje: 0, duplicadas: 0, sinMeta: 0, sinImagen: 0, altLargos: 0, ia: 0 };
-  const bySku = new Map();
+  const bySku = new Map(), entries = new Map();
   const attr = String(opts.attr || '').trim() || 'categoria_prod';
   for (const it of items) {
     const sku = String(it.sku || '').trim();
@@ -888,9 +1031,25 @@ function magentoBatch(items, keep, metaCfg, opts) {
     const key = sku.toLowerCase();
     if (bySku.has(key)) ex.duplicadas++;
     bySku.set(key, row);
+    entries.set(key, { sku, cat: it.cat, v: { ...res.vt.v, compat: it.v && it.v.compat } });
+  }
+  const rel = { upsell: 0, related: 0, crosssell: 0 };
+  if (opts.relations) {
+    const map = relations([...entries.values()]);
+    for (const [key, row] of bySku) {
+      const r = map.get(key);
+      if (!r) continue;
+      /* Complementos confirmados en el catálogo interno: solo si el SKU va en este archivo o ya se exportó antes. */
+      const extra = ((opts.catalogCross && opts.catalogCross.get(key)) || []).filter(c => bySku.has(c.toLowerCase()) || (opts.knownSkus && opts.knownSkus.has(c.toLowerCase())));
+      const cross = [...new Set([...r.crosssell, ...extra])];
+      const vals = { upsell: r.upsell, related: r.related, crosssell: cross };
+      [['upsell_skus', 'upsell'], ['related_skus', 'related'], ['crosssell_skus', 'crosssell']].forEach(([col, k]) => {
+        if (vals[k].length) { row[MAG_IDX[col]] = sanitizeMagentoCell(vals[k].join(','), col); rel[k]++; }
+      });
+    }
   }
   const rows = [...bySku.values()].map(sanitizeMagentoRow);
-  return { header: MAG_HEADER, rows, excluded: ex, total: items.length, contract: validateMagentoExport({ header: MAG_HEADER, rows }) };
+  return { header: MAG_HEADER, rows, excluded: ex, relations: rel, total: items.length, contract: validateMagentoExport({ header: MAG_HEADER, rows }) };
 }
 const batchCsv = ex => {
   const check = ex.contract || validateMagentoExport(ex);
@@ -1215,6 +1374,11 @@ const api = {
   buildMC,
   buildMeta,
   buildMg,
+  buildFaq,
+  relations,
+  complementEligible,
+  AREAS,
+  ATC_RE,
   buildTitle,
   cap,
   capNouns,

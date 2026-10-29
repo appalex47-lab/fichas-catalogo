@@ -231,3 +231,51 @@ test('fotos: explica cuando la llave no tiene acceso al modelo de visión y exig
   await assert.rejects(AI.visionExtract({ apiKey: 'x', images: [], fetchImpl: okFetch({}) }), e => e.code === 'no_images');
   await assert.rejects(AI.visionExtract({ apiKey: 'x', images: ['data:image/jpeg;base64,AAA'], fetchImpl: errFetch(429, 'throttled') }), e => e.code === 'rate');
 });
+
+test('complementos: solo se aceptan ids de la lista, sin repetir y con motivo corto', async () => {
+  const cands = [{ id: 1, name: 'Mounjaro 2.5 mg', cat: 'med' }, { id: 2, name: 'Wegovy', cat: 'med' }];
+  const r = AI.verifyComplements({ coincidencias: [{ id: 1, motivo: 'x'.repeat(400) }, { id: 1, motivo: 'repetido' }, { id: 99, motivo: 'inventado' }, { id: '2', motivo: 'ok' }, null] }, cands);
+  assert.deepEqual(r.map(x => x.id), [1, 2]);
+  assert.ok(r[0].motivo.length <= 160);
+  assert.deepEqual(AI.verifyComplements(null, cands), []);
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push(JSON.parse(init.body)); return okFetch({ coincidencias: [{ id: 2, motivo: 'nutrición oral' }, { id: 7, motivo: 'no existe' }] })(); };
+  const out = await AI.aiComplements({ apiKey: 'k', mode: 'child', subject: { name: 'Fresubin 200 mL', cat: 'beb' }, candidates: cands, fetchImpl });
+  assert.deepEqual(out, [{ id: 2, motivo: 'nutrición oral' }]);
+  const user = JSON.parse(calls[0].messages[1].content);
+  assert.equal(user.producto.nombre, 'Fresubin 200 mL');
+  assert.deepEqual(user.candidatos.map(x => x.id), [1, 2]);
+  assert.equal(calls[0].temperature, 0);
+});
+
+test('complementos: el prompt no deja que la IA recomiende sustitutos ni consejos médicos', () => {
+  const m = AI.buildComplementMessages({ mode: 'parent', subject: { name: 'Wegovy', cat: 'med' }, candidates: [{ id: 1, name: 'Suero oral', cat: 'beb' }] });
+  assert.match(m[0].content, /No devuelvas el mismo producto con otra marca/);
+  assert.match(m[0].content, /sin consejos médicos/);
+  assert.match(JSON.parse(m[1].content).tarea, /producto principal/);
+});
+
+test('área terapéutica: solo áreas de la lista cerrada, máximo dos, ATC solo si tiene formato válido', async () => {
+  const F = require('../js/logic.js');
+  const r = AI.verifyArea({ areas: [{ area: 'diabetes y metabolismo', motivo: 'm' }, { area: 'Control de peso', motivo: 'x'.repeat(400) }, { area: 'Cardiovascular', motivo: 'tercera' }, { area: 'Inventada', motivo: 'no' }, { area: 'Diabetes y metabolismo', motivo: 'repetida' }], atc: ' a10bx16 ' });
+  assert.deepEqual(r.areas.map(x => x.area), ['Diabetes y metabolismo', 'Control de peso']);
+  assert.ok(r.areas[1].motivo.length <= 160);
+  assert.equal(r.atc, 'A10BX16');
+  assert.equal(AI.verifyArea({ areas: [], atc: 'XYZ123' }).atc, '');
+  assert.deepEqual(AI.verifyArea(null), { areas: [], atc: '' });
+  assert.ok(F.AREAS.every(a => AI.verifyArea({ areas: [{ area: a, motivo: '' }], atc: '' }).areas.length === 1), 'toda el área de la lista se reconoce');
+  const calls = [];
+  const out = await AI.aiArea({ apiKey: 'k', cat: 'med', name: 'Mounjaro 2.5 mg', fields: { marca: 'Mounjaro', principio: 'Tirzepatida', receta: 'si', laboratorio: 'Eli Lilly' }, fetchImpl: async (u, init) => { calls.push(JSON.parse(init.body)); return okFetch({ areas: [{ area: 'Diabetes y metabolismo', motivo: 'antidiabético' }], atc: 'A10BX16' })(); } });
+  assert.equal(out.atc, 'A10BX16');
+  const user = JSON.parse(calls[0].messages[1].content);
+  assert.deepEqual(Object.keys(user.producto.datos).sort(), ['marca', 'principio'], 'no se envían receta ni laboratorio');
+  assert.ok(user.areas_permitidas.includes('Hidratación'));
+});
+
+test('complementos: el área y el ATC viajan como contexto cuando existen', () => {
+  const m = AI.buildComplementMessages({ mode: 'child', subject: { name: 'Fresubin', cat: 'beb', area: 'Nutrición y vitaminas' }, candidates: [{ id: 1, name: 'Mounjaro', cat: 'med', area: 'Diabetes y metabolismo', area2: 'Control de peso', atc: 'A10BX16' }] });
+  const p = JSON.parse(m[1].content);
+  assert.equal(p.producto.area, 'Nutrición y vitaminas');
+  assert.equal(p.candidatos[0].area, 'Diabetes y metabolismo / Control de peso');
+  assert.equal(p.candidatos[0].atc, 'A10BX16');
+});

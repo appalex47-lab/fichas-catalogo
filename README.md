@@ -129,6 +129,9 @@ La página solo necesita `index.html`, `styles/styles.css`, `js/logic.js`, `js/a
 - Sin repetir información: si el tipo ya está dentro del nombre del producto, o la marca al inicio del nombre, el título, la descripción de Merchant Center, las metas y el alt no lo repiten. Las plantillas de Magento conservan ambas filas.
 - Alt: se arma con marca, concentración, principio activo y presentación, con límite de 125 caracteres y sin "imagen de".
 - Revisión de lenguaje: avisa de claims prohibidos, adjetivos vacíos y claims que requieren validación.
+- Medicamentos: los campos opcionales Indicaciones, Posología, Población y Contraindicaciones se copian tal cual del inserto. Cada uno sale como una sección aparte antes de las condiciones de conservación, solo si lo capturas. La IA no los lee ni los genera.
+- «Categoría» (por ejemplo Endocrinología en medicamentos o Nutrición clínica en bebidas): campo opcional de todas las categorías que se captura con los datos principales (marca, principio activo, concentración…). Sale como una fila más de la ficha técnica del HTML de Magento y como la pregunta «¿A qué categoría pertenece…?». No cambia el título, Merchant Center ni las metas, y no llena la columna `categories` del CSV. Es distinta del «Área terapéutica», que es un dato interno.
+- Preguntas frecuentes: el HTML de Magento termina con una sección «Preguntas frecuentes» armada con los datos capturados. Cada pregunta aparece solo si existe el dato que la responde (por ejemplo, «¿Cómo se usa?» solo si capturaste la posología o el modo de uso). Las respuestas son frases fijas o copia literal de tus datos. Si hay menos de dos preguntas, la sección no se genera. No incluye JSON-LD. Para que el catálogo no suene repetitivo, la pregunta y los conectores de las respuestas de plantilla tienen variantes escritas en el código. La variante se elige con un hash de los datos del producto (marca, principio o producto, concentración y presentación): el mismo producto sale siempre igual y productos distintos varían. Las leyendas regulatorias y los textos copiados del inserto o del empaque nunca se parafrasean.
 - Cosméticos (NOM-141-SSA1/SCFI-2012): las secciones Ingredientes, Modo de uso, Precauciones y Protección solar se agregan después del texto y la lista aprobados, sin modificarlos, y solo si tienen datos. Avisa de "bloqueador", "protección total" o "100%", de términos de acción medicinal, y verifica que el nivel de protección coincida con la tabla de la norma según el FPS. Los textos tomados del empaque no pasan por la revisión de lenguaje.
 
 ## Formato del CSV para Magento
@@ -140,6 +143,38 @@ La página solo necesita `index.html`, `styles/styles.css`, `js/logic.js`, `js/a
 - Windows-1252 por defecto (como el archivo original) o UTF-8, saltos CRLF y comillas solo donde hay comas.
 - No exporta filas sin SKU, con descripción bloqueada ni con datos faltantes (se puede activar). Los SKU repetidos se exportan una sola vez.
 - Prueba siempre con 2 o 3 SKU en un ambiente de pruebas antes de una carga grande.
+
+## Productos relacionados, alternativas y compatibles
+
+Con la opción «Llenar productos relacionados, alternativas y compatibles» (Exportar, activa por defecto) el CSV llena tres columnas de Magento. Solo apuntan a SKU que se exportan en el mismo archivo y se calculan con reglas fijas:
+
+- **Alternativas** (`upsell_skus`): medicamentos con el mismo principio activo, la misma concentración, la misma forma y presentación y la misma condición de receta, de otra marca. Una concentración o presentación distinta nunca es alternativa. Se aplica también a medicamentos con receta.
+- **Relacionados** (`related_skus`): de la misma categoría y la misma marca, o el mismo laboratorio o fabricante, que no sean alternativas. Primero los de la misma marca.
+- **Compatibles** (`crosssell_skus`): los SKU que captures en «Insumos compatibles (SKU)» de dispositivos médicos y accesorios, separados por coma. Nunca se deducen.
+- Máximo 4 alternativas y 4 relacionados por producto. En el lote, el detalle de cada producto muestra lo que se exportaría.
+
+## Catálogo interno y complementos
+
+Los productos con SKU que guardas quedan también en un **catálogo interno**, aparte del lote: vaciar el lote no lo borra. Se ve en la sección «Catálogo» (botón del riel). Se guarda en este navegador y viaja dentro del respaldo del lote.
+
+- **Quién puede ser complemento:** cualquier producto que no sea medicamento (suplementos, bebidas, dermocosméticos, cuidado personal, accesorios) y los medicamentos que declaras sin receta **y** sin alta especialidad (campo nuevo «¿Es de alta especialidad?»). Un medicamento con receta, de alta especialidad o con alguno de los dos datos sin declarar **nunca** se vincula como complemento, ni a mano ni por IA. Si un producto vinculado pasa a requerir receta, pierde sus vínculos.
+- **Quién es producto principal:** los medicamentos que no pueden ser complemento, y cualquier producto que marques como principal en el catálogo.
+- **Al guardar un complemento:** la IA (si agregaste tu llave de Cohere) propone de qué productos principales del catálogo podría serlo y se abre una ventana con las propuestas marcadas. Tú confirmas, quitas o dejas en espera. Sin llave, la ventana trae la lista para elegir a mano.
+- **Sin producto principal todavía:** el producto queda en estado interno «Esperando producto principal». No se exporta ni se ve en la web.
+- **Al guardar después un producto principal:** si hay complementos en espera, se abre otra ventana para asignarlos.
+- **«No es complemento»** saca el producto de la lista de espera. «Buscar» y «Revisar pendientes» en el catálogo repiten la búsqueda cuando quieras (por ejemplo, tras una carga masiva, que no abre ventanas).
+- **La IA solo propone** sobre una lista cerrada de productos del catálogo (máximo 150, los más recientes) y se le envían solo nombres y categorías. Nada se vincula sin tu confirmación; cada vínculo queda en la auditoría con quién lo propuso (IA o manual) y cuándo. Las llamadas cuentan en el límite mensual.
+- **Exportación:** los complementos confirmados salen en `crosssell_skus` del producto principal, sumados a los de «Insumos compatibles». Solo se escriben SKU que van en el mismo archivo o que ya exportaste antes desde esta herramienta.
+
+## Área terapéutica y código ATC
+
+Clasificación interna que **no sale en ningún texto de la ficha ni en el CSV**. Sirve para ordenar el catálogo y como contexto para proponer complementos.
+
+- **Medicamentos:** «Área terapéutica», «Segunda área terapéutica» (por ejemplo diabetes y control de peso) y «Código ATC». **Demás categorías:** «Área de uso o necesidad» (por ejemplo Hidratación o Nutrición y vitaminas).
+- Las áreas salen de una lista cerrada (16 opciones, definida en `AREAS` de `js/logic.js`).
+- El **código ATC** (Anatómica, Terapéutica y Química, de la OMS) tiene de 1 a 5 niveles, por ejemplo A, A10, A10B, A10BX o A10BX16. La herramienta valida el formato, lo pasa a mayúsculas y avisa si no lo cumple. No lo compara con el índice oficial, así que verifícalo allí.
+- **«Sugerir con IA»** (junto al campo de área, requiere llave de Cohere): la IA propone hasta dos áreas de la lista y, solo si está segura, el ATC. Recibe el título del producto (que incluye marca, principio activo, concentración, presentación y laboratorio) y esos mismos datos sueltos; no recibe receta, categoría, SKU ni datos de personas. Nada entra al formulario hasta que pulsas «Aplicar» en cada sugerencia, y queda en la auditoría.
+- El catálogo guarda el área y el ATC, y se los envía a la IA como contexto cuando propone complementos.
 
 ## Datos crudos (extracción por reglas)
 

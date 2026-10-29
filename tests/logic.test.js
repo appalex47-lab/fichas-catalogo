@@ -124,10 +124,11 @@ test('revisión de lenguaje marca claims prohibidos', () => {
 const cos = { marca: 'La Roche-Posay', producto: 'Hyalu B5', tipo: 'Sérum', atributo: 'Ácido hialurónico', contenido: 'FCO 30ML', fabricante: "L'Oréal", piel: 'Piel sensible' };
 
 test('cosméticos: las secciones nuevas son opcionales y no alteran el texto aprobado', () => {
-  const base = F.computeFor('cos', cos, keep, meta).mg.html;
+  const sinFaq = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const base = sinFaq(F.computeFor('cos', cos, keep, meta).mg.html);
   assert.ok(!/Ingredientes:|Modo de uso:|Precauciones:|Protección solar:/.test(base));
   const conExtras = F.computeFor('cos', { ...cos, inci: 'AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891', modo: 'APLICAR SOBRE LA PIEL LIMPIA. USAR DOS VECES AL DÍA.', precauciones: 'Evitar el contacto con los ojos.', fps: '50+', nivel: 'Muy alta' }, keep, meta).mg.html;
-  assert.ok(conExtras.startsWith(base), 'el párrafo y la lista aprobados quedan igual');
+  assert.ok(sinFaq(conExtras).startsWith(base), 'el párrafo y la lista aprobados quedan igual');
   assert.match(conExtras, /<h2>Ingredientes:<\/h2>\n<p>AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891<\/p>/);
   assert.match(conExtras, /<h2>Modo de uso:<\/h2>\n<p>Aplicar sobre la piel limpia\. Usar dos veces al día\.<\/p>/);
   assert.match(conExtras, /<li><strong>Nivel de protección:<\/strong> Muy alta<\/li>/);
@@ -238,4 +239,168 @@ test('exportación: los datos sugeridos por IA sin confirmar no llegan a Magento
   assert.equal(sin.excluded.ia, 2, 'lo sugerido por IA y lo leído de fotos quedan sin exportar hasta confirmarlo');
   const con = F.magentoBatch(items, keep, meta, { ...F.defExp(), incIA: true });
   assert.equal(con.rows.length, 4);
+});
+
+/* ---------- Bloque de indicaciones y preguntas frecuentes ---------- */
+const medFaq = { marca: 'Mounjaro', concentracion: '2.5 mg', volumen: '0.6 mL', principio: 'Tirzepatida', forma: 'Solución inyectable', contenido: 'Caja con 4 plumas', laboratorio: 'Eli Lilly', via: 'Subcutánea', receta: 'si' };
+
+test('medicamentos: indicaciones, posología, población y contraindicaciones son opcionales y van antes de la conservación', () => {
+  const sinFaq = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const base = F.computeFor('med', medFaq, keep, meta).mg.html;
+  assert.ok(!/Indicaciones:|Cómo se usa:|Contraindicaciones/.test(sinFaq(base)));
+  const html = F.computeFor('med', { ...medFaq, indicaciones: 'Control glucémico en adultos con diabetes tipo 2', posologia: 'Una vez por semana', contraindicaciones: 'No usar en caso de hipersensibilidad' }, keep, meta).mg.html;
+  assert.match(html, /<h2>Indicaciones:<\/h2>\n<p>Control glucémico en adultos con diabetes tipo 2<\/p>/);
+  assert.match(html, /<h2>Cómo se usa:<\/h2>\n<p>Una vez por semana<\/p>/);
+  assert.ok(html.indexOf('Contraindicaciones y advertencias:') < html.indexOf('Condiciones de conservación:'));
+});
+
+test('FAQ: cada pregunta existe solo si el dato que la responde fue capturado', () => {
+  const q = r => [...new Set([...Array(12).keys()].flatMap(sd => F.buildFaq(F.CATS.med, r, sd).items.map(x => x[0])))];
+  const base = q(medFaq);
+  assert.ok(base.some(x => /Qué contiene Mounjaro/.test(x)) && base.some(x => /Cómo se conserva/.test(x)));
+  assert.ok(!base.some(x => /Para qué se usa|Cómo se usa|Quién no debe/.test(x)));
+  assert.ok(q({ ...medFaq, indicaciones: 'Control glucémico' }).some(x => /Para qué se usa/.test(x)));
+  assert.ok(!q({ ...medFaq, laboratorio: '' }).some(x => /Quién fabrica/.test(x)));
+});
+
+test('FAQ: texto literal escapado, sin JSON-LD y sin contradecir la receta declarada', () => {
+  const html = F.computeFor('med', { ...medFaq, receta: 'no', posologia: 'Tomar <1> tableta' }, keep, meta).mg.html;
+  assert.match(html, /<h2>Preguntas frecuentes:<\/h2>\n<h3>/);
+  assert.match(html, /<p>Tomar &lt;1&gt; tableta\.<\/p>/);
+  assert.ok(!/ld\+json|FAQPage/.test(html));
+  assert.match(html, /<h3>¿Es necesaria la receta médica para Mounjaro\?<\/h3>\n<p>No requiere receta médica\./);
+});
+
+test('FAQ: sin suficientes datos no se genera y un producto bloqueado no la tiene', () => {
+  assert.equal(F.buildFaq(F.CATS.med, {}).html, '');
+  const r = F.computeFor('med', { ...medFaq, receta: '' }, keep, meta).mg;
+  assert.ok(r.blocked && r.html === '' && !r.faq);
+});
+
+test('FAQ: la variante es estable para un mismo producto y cambia entre productos', () => {
+  const a1 = F.computeFor('med', medFaq, keep, meta).mg.html, a2 = F.computeFor('med', medFaq, keep, meta).mg.html;
+  assert.equal(a1, a2);
+  const marcas = ['Mounjaro', 'Ozempic', 'Victoza', 'Trulicity', 'Wegovy', 'Saxenda', 'Byetta', 'Bydureon'];
+  const firmas = new Set(marcas.map(m => F.computeFor('med', { ...medFaq, marca: m }, keep, meta).mg.faq.map(x => x[0].replace(m, 'X')).join('|')));
+  assert.ok(firmas.size > 1, 'productos distintos no usan todos la misma redacción');
+});
+
+test('FAQ: todas las variantes cumplen las reglas de lenguaje y no tocan textos literales ni regulatorios', () => {
+  const lleno = { ...medFaq, categoria: 'Endocrinología', indicaciones: 'Control glucémico', posologia: 'Una vez por semana', poblacion: 'Adultos', contraindicaciones: 'Hipersensibilidad' };
+  const cosF = { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal", piel: 'Piel sensible', modo: 'Aplicar sobre la piel limpia', precauciones: 'Evitar contacto con ojos', fps: '50+', nivel: 'Muy alta', inci: 'AQUA, GLYCERIN' };
+  const supF = { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' };
+  const disF = { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro', tecnologia: 'Automático de brazo', fabricante: 'Omron', uso: 'medición de presión arterial', paquete: 'Brazalete y estuche' };
+  for (const [id, v] of [['med', lleno], ['med', { ...lleno, receta: 'no' }], ['cos', cosF], ['sup', supF], ['dis', disF]]) {
+    for (let sd = 0; sd < 12; sd++) {
+      const { items } = F.buildFaq(F.CATS[id], v, sd);
+      const txt = items.map(x => x.join(' ')).join(' ');
+      assert.ok(!F.COMERCIAL_RE.test(txt), `${id} seed ${sd}: lenguaje comercial`);
+      assert.deepEqual(F.scanRed(txt, id), [], `${id} seed ${sd}: claims`);
+      if (id === 'med' && v.receta === 'no') assert.ok(!/(?<!no )(?<!sin )\b(?:requiere receta|con receta|bajo receta)/i.test(txt), 'contradice receta');
+      if (id === 'med') {
+        for (const lit of [lleno.indicaciones, lleno.posologia, lleno.poblacion, lleno.contraindicaciones]) assert.ok(items.some(x => x[1] === lit + '.'), `texto literal intacto: ${lit}`);
+        assert.ok(items.some(x => x[1] === F.LEGEND.medConservacion), 'conservación intacta');
+      }
+    }
+  }
+});
+
+/* ---------- Relacionados, alternativas y compatibles ---------- */
+const mk = (sku, marca, over = {}) => ({ sku, cat: 'med', v: { marca, concentracion: '500 mg', principio: 'Paracetamol', forma: 'Tabletas', contenido: 'Caja con 20 tabletas', laboratorio: 'Lab Uno', via: 'Oral', receta: 'no', ...over } });
+
+test('relaciones: alternativas = mismo principio, concentración, presentación y receta, de otra marca', () => {
+  const r = F.relations([
+    mk('A1', 'Tempra'), mk('A2', 'Tylenol'), mk('A3', 'Genérico', { laboratorio: 'Lab Dos' }),
+    mk('B1', 'Tempra', { concentracion: '650 mg' }),
+    mk('C1', 'Otra', { contenido: 'Caja con 10 tabletas' }),
+    mk('D1', 'Rx', { receta: 'si' }),
+    mk('E1', 'Pomada', { principio: 'Ibuprofeno' })
+  ]);
+  assert.deepEqual(r.get('a1').upsell, ['A2', 'A3']);
+  assert.ok(!r.get('a1').upsell.includes('B1') && !r.get('a1').upsell.includes('C1') && !r.get('a1').upsell.includes('D1') && !r.get('a1').upsell.includes('E1'));
+});
+
+test('relaciones: relacionados = misma marca o laboratorio, sin repetir alternativas ni a sí mismo', () => {
+  const r = F.relations([mk('A1', 'Tempra'), mk('A2', 'Tylenol'), mk('B1', 'Tempra', { concentracion: '650 mg' }), mk('F1', 'Zeta', { principio: 'Otro', laboratorio: 'Lab Tres' })]);
+  assert.deepEqual(r.get('a1').related, ['B1', 'A2'].filter(x => x !== 'A2'));
+  assert.ok(!r.get('a1').related.includes('A1'));
+  assert.ok(!r.get('a1').related.includes('F1'));
+});
+
+test('relaciones: los compatibles solo salen de lo capturado y apuntan a SKU existentes', () => {
+  const dis = { sku: 'GLU1', cat: 'dis', v: { marca: 'Accu', compat: 'TIRA1, tira2; NOEXISTE, GLU1' } };
+  const acc = (sku) => ({ sku, cat: 'acc', v: { marca: 'Accu' } });
+  const r = F.relations([dis, acc('TIRA1'), acc('TIRA2')]);
+  assert.deepEqual(r.get('glu1').crosssell, ['TIRA1', 'TIRA2']);
+  assert.deepEqual(F.relations([dis]).get('glu1').crosssell, []);
+});
+
+test('relaciones: el CSV las llena solo con opts.relations y solo con SKU del mismo archivo', () => {
+  const items = [mk('A1', 'Tempra'), mk('A2', 'Tylenol'), mk('A3', 'Sin receta declarada', { receta: '' })];
+  const col = (ex, sku, c) => ex.rows.find(r => r[0] === sku)[ex.header.indexOf(c)];
+  const off = F.magentoBatch(items, keep, meta, {});
+  assert.equal(col(off, 'A1', 'upsell_skus'), '');
+  const on = F.magentoBatch(items, keep, meta, { relations: true });
+  assert.equal(col(on, 'A1', 'upsell_skus'), 'A2');
+  assert.equal(col(on, 'A2', 'upsell_skus'), 'A1');
+  assert.ok(on.contract.ok);
+  assert.deepEqual(on.relations, { upsell: 2, related: 0, crosssell: 0 });
+});
+
+test('área terapéutica y ATC: campos de medicamentos y área en las demás categorías, sin tocar los textos', () => {
+  assert.ok(['area', 'area2', 'atc'].every(k => F.CATS.med.fields.some(f => f.key === k)));
+  assert.ok(Object.keys(F.CATS).filter(id => id !== 'med').every(id => F.CATS[id].fields.some(f => f.key === 'area')));
+  const base = F.computeFor('med', medFaq, keep, meta);
+  const con = F.computeFor('med', { ...medFaq, area: 'Diabetes y metabolismo', area2: 'Control de peso', atc: 'a10bx 16' }, keep, meta);
+  assert.equal(con.mg.html, base.mg.html);
+  assert.equal(con.title.title, base.title.title);
+  assert.equal(con.vt.v.atc, 'A10BX16');
+  assert.deepEqual(F.lint(F.CATS.med, { atc: 'A10BX16' }).check, []);
+  assert.match(F.lint(F.CATS.med, { atc: 'ZZZ' }).check.join(' '), /formato esperado/);
+  ['A', 'A10', 'A10B', 'A10BX', 'A10BX16'].forEach(c => assert.ok(F.ATC_RE.test(c), c));
+  ['a10', 'A1', 'A10BX1', '10A', ''].forEach(c => assert.ok(!F.ATC_RE.test(c), c));
+});
+
+test('categoría del medicamento: se captura con los datos principales y sale en la ficha técnica y en la FAQ', () => {
+  const f = F.CATS.med.fields;
+  assert.ok(!f.find(x => x.key === 'categoria').g && !f.find(x => x.key === 'categoria').req, 'va con los datos principales y es opcional');
+  const sin = F.computeFor('med', medFaq, keep, meta);
+  assert.ok(!/Categoría:/.test(sin.mg.html));
+  const con = F.computeFor('med', { ...medFaq, categoria: 'ENDOCRINOLOGÍA' }, keep, meta);
+  assert.match(con.mg.html, /<li><strong>Categoría:<\/strong> Endocrinología<\/li>\n<\/ul>/);
+  assert.ok(con.mg.faq.some(x => /categoría/i.test(x[0]) && /Endocrinología/.test(x[1])));
+  assert.equal(con.title.title, sin.title.title, 'no cambia el título');
+  assert.equal(con.mc.text, sin.mc.text, 'no cambia Merchant Center');
+  assert.deepEqual(con.meta.mt.text, sin.meta.mt.text, 'no cambia el meta title');
+});
+
+test('categoría: todas las categorías la tienen con los datos principales y la muestran en su ficha técnica', () => {
+  const muestras = {
+    dis: { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro', tecnologia: 'Automático de brazo', fabricante: 'Omron' },
+    cos: { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal" },
+    sup: { marca: 'GNC', componente: 'Vitamina C', forma: 'Cápsulas', contenido: 'Frasco con 100 piezas', fabricante: 'GNC' },
+    beb: { marca: 'Electrolit', tipo: 'Suero oral', sabor: 'Coco', atributo: 'Sin azúcar', contenido: '625 mL' },
+    hig: { marca: 'Colgate', producto: 'Pasta dental', variante: 'Total', contenido: '75 mL', fabricante: 'Colgate' },
+    acc: { marca: 'Saba', producto: 'Parches térmicos', material: 'Alivio de dolores', contenido: 'Caja con 3 piezas', fabricante: 'Essity' }
+  };
+  for (const [id, v] of Object.entries(muestras)) {
+    const fd = F.CATS[id].fields.find(x => x.key === 'categoria');
+    assert.ok(fd && !fd.g && !fd.req, `${id}: campo principal y opcional`);
+    const sin = F.computeFor(id, v, keep, meta), con = F.computeFor(id, { ...v, categoria: 'NUTRICIÓN CLÍNICA' }, keep, meta);
+    assert.ok(!/Categoría:/.test(sin.mg.html), `${id}: sin captura no aparece`);
+    assert.match(con.mg.html, /<li><strong>Categoría:<\/strong> Nutrición Clínica<\/li>/, `${id}: aparece en la ficha técnica`);
+    assert.equal(con.title.title, sin.title.title, `${id}: no cambia el título`);
+    assert.equal(con.mc.text, sin.mc.text, `${id}: no cambia Merchant Center`);
+    assert.equal(con.meta.mt.text, sin.meta.mt.text, `${id}: no cambia el meta title`);
+  }
+});
+
+test('categoría: la pregunta frecuente existe en las categorías con FAQ y solo si se capturó', () => {
+  for (const id of ['cos', 'sup', 'dis', 'beb']) {
+    const v = { marca: 'X', producto: 'Y', componente: 'Z', modelo: 'M', tipo: 'T', fabricante: 'Fab', contenido: '10 mL', tecnologia: 'Tec', atributo: 'A', sabor: 'S', categoria: 'Nutrición clínica' };
+    const q = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS[id], v, sd).items.map(x => x[0]));
+    assert.ok(q.some(x => /categoría/.test(x)), `${id}: tiene la pregunta`);
+    const q2 = [...Array(6).keys()].flatMap(sd => F.buildFaq(F.CATS[id], { ...v, categoria: '' }, sd).items.map(x => x[0]));
+    assert.ok(!q2.some(x => /categoría/.test(x)), `${id}: sin dato no hay pregunta`);
+  }
 });
