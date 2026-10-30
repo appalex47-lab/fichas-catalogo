@@ -1306,3 +1306,14 @@ test('accesorios: etiquetas, meta migrada y listas de ayuda', () => {
   assert.equal(m.cats.acc.mt.tpl, F.META_ACC.mt.tpl);
   assert.ok(F.CATS.acc.fields.find(f => f.key === 'tipo').sug.includes('Rodillera'));
 });
+
+test('título de medicamentos: forma de pieza + presentación se leen «28 cápsulas»', () => {
+  const t = (forma, contenido) => F.buildTitle(F.CATS.med, { marca: 'Enterokan', concentracion: '90 mg / 50 mg', principio: 'Mentha Piperita', forma, contenido, laboratorio: 'Schwabe' }).title.split(' | ')[2];
+  assert.equal(t('Cápsulas', 'Caja con 28 piezas'), '28 cápsulas');
+  assert.equal(t('Tabletas', 'Caja con 30 tabletas'), '30 tabletas');
+  assert.equal(t('Cápsula', '28'), '28 cápsulas');
+  assert.equal(t('Tableta', 'Blíster con 1 pieza'), '1 tableta');
+  assert.equal(t('Cápsulas de liberación prolongada', 'Frasco con 60 piezas'), '60 cápsulas de liberación prolongada');
+  assert.equal(t('Jarabe', 'Frasco 120 mL'), 'Jarabe, Frasco 120 mL', 'líquidos e inyectables no se combinan');
+  assert.equal(t('Comprimidos', 'Caja con 2 blísteres de 10 piezas'), 'Comprimidos, Caja con 2 blísteres de 10 piezas', 'si el conteo no es claro, no se calcula');
+});

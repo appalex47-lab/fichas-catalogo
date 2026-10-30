@@ -78,9 +78,27 @@ function expandPres(t) {
 }
 const COUNT_NOUN_RE = /(?<![\p{L}\d-])(\d+)\s+(tabletas?|cápsulas?|capsulas?|piezas?|sobres?|comprimidos?|parches?|pastillas?|gomitas?|unidades|unidad|ampolletas?|plumas?|tiras|lancetas?|grageas?|sachets?|toallitas?|jeringas?|perlas?|softgels?|barras?|shots?|chicles?|porciones|viales?)(?![\p{L}])/giu;
 const capNouns = s => s.replace(COUNT_NOUN_RE, (m, n, w) => `${n} ${w.toLowerCase()}`);
-function joinForm(forma, contenido) {
+/* Formas que se cuentan por pieza: «Cápsulas» + «Caja con 28 piezas» se lee «28 Cápsulas». */
+const FORMA_PIEZA = /^(c[aá]psulas?|tabletas?|comprimidos?|grageas?|pastillas?|perlas?|softgels?|parches?|supositorios?|[oó]vulos?|gomitas?|gomas?|sobres?|tiras?|pastillas?|chicles?)\b/i;
+const ENVASE = '(?:caja|frasco|bl[ií]ster|bolsa|tubo|envase|estuche|blister)s?';
+function formaConPiezas(forma, contenido) {
+  const f = String(forma || '').trim(), c = String(contenido || '').trim();
+  const head = (f.match(FORMA_PIEZA) || [])[1];
+  if (!head) return '';
+  const base = head.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/e?s$/, '').replace(/s$/, '');
+  const m = c.match(new RegExp(`^(?:${ENVASE}\\s*(?:con|de|x)?\\s*)?(\\d+)\\s*(?:piezas?|pzas?\\.?|unidades|uds?\\.?|${base.slice(0, 5)}\\w*)?\\.?$`, 'i'));
+  if (!m) return '';
+  const n = Number(m[1]);
+  if (!(n > 0)) return '';
+  const resto = f.slice(head.length);
+  const word = n === 1 ? head.replace(/(?<=[aeiou])s$/i, '').replace(/es$/i, '') : (/s$/i.test(head) ? head : head + (/[aeiou]$/i.test(head) ? 's' : 'es'));
+  return `${n} ${word}${resto}`;
+}
+function joinForm(forma, contenido, porPieza) {
   if (!forma) return contenido || '';
   if (!contenido) return forma;
+  const piezas = porPieza ? formaConPiezas(forma, contenido) : '';
+  if (piezas) return piezas;
   const base = forma.toLowerCase().replace(/s$/, '');
   if (contenido.toLowerCase().includes(base)) return contenido;
   return `${forma}, ${contenido}`;
@@ -462,7 +480,7 @@ const CATS = {
     title: [
       seg('Marca + concentración / volumen', ['marca','concentracion','volumen'], v => join(' ', v.marca, join(' / ', v.concentracion, v.volumen))),
       seg('Principio activo', ['principio']),
-      seg('Forma farmacéutica + presentación', ['forma','contenido'], v => joinForm(v.forma, v.contenido)),
+      seg('Forma farmacéutica + presentación', ['forma','contenido'], v => joinForm(v.forma, v.contenido, true)),
       seg('Laboratorio', ['laboratorio'], v => v.laboratorio && (/^laboratorios?\b/i.test(v.laboratorio) ? v.laboratorio : 'Laboratorio ' + v.laboratorio))
     ],
     vital: ['principio'],

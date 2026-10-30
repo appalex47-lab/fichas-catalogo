@@ -85,8 +85,8 @@ test('presentación: 1 va en singular y 30 en plural en título y lote', { skip 
   const a = boot();
   a.addMed('P1', 'Tempra', '1'); a.addMed('P2', 'Dolofin', '30');
   const t = a.titles();
-  assert.match(t[0], /Tabletas, 1 pieza(?!s)/);
-  assert.match(t[1], /Tabletas, 30 piezas/);
+  assert.match(t[0], /\| 1 tableta(?!s) \|/);
+  assert.match(t[1], /\| 30 tabletas \|/);
 });
 
 test('editar: el producto no sale del lote hasta guardar y no se pierde al recargar o limpiar', { skip }, () => {
