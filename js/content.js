@@ -57,7 +57,7 @@ const INFO = {
   sup: { identidad: ['marca', 'componente'], tecnica: ['forma'], origen: ['fabricante'] },
   beb: { identidad: ['marca', 'tipo'], tecnica: ['sabor|atributo|beneficio'], origen: ['fabricante'] },
   hig: { identidad: ['marca', 'producto|tipo'], tecnica: ['beneficio|variante|uso'], origen: ['fabricante'] },
-  acc: { identidad: ['marca', 'producto'], tecnica: ['material'], origen: ['fabricante'] }
+  acc: { identidad: ['marca', 'producto|tipo'], tecnica: ['material|uso|caracteristicas|queEs'], origen: ['fabricante'] }
 };
 const PRES_KEYS = { dis: ['paquete', 'presentacion'] };
 const labelOf = (c, k) => { try { return F.labelOf(c, k); } catch (_) { return k; } };

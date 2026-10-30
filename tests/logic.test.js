@@ -572,7 +572,7 @@ test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo
     const sinDato = F.computeFor(id, base[id], keep, meta);
     for (const fd of c.fields) {
       if (fd.type === 'select' || fd.g === 'i' || NO_TEXT.has(fd.key) || fd.key === 'atc') continue;
-      const r = F.computeFor(id, { ...base[id], [fd.key]: ['nutrimental', 'especificaciones'].includes(fd.key) ? 'zzdatoprueba | 5 g' : 'zzdatoprueba' }, keep, meta);
+      const r = F.computeFor(id, { ...base[id], [fd.key]: ['nutrimental', 'especificaciones', 'tallas'].includes(fd.key) ? 'zzdatoprueba | 5 g' : 'zzdatoprueba' }, keep, meta);
       const enFicha = /zzdatoprueba/i.test(strip(r.mg.html)), enTitulo = /zzdatoprueba/i.test(r.title.title);
       assert.ok(enFicha || enTitulo, `${id}.${fd.key} no llega a la ficha de Magento ni al título`);
       const usos = [...(c.mgUses || []), ...(c.mgOpt || [])];
@@ -1223,4 +1223,86 @@ test('dispositivos: etiquetas, meta migrada y datos viejos que siguen funcionand
   const viejo = F.computeFor('dis', { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro digital', tecnologia: 'Automático de brazo', fabricante: 'Omron', caracteristicas: 'Pantalla LCD' }, keep, mt());
   assert.equal(viejo.title.title, 'Omron HEM-7121 Baumanómetro digital | Automático de brazo');
   assert.equal(viejo.mg.blocked, null);
+});
+
+/* ---------- Accesorios: ficha homologada ---------- */
+const ACCX = {
+  parches: { marca: 'Saba', tipo: 'Parches térmicos', uso: 'Alivio de dolores musculares', material: 'Tela no tejida', contenido: '3 piezas', envase: 'Caja', fabricante: 'Essity', modo: 'Adherir sobre la ropa.' },
+  muneca: { marca: 'Marca Ejemplo', producto: 'Soporte Plus', tipo: 'Muñequera', uso: 'Soporte de la muñeca', material: 'Neopreno', talla: 'M', lado: 'Derecha', color: 'Negro', contenido: '1 pieza', fabricante: 'Laboratorios Ejemplo', tallas: 'Mediana | Muñeca de 15 a 18 cm\nGrande | Muñeca de 18 a 21 cm', cuidados: 'Lavar a mano.' },
+  baston: { marca: 'Marca Ejemplo', tipo: 'Bastón de aluminio', uso: 'Apoyo para caminar', material: 'Aluminio', color: 'Plateado', contenido: '1 pieza', fabricante: 'Laboratorios Ejemplo' },
+  medias: { marca: 'Marca Ejemplo', tipo: 'Medias de compresión', uso: 'Soporte para las piernas', compresion: '20-30 mmHg', talla: 'M', color: 'Beige', publico: 'adultos', contenido: '1 par', fabricante: 'Laboratorios Ejemplo', registro: 'Reg. No. 0000X2026 SSA' },
+  cubrebocas: { marca: 'Marca Ejemplo', tipo: 'Cubrebocas quirúrgicos', material: '3 capas', color: 'Azul', contenido: '50 piezas', envase: 'Caja', fabricante: 'Laboratorios Ejemplo', declarada: 'Filtración bacteriana ≥ 95 %' }
+};
+
+test('accesorios: título con talla, lado, color y compresión; sin fabricante; el material se omite si no cabe', () => {
+  const t = k => F.computeFor('acc', ACCX[k], keep, mt()).title;
+  assert.equal(t('muneca').title, 'Marca Ejemplo Soporte Plus Muñequera | Talla M | Derecha | Negro | 1 pieza');
+  assert.deepEqual(t('muneca').softDropped, ['Neopreno']);
+  assert.equal(t('medias').title, 'Marca Ejemplo Medias de compresión | 20-30 mmHg | Talla M | Beige | 1 par');
+  assert.equal(t('parches').title, 'Saba Parches térmicos | Tela no tejida | 3 piezas');
+  assert.equal(t('baston').title, 'Marca Ejemplo Bastón de aluminio | Plateado | 1 pieza', 'el material repetido en el tipo no se repite');
+  assert.equal(F.computeFor('acc', { ...ACCX.muneca, talla: 'G', lado: 'Izquierda', color: 'Azul' }, keep, mt()).title.title, 'Marca Ejemplo Soporte Plus Muñequera | Talla G | Izquierda | Azul | 1 pieza', 'otra variante, otro título');
+});
+
+test('accesorios: basta el nombre o el tipo; material y compatibilidad ya no son obligatorios; presentación y cantidad se separan', () => {
+  const base = { marca: 'M', contenido: '1 pieza', fabricante: 'F' };
+  assert.deepEqual(F.computeFor('acc', base, keep, mt()).title.missing, ['Línea o nombre o tipo de accesorio']);
+  assert.deepEqual(F.computeFor('acc', { ...base, tipo: 'Venda' }, keep, mt()).title.missing, []);
+  const v = F.computeFor('acc', { ...ACCX.parches, contenido: 'Caja con 3 piezas', envase: '' }, keep, mt()).vt.v;
+  assert.deepEqual([v.envase, v.contenido], ['Caja', '3 piezas']);
+  const l = F.computeFor('acc', { marca: 'Saba', producto: 'Parches térmicos', material: 'Alivio de dolores', contenido: 'Caja con 3 piezas', fabricante: 'Essity' }, keep, mt());
+  assert.deepEqual(l.title.missing, []);
+  assert.equal(l.title.title, 'Saba Parches térmicos | Alivio de dolores | 3 piezas', 'los datos viejos siguen funcionando');
+});
+
+test('accesorios: descripción por tipo, con género y número, sin «accesorio para el bienestar»', () => {
+  const r = k => F.computeFor('acc', ACCX[k], keep, mt());
+  assert.match(r('parches').mc.text, /^Saba son unos parches térmicos, de tela no tejida\. Para alivio de dolores musculares\. Adherir sobre la ropa\. Se presenta en una caja con 3 piezas\.$/);
+  assert.match(r('muneca').mc.text, /^Marca Ejemplo Soporte Plus es una muñequera, de neopreno\. Uso: soporte de la muñeca\./);
+  assert.match(r('medias').mc.text, /^Marca Ejemplo son unas medias de compresión, 20-30 mmHg, para adultos\./);
+  assert.match(r('cubrebocas').mc.text, /^Marca Ejemplo son cubrebocas quirúrgicos, de 3 capas\./);
+  for (const k of Object.keys(ACCX)) assert.ok(!/accesorio para el bienestar|materiales y especificaciones de compatibilidad|Material o compatibilidad/.test(r(k).mc.text + r(k).mg.html), k);
+  assert.ok(!/medicamento/.test(r('medias').mc.text + r('medias').mg.html), 'ningún accesorio lleva «no es un medicamento»');
+});
+
+test('accesorios: metas con la variante primero', () => {
+  const m = k => F.computeFor('acc', ACCX[k], keep, mt()).meta;
+  assert.equal(m('muneca').mt.text, 'Marca Ejemplo Soporte Plus Muñequera | Talla M, Derecha, Negro, 1 pieza');
+  assert.equal(m('medias').mt.text, 'Marca Ejemplo Medias de compresión | 20-30 mmHg, Talla M, Beige, 1 par');
+  assert.equal(m('parches').md.text, 'Saba Parches térmicos. Alivio de dolores musculares. Caja con 3 piezas. Compra en Farmacias Especializadas.');
+});
+
+test('accesorios: Magento con guía de tallas, cuidado y preguntas por talla y lado', () => {
+  const h = F.computeFor('acc', ACCX.muneca, keep, mt()).mg;
+  const orden = [/<p><strong>Marca Ejemplo Soporte Plus<\/strong> es una muñequera de <strong>Laboratorios Ejemplo<\/strong>/, /<h2>Beneficios principales:/, /<h2>Ficha técnica del producto:/, /id="guia-de-tallas"/, /<h2>Cuidado y limpieza:/, /<h2>Preguntas frecuentes:/].map(re => h.html.search(re));
+  assert.ok(orden.every((n, i) => n >= 0 && (!i || n > orden[i - 1])), orden.join(','));
+  assert.match(h.html, /<th scope="row">Mediana<\/th><td>Muñeca de 15 a 18 cm<\/td>/);
+  assert.match(h.html, /Lado:<\/strong> Derecha/);
+  const faq = h.faq.map(x => x.join(' ')).join('\n');
+  assert.match(faq, /¿(?:Cómo elijo la talla de|Qué medidas tiene cada talla de)[^\n]*Mediana: muñeca de 15 a 18 cm; Grande: muñeca de 18 a 21 cm\./);
+  assert.match(faq, /¿Para qué lado es[^\n]*Es derecha\./);
+  assert.match(F.computeFor('acc', ACCX.cubrebocas, keep, mt()).mg.html, /<h2>Declarado en el empaque:<\/h2>\n<p>Filtración bacteriana ≥ 95 %<\/p>/);
+  assert.match(F.computeFor('acc', ACCX.medias, keep, mt()).mg.faq.map(x => x.join(' ')).join('\n'), /¿(?:Qué nivel de compresión tiene|Cuánta compresión ofrece)[^\n]*Según su empaque, 20-30 mmHg\./);
+});
+
+test('accesorios: promesas y enfermedades, posibles dispositivos médicos y guía de tallas sin barra', () => {
+  const L = (extra, base = ACCX.muneca) => F.lint(F.CATS.acc, { ...base, ...extra });
+  assert.equal(L({}).check.length, 0);
+  assert.ok(L({ beneficios: 'Previene várices' }).claim.some(x => x.term === 'previene'));
+  assert.ok(L({ beneficios: 'Para várices' }).med.some(x => x.term === 'enfermedad'));
+  assert.ok(L({ uso: 'Alivio del dolor' }).amber.some(x => x.term === 'alivia'));
+  assert.ok(L({ beneficios: 'Elimina el 99% de bacterias' }).claim.some(x => x.term === 'elimina'));
+  assert.ok(!L({ declarada: 'Elimina el 99% de bacterias' }).claim.length, 'lo declarado en el empaque se publica sin pasar por la revisión de redacción');
+  assert.match(L({}, ACCX.baston).check.join(' '), /suele ser un dispositivo médico/);
+  assert.equal(L({}, ACCX.medias).check.filter(x => /dispositivo médico/.test(x)).length, 0, 'con registro capturado no avisa');
+  assert.match(L({ tallas: 'Mediana | 15 a 18 cm\nGrande' }).check.join(' '), /líneas no llevan «\|»[^.]*«Grande»/);
+  assert.match(L({ tallas: '' }).check.join(' '), /Capturaste la talla pero no la guía/);
+});
+
+test('accesorios: etiquetas, meta migrada y listas de ayuda', () => {
+  const lbl = k => F.CATS.acc.fields.find(f => f.key === k).label;
+  assert.deepEqual([lbl('producto'), lbl('tipo'), lbl('tallas'), lbl('contenido')], ['Línea o nombre', 'Tipo de accesorio', 'Guía de tallas y medidas', 'Contenido neto']);
+  const m = F.defMeta(); m.cats.acc.mt = { ...F.META_GEN.mt }; F.migrateMeta(m);
+  assert.equal(m.cats.acc.mt.tpl, F.META_ACC.mt.tpl);
+  assert.ok(F.CATS.acc.fields.find(f => f.key === 'tipo').sug.includes('Rodillera'));
 });
