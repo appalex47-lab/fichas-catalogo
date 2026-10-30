@@ -604,10 +604,11 @@ function renderLote() {
       + relLine(it)
       + (e.ux.canRevoke ? `<button type="button" class="btn" data-revoke="${esc(it.id)}">Retirar aprobación</button>` : '') + `</td></tr>`;
   };
+  const waitTag = it => { const ce = it.sku ? Catalog.find(state.catalog, it.sku) : null; return ce && ce.elegible && Catalog.status(state.catalog, ce) === 'esperando' ? ' <span class="tag tag--warn" data-wait-parent title="Es un complemento y aún no tiene producto principal en el catálogo.">Espera producto principal</span>' : ''; };
   const rowHTML = x => {
     const { it, e } = x, open = state.loteOpen.has(it.id);
     return `<tr data-id="${esc(it.id)}"><td data-label="SKU">${esc(it.sku || 'sin SKU')}</td><td data-label="Categoría">${e.res.c.emoji} ${esc(e.res.c.name)}</td><td class="t" data-label="Título">${esc(e.res.title.title)}</td>`
-      + `<td data-label="Estado"><span class="status status--${e.ux.tone}" title="${esc(e.ux.why)}"><span aria-hidden="true">${e.ux.icon}</span> ${esc(e.ux.label)}</span> ${tagsHTML(e)}</td>`
+      + `<td data-label="Estado"><span class="status status--${e.ux.tone}" title="${esc(e.ux.why)}"><span aria-hidden="true">${e.ux.icon}</span> ${esc(e.ux.label)}</span> ${tagsHTML(e)}${waitTag(it)}</td>`
       + `<td data-label="Evaluación">${metrics(e)}</td><td data-label="Avisos">${anomTags(e)}</td>`
       + `<td class="ops">${e.ia ? `<button type="button" class="btn btn--ai" data-aiok="${it.id}">Confirmar IA</button>` : ''}`
       + `<button type="button" class="btn btn--quiet" data-toggle="${esc(it.id)}" aria-expanded="${open}">${open ? 'Ocultar' : 'Ver'}</button>`

@@ -21,6 +21,8 @@ test('catálogo: un complemento sin producto principal queda esperando y no abre
   assert.match(a.text('#cat-body'), /Fresubin/);
   assert.match(a.text('#cat-body'), /Esperando producto principal/);
   assert.equal(catalog(a).entries.length, 1);
+  assert.match(a.text('#lote-body'), /Espera producto principal/);
+  assert.equal(a.d.querySelectorAll('#lote-body [data-wait-parent]').length, 1);
   assert.deepEqual(a.errors, []);
 });
 
