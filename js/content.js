@@ -55,7 +55,7 @@ const INFO = {
   dis: { identidad: ['marca', 'modelo', 'tipo'], tecnica: ['tecnologia', 'uso'], origen: ['fabricante'] },
   cos: { identidad: ['marca', 'producto|tipo'], tecnica: ['atributo|beneficio|fps'], origen: ['fabricante'] },
   sup: { identidad: ['marca', 'componente'], tecnica: ['forma'], origen: ['fabricante'] },
-  beb: { identidad: ['marca', 'tipo'], tecnica: ['sabor|atributo'], origen: ['fabricante'] },
+  beb: { identidad: ['marca', 'tipo'], tecnica: ['sabor|atributo|beneficio'], origen: ['fabricante'] },
   hig: { identidad: ['marca', 'producto|tipo'], tecnica: ['beneficio|variante|uso'], origen: ['fabricante'] },
   acc: { identidad: ['marca', 'producto'], tecnica: ['material'], origen: ['fabricante'] }
 };

@@ -1066,3 +1066,81 @@ test('cuidado personal: etiquetas nuevas, meta migrada y datos viejos que siguen
   assert.equal(viejo.mg.blocked, null);
   assert.match(viejo.title.title, /^Colgate Total 12 pasta dental \| Salud bucal completa \| Crema 150 mL$/);
 });
+
+/* ---------- Bebidas: ficha homologada ---------- */
+const BEBX = {
+  hidratante: { marca: 'Marca Ejemplo', producto: 'Hidra', tipo: 'Bebida con electrolitos', beneficio: 'Reposición de líquidos y electrolitos', sabor: 'Fresa', atributo: 'Sin cafeína', contenido: '600 mL', envase: 'Botella', fabricante: 'Laboratorios Ejemplo' },
+  proteina: { marca: 'Marca Ejemplo', producto: 'Pro 20', tipo: 'Bebida de proteína', beneficio: '20 g de proteína por lata', sabor: 'Chocolate', atributo: 'Sin azúcar añadida', contenido: '12 x 330 mL', envase: 'Caja con 12 latas', fabricante: 'Laboratorios Ejemplo', ingredientes: 'Agua, proteína de leche, cacao, sucralosa, saborizante', alergenos: 'Contiene leche', modo: 'Agitar antes de abrir.' },
+  agua: { marca: 'Marca Ejemplo', producto: 'Pura', tipo: 'Agua alcalina', atributo: 'pH 9.5', contenido: '1 L', envase: 'Botella' },
+  formula: { marca: 'Marca Ejemplo', producto: 'Nutri Bebé', tipo: 'Fórmula infantil', beneficio: 'Alimentación del lactante', etapa: 'Etapa 1', publico: 'Lactantes de 0 a 6 meses', contenido: '800 g', envase: 'Lata', fabricante: 'Laboratorios Ejemplo' }
+};
+
+test('bebidas: título con línea, tipo, sabor, etapa y cantidad; sabor y atributo opcionales; pH conserva su escritura', () => {
+  const t = k => F.computeFor('beb', BEBX[k], keep, mt()).title;
+  assert.equal(t('hidratante').title, 'Marca Ejemplo Hidra Bebida con electrolitos | Sabor Fresa | Sin cafeína | 600 mL'.replace(' | Sin cafeína', ''), 'el atributo se omite al pasar de 70');
+  assert.deepEqual(t('hidratante').softDropped, ['Sin cafeína']);
+  assert.equal(t('proteina').title, 'Marca Ejemplo Pro 20 Bebida de proteína | Sabor Chocolate | 12 x 330 mL');
+  assert.equal(t('agua').title, 'Marca Ejemplo Pura Agua alcalina | pH 9.5 | 1 L');
+  assert.equal(t('formula').title, 'Marca Ejemplo Nutri Bebé Fórmula infantil | Etapa 1 | 800 g');
+  assert.deepEqual(t('agua').missing, [], 'sin sabor ya no falta nada');
+});
+
+test('bebidas: «Caja con 12 latas de 330 mL» se separa en presentación y paquete', () => {
+  const v = F.computeFor('beb', { ...BEBX.proteina, contenido: 'Caja con 12 latas de 330 mL', envase: '' }, keep, mt()).vt.v;
+  assert.deepEqual([v.envase, v.contenido], ['Caja con 12 latas', '12 x 330 mL']);
+  const w = F.computeFor('beb', { ...BEBX.hidratante, contenido: 'Botella de 600 mL', envase: '' }, keep, mt()).vt.v;
+  assert.deepEqual([w.envase, w.contenido], ['Botella', '600 mL']);
+});
+
+test('bebidas: la introducción depende del tipo y ya no dice «solución líquida de hidratación»', () => {
+  const r = k => F.computeFor('beb', BEBX[k], keep, mt());
+  assert.match(r('proteina').mc.text, /^Marca Ejemplo Pro 20 es una bebida de proteína sabor chocolate, sin azúcar añadida\. Ofrece 20 g de proteína por lata\. Agitar antes de abrir\. Se presenta en una caja con 12 latas \(12 x 330 mL\)\.$/);
+  assert.match(r('agua').mc.text, /^Marca Ejemplo Pura es agua alcalina, pH 9\.5\./);
+  assert.match(r('formula').mc.text, /^Marca Ejemplo Nutri Bebé es una fórmula infantil, etapa 1, para lactantes de 0 a 6 meses\. Se presenta en una lata de 800 g\.$/);
+  for (const k of Object.keys(BEBX)) assert.ok(!/solución líquida|hidratación del usuario/.test(r(k).mg.html + r(k).mc.text), k);
+  assert.ok(!/Ofrece alimentación/.test(r('formula').mc.text + r('formula').mg.faq.map(x => x.join(' ')).join(' ')), 'en fórmulas infantiles no se genera la frase de beneficio');
+  assert.ok(!/medicamento/.test(r('hidratante').mc.text + r('hidratante').mg.html), 'ninguna bebida lleva «no es un medicamento»');
+});
+
+test('bebidas: metas con sabor y cantidad primero, y descripción para quién', () => {
+  const m = k => F.computeFor('beb', BEBX[k], keep, mt()).meta;
+  assert.equal(m('proteina').mt.text, 'Marca Ejemplo Pro 20 Bebida de proteína | Sabor Chocolate, 12 x 330 mL');
+  assert.equal(m('proteina').md.text, 'Marca Ejemplo Pro 20 Bebida de proteína. 20 g de proteína por lata. Caja con 12 latas (12 x 330 mL). Compra en Farmacias Especializadas.');
+  assert.equal(m('formula').md.text, 'Marca Ejemplo Nutri Bebé Fórmula infantil. Para lactantes de 0 a 6 meses. Lata de 800 g. Compra en Farmacias Especializadas.');
+});
+
+test('bebidas: Magento ordena beneficios, ficha técnica, tabla nutrimental, ingredientes, alérgenos y sellos', () => {
+  const h = F.computeFor('beb', { ...BEBX.proteina, nutrimental: 'Nutriente | Por 330 mL\nEnergía | 120 kcal\nProteínas | 20 g\nAzúcares | 0 g', leyenda: 'CONTIENE EDULCORANTES, NO RECOMENDABLE EN NIÑOS', atributos: 'Sin azúcar añadida' }, keep, mt()).mg.html;
+  const orden = [/<p><strong>Marca Ejemplo Pro 20<\/strong> es una bebida de proteína de <strong>Laboratorios Ejemplo<\/strong>/, /<h2>Beneficios principales:/, /<h2>Ficha técnica de la bebida:/, /id="tabla-nutrimental"/, /<h2>Modo de consumo:/, /<h2>Ingredientes:/, /<h2>Alérgenos:/, /<h2>Sellos y leyendas del empaque:/, /<h2>Características declaradas:/, /<h2>Preguntas frecuentes:/].map(re => h.search(re));
+  assert.ok(orden.every((n, i) => n >= 0 && (!i || n > orden[i - 1])), orden.join(','));
+  assert.match(h, /CONTIENE EDULCORANTES, NO RECOMENDABLE EN NIÑOS/);
+  assert.match(h, /¿Cuánta proteína tiene[\s\S]*20 g de proteína/);
+});
+
+test('bebidas: leyendas obligatorias, características declaradas, alérgenos y avisos por tipo', () => {
+  const L = (extra, base = BEBX.proteina) => F.lint(F.CATS.beb, { ...base, ...extra }).check.join('\n');
+  assert.match(L({}), /incluyen un edulcorante, pero no capturaste la leyenda «CONTIENE EDULCORANTES/);
+  assert.equal(/edulcorante/.test(L({ leyenda: 'CONTIENE EDULCORANTES, NO RECOMENDABLE EN NIÑOS' })), false);
+  assert.match(L({ ingredientes: 'Agua, cafeína', leyenda: '' }), /incluyen cafeína, pero no capturaste la leyenda «CONTIENE CAFEINA/);
+  assert.match(L({ atributos: 'Sin azúcar', ingredientes: 'Agua, azúcar' }), /«Sin azúcar», pero los ingredientes incluyen azúcar/);
+  assert.match(L({ atributos: 'Sin gluten', ingredientes: 'Agua, trigo' }), /cereales con gluten/);
+  assert.match(L({ atributos: 'Sin cafeína', ingredientes: 'Agua, cafeína' }), /«Sin cafeína», pero los ingredientes incluyen cafeína/);
+  assert.match(L({ alergenos: '' }), /mencionan leche, pero «Alérgenos» no lo menciona/);
+  assert.match(L({}, { ...BEBX.hidratante, tipo: 'Suero oral' }), /Los sueros orales pueden estar registrados como medicamento/);
+  assert.match(L({}, BEBX.formula), /publicidad de las fórmulas infantiles/);
+  assert.equal(L({}, BEBX.agua), '');
+  const publicado = F.computeFor('beb', { ...BEBX.proteina, atributos: 'Sin azúcar, Sin cafeína', ingredientes: 'Agua, azúcar, cacao' }, keep, mt()).mg.html;
+  const decl = (publicado.match(/<h2>Características declaradas:<\/h2>[\s\S]*?<\/ul>/) || [''])[0];
+  assert.ok(!/Sin azúcar/.test(decl) && /<li>Sin cafeína<\/li>/.test(decl), 'la característica en conflicto no se publica');
+});
+
+test('bebidas: etiquetas, meta migrada y datos viejos que siguen funcionando', () => {
+  const lbl = k => F.CATS.beb.fields.find(f => f.key === k).label;
+  assert.deepEqual([lbl('contenido'), lbl('leyenda'), lbl('producto')], ['Contenido neto', 'Sellos y leyendas del empaque', 'Línea o nombre del producto']);
+  const m = F.defMeta(); m.cats.beb.mt = { ...F.META_GEN.mt }; F.migrateMeta(m);
+  assert.equal(m.cats.beb.mt.tpl, F.META_BEB.mt.tpl);
+  const viejo = F.computeFor('beb', { marca: 'Electrolit', tipo: 'Suero oral', sabor: 'Coco', atributo: 'Sin azúcar', contenido: '625 mL' }, keep, mt());
+  assert.deepEqual(viejo.title.missing, []);
+  assert.equal(viejo.title.title, 'Electrolit Suero oral | Sabor Coco | Sin azúcar | 625 mL');
+  assert.equal(viejo.mg.blocked, null);
+});
