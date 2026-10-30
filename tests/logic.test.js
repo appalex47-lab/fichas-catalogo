@@ -572,7 +572,7 @@ test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo
     const sinDato = F.computeFor(id, base[id], keep, meta);
     for (const fd of c.fields) {
       if (fd.type === 'select' || fd.g === 'i' || NO_TEXT.has(fd.key) || fd.key === 'atc') continue;
-      const r = F.computeFor(id, { ...base[id], [fd.key]: fd.key === 'nutrimental' ? 'zzdatoprueba | 5 g' : 'zzdatoprueba' }, keep, meta);
+      const r = F.computeFor(id, { ...base[id], [fd.key]: ['nutrimental', 'especificaciones'].includes(fd.key) ? 'zzdatoprueba | 5 g' : 'zzdatoprueba' }, keep, meta);
       const enFicha = /zzdatoprueba/i.test(strip(r.mg.html)), enTitulo = /zzdatoprueba/i.test(r.title.title);
       assert.ok(enFicha || enTitulo, `${id}.${fd.key} no llega a la ficha de Magento ni al título`);
       const usos = [...(c.mgUses || []), ...(c.mgOpt || [])];
@@ -1142,5 +1142,85 @@ test('bebidas: etiquetas, meta migrada y datos viejos que siguen funcionando', (
   const viejo = F.computeFor('beb', { marca: 'Electrolit', tipo: 'Suero oral', sabor: 'Coco', atributo: 'Sin azúcar', contenido: '625 mL' }, keep, mt());
   assert.deepEqual(viejo.title.missing, []);
   assert.equal(viejo.title.title, 'Electrolit Suero oral | Sabor Coco | Sin azúcar | 625 mL');
+  assert.equal(viejo.mg.blocked, null);
+});
+
+/* ---------- Dispositivos médicos: ficha homologada ---------- */
+const DISX = {
+  bauma: { marca: 'Marca Ejemplo', modelo: 'BP-100', tipo: 'Baumanómetro digital', tecnologia: 'Automático de brazo', fabricante: 'Marca Ejemplo', uso: 'Medición de la presión arterial y del pulso', publico: 'Adultos', paquete: 'Brazalete, 4 pilas AA, estuche e instructivo', registro: 'Reg. No. 0000X2026 SSA', caracteristicas: 'Pantalla grande\nMemoria para 2 usuarios', especificaciones: 'Rango de presión | 0 a 299 mmHg\nMedida del brazalete | 22 a 42 cm', modo: 'Colocar el brazalete y presionar inicio.' },
+  termo: { marca: 'Marca Ejemplo', modelo: 'TI-20', tipo: 'Termómetro infrarrojo', tecnologia: 'Infrarrojo sin contacto', fabricante: 'Marca Ejemplo', uso: 'Medición de la temperatura corporal en la frente', declarada: 'Clínicamente validado' },
+  nebu: { marca: 'Marca Ejemplo', modelo: 'NB-30', tipo: 'Nebulizador', tecnologia: 'Compresor', fabricante: 'Marca Ejemplo', uso: 'Administración de medicamento en aerosol indicado por un médico' },
+  tiras: { marca: 'Marca Ejemplo', modelo: 'GT-50', tipo: 'Tiras reactivas para glucosa', fabricante: 'Marca Ejemplo', uso: 'Medición de glucosa en sangre capilar', contenido: '50 piezas', presentacion: 'Caja', compatibilidad: 'Glucómetro Marca Ejemplo GT-100' }
+};
+
+test('dispositivos: el modelo conserva sus mayúsculas y el título no lleva fabricante ni repite la tecnología', () => {
+  const t = k => F.computeFor('dis', DISX[k], keep, mt()).title;
+  assert.equal(t('bauma').title, 'Marca Ejemplo BP-100 Baumanómetro digital | Automático de brazo');
+  assert.equal(t('termo').title, 'Marca Ejemplo TI-20 Termómetro infrarrojo | Sin contacto');
+  assert.equal(t('tiras').title, 'Marca Ejemplo GT-50 Tiras reactivas para glucosa | 50 piezas');
+  assert.equal(F.computeFor('dis', { ...DISX.termo, modelo: 'Ti-20 pro' }, keep, mt()).vt.v.modelo, 'Ti-20 pro');
+});
+
+test('dispositivos: los insumos ya no se bloquean y bastan tecnología, uso previsto o características', () => {
+  const base = { marca: 'M', modelo: 'X1', tipo: 'Lancetas', fabricante: 'F' };
+  assert.ok(F.computeFor('dis', base, keep, mt()).mg.blocked, 'sin ninguno de los tres sí se bloquea');
+  assert.equal(F.computeFor('dis', { ...base, uso: 'Punción capilar' }, keep, mt()).mg.blocked, null);
+  assert.equal(F.computeFor('dis', { ...base, caracteristicas: 'Calibre 30G' }, keep, mt()).mg.blocked, null);
+  assert.deepEqual(F.computeFor('dis', DISX.tiras, keep, mt()).title.missing, []);
+});
+
+test('dispositivos: «Caja con 50 piezas» en la presentación se separa de la cantidad', () => {
+  const v = F.computeFor('dis', { ...DISX.tiras, contenido: '', presentacion: 'Caja con 50 piezas' }, keep, mt()).vt.v;
+  assert.deepEqual([v.presentacion, v.contenido], ['Caja', '50 piezas']);
+});
+
+test('dispositivos: descripción de Merchant Center por tipo, sin «equipo de medición técnica»', () => {
+  const r = k => F.computeFor('dis', DISX[k], keep, mt());
+  assert.match(r('bauma').mc.text, /^Marca Ejemplo BP-100 es un baumanómetro digital, automático de brazo, para adultos\. Uso previsto: medición de la presión arterial y del pulso\. Pantalla grande, memoria para 2 usuarios\. Incluye brazalete, 4 pilas aa, estuche e instructivo\./i);
+  assert.match(r('tiras').mc.text, /^Marca Ejemplo GT-50 son unas tiras reactivas para glucosa\. Para medición de glucosa en sangre capilar\. Compatible con glucómetro Marca Ejemplo GT-100\. Se presenta en una caja con 50 piezas\./);
+  for (const k of Object.keys(DISX)) assert.ok(!/equipo de medición técnica|integrando componentes|Cuenta con/.test(r(k).mc.text + r(k).mg.html), k);
+  assert.ok(!/Dispositivo médico tiras/.test(r('tiras').mc.text), 'un insumo no se llama dispositivo médico');
+});
+
+test('dispositivos: metas con marca, modelo y tipo, y tecnología y cantidad después', () => {
+  const m = k => F.computeFor('dis', DISX[k], keep, mt()).meta;
+  assert.equal(m('bauma').mt.text, 'Marca Ejemplo BP-100 Baumanómetro digital | Automático de brazo');
+  assert.equal(m('tiras').mt.text, 'Marca Ejemplo GT-50 Tiras reactivas para glucosa | 50 piezas');
+  assert.equal(m('bauma').md.text, 'Marca Ejemplo BP-100 Baumanómetro digital. Medición de la presión arterial y del pulso. Compra en Farmacias Especializadas.');
+});
+
+test('dispositivos: la ficha de Magento ordena características, ficha técnica, especificaciones y cierre', () => {
+  const h = F.computeFor('dis', DISX.bauma, keep, mt()).mg.html;
+  const orden = [/es un baumanómetro digital de <strong>Marca Ejemplo<\/strong>, <strong>automático de brazo<\/strong>, para adultos\./, /<h2>Características principales:/, /<h2>Ficha técnica del producto:/, /id="especificaciones-tecnicas"/, /<h2>Contenido del paquete:/, /<h2>Instrucciones de uso:/, /Utilice el dispositivo conforme al instructivo del fabricante\. Consulte a su médico ante cualquier duda sobre sus mediciones\./, /<h2>Preguntas frecuentes:/].map(re => h.search(re));
+  assert.ok(orden.every((n, i) => n >= 0 && (!i || n > orden[i - 1])), orden.join(','));
+  assert.match(h, /<th scope="row">Rango de presión<\/th><td>0 a 299 mmHg<\/td>/);
+  assert.match(h, /Registro sanitario:<\/strong> Reg\. No\. 0000X2026 SSA/);
+  const neb = F.computeFor('dis', DISX.nebu, keep, mt()).mg.html;
+  assert.ok(!/Consulte a su médico ante cualquier duda/.test(neb) && /Utilice el dispositivo conforme al instructivo/.test(neb), 'el cierre de mediciones no va en un nebulizador');
+  assert.ok(!/Consulte a su médico ante cualquier duda/.test(F.computeFor('dis', DISX.tiras, keep, mt()).mg.html));
+  assert.match(F.computeFor('dis', DISX.termo, keep, mt()).mg.html, /<h2>Declarado en el empaque:<\/h2>\n<p>Clínicamente validado<\/p>/);
+  const faq = F.computeFor('dis', DISX.bauma, keep, mt()).mg.faq.map(x => x.join(' ')).join('\n');
+  assert.match(faq, /registro sanitario[^\n]*su registro sanitario es 0000X2026 SSA\./);
+  assert.match(faq, /rango de presión[^\n]*0 a 299 mmHg/i);
+});
+
+test('dispositivos: avisos de registro, validaciones, especificaciones sin barra y rango faltante', () => {
+  const L = (extra, base = DISX.bauma) => F.lint(F.CATS.dis, { ...base, ...extra });
+  assert.equal(L({}).check.length, 0);
+  assert.match(L({ registro: '' }).check.join(' '), /No capturaste el registro sanitario/);
+  assert.match(L({ especificaciones: 'Rango de presión | 0 a 299 mmHg\nPantalla grande' }).check.join(' '), /líneas no llevan «\|»[^.]*«Pantalla grande»/);
+  assert.match(L({ especificaciones: 'Memoria | 60 lecturas' }).check.join(' '), /no incluyen el rango de medición/);
+  assert.ok(L({ caracteristicas: 'Clínicamente validado' }).amber.some(x => x.term === 'clínicamente validado'));
+  assert.equal(L({}, DISX.nebu).check.filter(x => /rango/.test(x)).length, 0, 'un nebulizador no mide');
+  assert.ok(!L({ declarada: 'Clínicamente validado' }).amber.length, 'lo declarado en el empaque se publica sin pasar por la revisión de redacción');
+});
+
+test('dispositivos: etiquetas, meta migrada y datos viejos que siguen funcionando', () => {
+  const lbl = k => F.CATS.dis.fields.find(f => f.key === k).label;
+  assert.deepEqual([lbl('registro'), lbl('especificaciones'), lbl('modo')], ['Registro sanitario', 'Especificaciones técnicas', 'Instrucciones de uso']);
+  const m = F.defMeta(); m.cats.dis.mt = { ...F.META_GEN.mt }; F.migrateMeta(m);
+  assert.equal(m.cats.dis.mt.tpl, F.META_DIS.mt.tpl);
+  const viejo = F.computeFor('dis', { marca: 'Omron', modelo: 'HEM-7121', tipo: 'Baumanómetro digital', tecnologia: 'Automático de brazo', fabricante: 'Omron', caracteristicas: 'Pantalla LCD' }, keep, mt());
+  assert.equal(viejo.title.title, 'Omron HEM-7121 Baumanómetro digital | Automático de brazo');
   assert.equal(viejo.mg.blocked, null);
 });

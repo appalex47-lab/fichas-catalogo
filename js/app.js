@@ -1815,7 +1815,7 @@ $('#logo-clear').addEventListener('click', () => {
   toast('Logotipo quitado.');
 });
 
-const VERBATIM_KEYS = ['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'nutrimental', 'beneficios'];
+const VERBATIM_KEYS = ['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'nutrimental', 'beneficios', 'registro', 'declarada'];
 function renderImgReview() {
   const box = $('#img-review'), r = state.imgResult;
   if (!r) { box.innerHTML = ''; return; }

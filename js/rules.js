@@ -41,7 +41,7 @@ const badge = k => `<span class="badge ${ENF[k][1]}">${ENF[k][0]}</span>`;
 const src = (...k) => k.map(x => SRC[x]).join('; ');
 
 const SEP_NAMES = { ' | ': 'barra vertical ( | )', ' - ': 'guion ( - )', '. ': 'punto ( . )', ', ': 'coma ( , )', ' ': 'espacio' };
-const LEG = { med: ['medMc', 'medReceta', 'medConservacion', 'medAviso'], dis: ['disMc'], cos: ['cosMc'], sup: ['supResp', 'supConservacion'], hig: ['higMc'], beb: [], acc: [] };
+const LEG = { med: ['medMc', 'medReceta', 'medConservacion', 'medAviso'], dis: ['disMc', 'disMedico'], cos: ['cosMc', 'cosResp'], sup: ['supResp', 'supConservacion'], hig: ['higMc', 'cosResp'], beb: [], acc: [] };
 const LEG_LABEL = {
   medMc: 'Merchant Center: leyenda de uso y dosis',
   medReceta: 'Magento: frase de venta con receta (solo si se declara receta)',
@@ -49,6 +49,8 @@ const LEG_LABEL = {
   medAviso: 'Magento: aviso legal y de seguridad (lista)',
   disMc: 'Merchant Center: uso conforme al instructivo',
   cosMc: 'Merchant Center: uso conforme a las indicaciones',
+  cosResp: 'Merchant Center, Magento y preguntas: aclaración de que no es un medicamento (en cuidado personal, solo aseo y belleza)',
+  disMedico: 'Magento: cierre en dispositivos de medición',
   higMc: 'Merchant Center: uso conforme a las indicaciones',
   supResp: 'Merchant Center y Magento: responsabilidad y aclaración de que no es medicamento',
   supConservacion: 'Magento: condiciones de conservación'

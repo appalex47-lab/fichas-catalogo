@@ -166,12 +166,12 @@ async function aiExtract(o) {
 const MAX_IMAGES = 3;
 /* Campos que se pueden leer de un empaque. Nunca la receta. */
 const IMG_FIELDS = ['marca', 'producto', 'tipo', 'principio', 'concentracion', 'volumen', 'forma', 'contenido', 'via', 'laboratorio', 'fabricante', 'modelo', 'sabor', 'atributo', 'componente', 'variante', 'material', 'inci', 'modo', 'precauciones', 'fps',
-  'nutrimental', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'porcion', 'porciones', 'beneficios', 'zona', 'espectro', 'resistencia', 'pao', 'origen', 'talla', 'fluor', 'duracion', 'etapa'];
+  'nutrimental', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'porcion', 'porciones', 'beneficios', 'zona', 'espectro', 'resistencia', 'pao', 'origen', 'talla', 'fluor', 'duracion', 'etapa', 'registro', 'advertencias', 'declarada'];
 /* Campos que solo se leen en una categoría (en dermocosméticos y cuidado personal «ingredientes» es otro dato y no se lee de la foto). */
 const IMG_BY_CAT = { sup: ['ingredientes'] };
 const imgAllowed = cat => new Set([...IMG_FIELDS, ...(IMG_BY_CAT[cat] || [])]);
 /* Textos que deben ser copia literal de lo que se lee. */
-const VERBATIM = new Set(['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'beneficios']);
+const VERBATIM = new Set(['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'beneficios', 'registro', 'declarada']);
 /* Tablas: varias líneas con barras. Cada cantidad con su unidad y cada palabra deben estar en lo leído. */
 const TABLE_KEYS = new Set(['nutrimental']);
 const cleanLines = s => String(s ?? '').replace(/\r/g, '').split('\n').map(l => l.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');

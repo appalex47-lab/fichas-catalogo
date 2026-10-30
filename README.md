@@ -162,6 +162,14 @@ La página solo necesita `index.html`, `styles/styles.css`, `js/logic.js`, `js/a
   - **Revisiones:** leyenda de edulcorantes o de cafeína si los ingredientes los incluyen y la leyenda no está capturada (modificación de 2020 de la NOM-051, confirmada solo por fuentes secundarias); características declaradas contra los ingredientes (sin azúcar, sin cafeína, sin gluten, sin edulcorantes); alérgenos y tabla nutrimental como en suplementos; aviso en sueros orales (pueden estar registrados como medicamento; la ficha no afirma nada) y en fórmulas infantiles (reglas especiales de publicidad).
   - **Metas:** sabor, etapa y cantidad primero, tienda al final solo si cabe. La estructura sigue «sin confirmar».
   - **Productos ya guardados:** siguen funcionando.
+- Dispositivos médicos, ficha homologada:
+  - **Campos:** el modelo se conserva exactamente como se escribe («TI-20»); «Tecnología o zona de medición» deja de ser obligatoria (basta con ella, el uso previsto o las características), así que las tiras y lancetas ya no se bloquean; nuevos «Registro sanitario», «Especificaciones técnicas» (una línea «Nombre | Valor» que sale como tabla con `id="especificaciones-tecnicas"`), «Contenido o piezas», «Compatibilidad», «Dirigido a», «Instrucciones de uso», «Advertencias» y «Declarado en el empaque».
+  - **Título:** marca + modelo + tipo | tecnología (opcional, se omite si pasa de 70 caracteres) | cantidad. Sin fabricante. La tecnología no repite palabras del tipo.
+  - **Introducción:** una frase por tipo («es un baumanómetro digital», «son unas tiras reactivas»). Ya no dice «equipo de medición técnica» ni «integrando componentes». Los insumos no se llaman «dispositivo médico».
+  - **Cierre:** «Utilice el dispositivo conforme al instructivo del fabricante.» y, solo en dispositivos de medición (baumanómetro, glucómetro, termómetro, oxímetro, báscula), «Consulte a su médico ante cualquier duda sobre sus mediciones.»
+  - **Revisiones:** sin registro sanitario capturado (aviso, no bloqueo); validaciones como «clínicamente validado» o «diagnóstico» en la redacción propia (requieren sustento; en «Declarado en el empaque» se publican tal cual); especificaciones sin «|»; dispositivo de medición sin rango.
+  - **Metas:** marca, modelo y tipo primero; la estructura sigue «sin confirmar». La lectura de fotos puede proponer registro sanitario, advertencias y lo declarado en el empaque; las especificaciones se capturan a mano.
+  - **Productos ya guardados:** siguen funcionando.
 - Cosméticos (NOM-141-SSA1/SCFI-2012): las secciones Ingredientes, Modo de uso, Precauciones y Protección solar solo salen si tienen datos. Avisa de "bloqueador", "protección total" o "100%", de términos de acción medicinal, y verifica que el nivel de protección coincida con la tabla de la norma según el FPS. Los textos tomados del empaque no pasan por la revisión de lenguaje.
 
 ## Formato del CSV para Magento
