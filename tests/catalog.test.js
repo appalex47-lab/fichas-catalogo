@@ -195,3 +195,79 @@ test('rutina: el paso se deduce del tipo y los cosméticos de otro paso completa
   const manual = C.upsert(c, item('SOL', 'cos', { marca: 'M', tipo: 'Crema', rutina: 'Protección solar' }), 'S', AT).entry;
   assert.equal(manual.rutina, 'Protección solar', 'lo declarado manda sobre lo deducido');
 });
+
+/* ---------- alternativas y relacionados a mano ---------- */
+test('a mano: agregar una alternativa vale para los dos productos y quitar una de la regla la oculta', () => {
+  const C = require('../js/catalog.js');
+  const c = C.empty();
+  C.upsert(c, { sku: 'A1', nombre: 'Uno', cat: 'beb', marca: 'X', rv: { marca: 'X' } });
+  C.upsert(c, { sku: 'B2', nombre: 'Dos', cat: 'beb', marca: 'Y', rv: { marca: 'Y' } });
+  assert.ok(C.setRel(c, 'a1', 'B2', 'upsell', true, 't'));
+  let eff = C.effectiveRels(c);
+  assert.deepEqual(eff.get('a1').upsell, ['B2']);
+  assert.deepEqual(eff.get('b2').upsell, ['A1']);
+  assert.ok(C.setRel(c, 'A1', 'B2', 'upsell', false, 't'));
+  assert.equal(c.relMan.length, 1);
+  assert.deepEqual(C.effectiveRels(c).get('a1').upsell, []);
+  assert.ok(C.clearRel(c, 'B2', 'A1', 'upsell'));
+  assert.equal(c.relMan.length, 0);
+  assert.equal(C.setRel(c, 'A1', 'A1', 'upsell', true), false);
+  assert.equal(C.setRel(c, 'A1', 'ZZ', 'upsell', true), false);
+});
+
+test('a mano: se conserva al normalizar y se borra con el producto', () => {
+  const C = require('../js/catalog.js');
+  const c = C.empty();
+  C.upsert(c, { sku: 'A1', nombre: 'Uno', cat: 'beb', marca: 'X' });
+  C.upsert(c, { sku: 'B2', nombre: 'Dos', cat: 'beb', marca: 'Y' });
+  C.setRel(c, 'A1', 'B2', 'related', true, 't');
+  const n = C.normalize(JSON.parse(JSON.stringify(c)));
+  assert.equal(n.relMan.length, 1);
+  C.remove(c, 'B2');
+  assert.equal(c.relMan.length, 0);
+});
+
+test('CSV: alternativas a mano se agregan, y las quitadas no salen, siempre que el SKU vaya en el archivo', () => {
+  const meta = F.defMeta();
+  const beb = (sku, marca) => ({ sku, cat: 'beb', v: { marca, tipo: 'Suero oral', sabor: 'Coco', atributo: 'Sin azúcar', contenido: '625 mL' } });
+  const col = (ex, sku, name) => ex.rows.find(r => r[0] === sku)[ex.header.indexOf(name)];
+  const items = [beb('A-1', 'Alfa'), beb('B-2', 'Beta')];
+  const base = F.magentoBatch(items, new Set(), meta, { relations: true });
+  assert.equal(col(base, 'A-1', 'upsell_skus'), '');
+  const over = new Map([['a-1', { upsell: { add: ['B-2', 'Z-9'], del: [] } }], ['b-2', { upsell: { add: ['A-1'], del: [] } }]]);
+  const man = F.magentoBatch(items, new Set(), meta, { relations: true, relOver: over });
+  assert.equal(col(man, 'A-1', 'upsell_skus'), 'B-2', 'Z-9 no está en el archivo ni se cargó antes');
+  assert.equal(col(man, 'B-2', 'upsell_skus'), 'A-1');
+});
+
+/* ---------- compartir: unir catálogos ---------- */
+test('unir: suma productos, vínculos y alternativas; en un producto repetido gana el más reciente', () => {
+  const mk = (rows, at) => { const c = C.empty(); rows.forEach(([sku, cat, v]) => C.upsert(c, item(sku, cat, v), sku, at)); return c; };
+  const a = mk([['MOU-1', 'med', { marca: 'Mounjaro', receta: 'si', especialidad: 'no' }], ['FRE-1', 'beb', { marca: 'Fresubin' }]], '2026-01-01T00:00:00Z');
+  const b = mk([['MOU-1', 'med', { marca: 'Mounjaro KwikPen', receta: 'si', especialidad: 'no' }], ['SUE-1', 'beb', { marca: 'Electrolit' }], ['FRE-1', 'beb', { marca: 'Fresubin' }]], '2026-02-01T00:00:00Z');
+  C.link(b, 'MOU-1', 'SUE-1', { by: 'manual', at: '2026-02-01' });
+  C.setRel(b, 'FRE-1', 'SUE-1', 'upsell', true, '2026-02-02');
+  C.markExported(b, ['MOU-1'], '2026-02-03');
+  const r = C.merge(a, JSON.parse(JSON.stringify(b)));
+  assert.equal(r.added, 1);
+  assert.equal(r.updated, 2);
+  assert.equal(a.entries.length, 3);
+  assert.equal(C.find(a, 'MOU-1').marca, 'Mounjaro KwikPen');
+  assert.equal(C.find(a, 'MOU-1').exportedAt, '2026-02-03');
+  assert.equal(a.links.length, 1);
+  assert.equal(a.relMan.length, 1);
+  const again = C.merge(a, JSON.parse(JSON.stringify(b)));
+  assert.deepEqual([again.added, again.updated, again.links, again.rels], [0, 0, 0, 0]);
+  assert.equal(a.links.length, 1);
+});
+
+test('unir: lo más viejo no pisa lo nuevo y los vínculos huérfanos se omiten', () => {
+  const a = C.empty(), b = C.empty();
+  C.upsert(a, item('X-1', 'beb', { marca: 'Nueva' }), 'x', '2026-05-01T00:00:00Z');
+  C.upsert(b, item('X-1', 'beb', { marca: 'Vieja' }), 'x', '2026-01-01T00:00:00Z');
+  b.links.push({ p: 'NOPE', c: 'X-1' });
+  const r = C.merge(a, b);
+  assert.equal(C.find(a, 'X-1').marca, 'Nueva');
+  assert.equal(r.same, 1);
+  assert.equal(a.links.length, 0);
+});

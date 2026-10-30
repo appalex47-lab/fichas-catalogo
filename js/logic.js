@@ -6,6 +6,8 @@
 (function (root) {
 'use strict';
 const escT = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+/* Texto de párrafo: las líneas capturadas se conservan con salto de línea, porque el navegador junta los saltos simples. */
+const escP = s => escT(s).split(/\r?\n+/).map(x => x.trim()).filter(Boolean).join('<br />\n');
 const cap = s => s ? (/^pH(?=\s*\d)/.test(s) ? s : s.charAt(0).toUpperCase() + s.slice(1)) : '';
 const lc  = s => (s && !/^[A-ZÁÉÍÓÚÑ]{2}/.test(s)) ? s.charAt(0).toLowerCase() + s.slice(1) : (s || '');
 const join = (sep, ...a) => a.filter(Boolean).join(sep);
@@ -78,9 +80,27 @@ function expandPres(t) {
 }
 const COUNT_NOUN_RE = /(?<![\p{L}\d-])(\d+)\s+(tabletas?|cápsulas?|capsulas?|piezas?|sobres?|comprimidos?|parches?|pastillas?|gomitas?|unidades|unidad|ampolletas?|plumas?|tiras|lancetas?|grageas?|sachets?|toallitas?|jeringas?|perlas?|softgels?|barras?|shots?|chicles?|porciones|viales?)(?![\p{L}])/giu;
 const capNouns = s => s.replace(COUNT_NOUN_RE, (m, n, w) => `${n} ${w.toLowerCase()}`);
-function joinForm(forma, contenido) {
+/* Formas que se cuentan por pieza: «Cápsulas» + «Caja con 28 piezas» se lee «28 Cápsulas». */
+const FORMA_PIEZA = /^(c[aá]psulas?|tabletas?|comprimidos?|grageas?|pastillas?|perlas?|softgels?|parches?|supositorios?|[oó]vulos?|gomitas?|gomas?|sobres?|tiras?|pastillas?|chicles?)\b/i;
+const ENVASE = '(?:caja|frasco|bl[ií]ster|bolsa|tubo|envase|estuche|blister)s?';
+function formaConPiezas(forma, contenido) {
+  const f = String(forma || '').trim(), c = String(contenido || '').trim();
+  const head = (f.match(FORMA_PIEZA) || [])[1];
+  if (!head) return '';
+  const base = head.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/e?s$/, '').replace(/s$/, '');
+  const m = c.match(new RegExp(`^(?:${ENVASE}\\s*(?:con|de|x)?\\s*)?(\\d+)\\s*(?:piezas?|pzas?\\.?|unidades|uds?\\.?|${base.slice(0, 5)}\\w*)?\\.?$`, 'i'));
+  if (!m) return '';
+  const n = Number(m[1]);
+  if (!(n > 0)) return '';
+  const resto = f.slice(head.length);
+  const word = n === 1 ? head.replace(/(?<=[aeiou])s$/i, '').replace(/es$/i, '') : (/s$/i.test(head) ? head : head + (/[aeiou]$/i.test(head) ? 's' : 'es'));
+  return `${n} ${word}${resto}`;
+}
+function joinForm(forma, contenido, porPieza) {
   if (!forma) return contenido || '';
   if (!contenido) return forma;
+  const piezas = porPieza ? formaConPiezas(forma, contenido) : '';
+  if (piezas) return piezas;
   const base = forma.toLowerCase().replace(/s$/, '');
   if (contenido.toLowerCase().includes(base)) return contenido;
   return `${forma}, ${contenido}`;
@@ -203,7 +223,7 @@ function nutriFact(v, re) {
 const S = t => t ? `<strong>${escT(t)}</strong>` : '';
 const liRows = pairs => pairs.filter(([, v]) => v).map(([l, v]) => `  <li><strong>${l}:</strong> ${escT(v)}</li>`).join('\n');
 const assemble = (p, heading, pairs, extra = []) =>
-  [`<p>${p.trim()}</p>`, `<h2>${heading}</h2>\n<ul>\n${liRows(pairs)}\n</ul>`, ...extra].join('\n<br />\n');
+  [`<p>${p.trim()}</p>`, `<h2>${heading}</h2>\n<ul>\n${liRows(pairs)}\n</ul>`, ...extra].join('\n');
 
 /* Frases y bloques fijos de las plantillas aprobadas. Una sola fuente: las plantillas y el documento de reglas los leen de aquí. */
 const LEGEND = {
@@ -246,7 +266,7 @@ function compSec(t) {
   return [`<h2>Composición:</h2>\n${lead ? `<p>${escT(lead)}</p>\n` : ''}<ul>\n${parts.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>`];
 }
 /* Secciones de texto literal que se agregan al HTML de Magento solo si el dato fue capturado: [encabezado, texto]. */
-const secs = pairs => pairs.filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`);
+const secs = pairs => pairs.filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escP(t)}</p>`);
 /* Lista con viñetas a partir de un texto separado por comas, punto y coma o saltos de línea. */
 const listSec = (h, text) => { const items = String(text || '').split(/\s*[,;\n]+\s*/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean).map(cap); return items.length ? [`<h2>${h}</h2>\n<ul>\n${items.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>`] : []; };
 /* ---------- Cosméticos: nombre sin repetir, género del tipo, presentación y atributos verificados ---------- */
@@ -462,7 +482,7 @@ const CATS = {
     title: [
       seg('Marca + concentración / volumen', ['marca','concentracion','volumen'], v => join(' ', v.marca, join(' / ', v.concentracion, v.volumen))),
       seg('Principio activo', ['principio']),
-      seg('Forma farmacéutica + presentación', ['forma','contenido'], v => joinForm(v.forma, v.contenido)),
+      seg('Forma farmacéutica + presentación', ['forma','contenido'], v => joinForm(v.forma, v.contenido, true)),
       seg('Laboratorio', ['laboratorio'], v => v.laboratorio && (/^laboratorios?\b/i.test(v.laboratorio) ? v.laboratorio : 'Laboratorio ' + v.laboratorio))
     ],
     vital: ['principio'],
@@ -495,7 +515,7 @@ const CATS = {
         ['Forma Farmacéutica', v.forma], ['Presentación', v.contenido], ['Vía de Administración', v.via], ['Laboratorio', v.laboratorio], ['Categoría', v.categoria]
       ], [
         ...[['Indicaciones:', v.indicaciones], ['Cómo se usa:', v.posologia], ['Población a la que va dirigido:', v.poblacion], ['Contraindicaciones y advertencias:', v.contraindicaciones], ['Leyenda adicional:', v.leyenda]]
-          .filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`),
+          .filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escP(t)}</p>`),
         `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.medConservacion}</p>`,
         `<h2>Aviso legal y de seguridad:</h2>\n<ul>\n${LEGEND.medAviso.map(x => `  <li>${x}</li>`).join('\n')}\n</ul>`
       ]);
@@ -552,17 +572,17 @@ const CATS = {
       const lst = (h, a) => `<h2>${h}</h2>\n<ul>\n${a.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`;
       if (specRows(v.especificaciones).length) extras.push(specHtml(v.especificaciones));
       if (pk.length) extras.push(lst('Contenido del paquete:', pk));
-      if (v.compatibilidad) extras.push(`<h2>Compatibilidad:</h2>\n<p>${escT(v.compatibilidad)}</p>`);
-      if (v.modo) extras.push(`<h2>Instrucciones de uso:</h2>\n<p>${escT(v.modo)}</p>`);
-      if (v.extra) extras.push(`<h2>Especificaciones adicionales:</h2>\n<p>${escT(v.extra)}</p>`);
-      if (v.declarada) extras.push(`<h2>Declarado en el empaque:</h2>\n<p>${escT(v.declarada)}</p>`);
-      if (v.advertencias) extras.push(`<h2>Advertencias:</h2>\n<p>${escT(v.advertencias)}</p>`);
+      if (v.compatibilidad) extras.push(`<h2>Compatibilidad:</h2>\n<p>${escP(v.compatibilidad)}</p>`);
+      if (v.modo) extras.push(`<h2>Instrucciones de uso:</h2>\n<p>${escP(v.modo)}</p>`);
+      if (v.extra) extras.push(`<h2>Especificaciones adicionales:</h2>\n<p>${escP(v.extra)}</p>`);
+      if (v.declarada) extras.push(`<h2>Declarado en el empaque:</h2>\n<p>${escP(v.declarada)}</p>`);
+      if (v.advertencias) extras.push(`<h2>Advertencias:</h2>\n<p>${escP(v.advertencias)}</p>`);
       extras.push(`<p>${LEGEND.disMc}${disMedidor(v) ? ' ' + LEGEND.disMedico : ''}</p>`);
       const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
         ['Marca', v.marca], ['Modelo', v.modelo], ['Tipo de dispositivo', v.tipo], ['Tecnología o zona de medición', v.tecnologia], ['Dirigido a', v.publico], ['Registro sanitario', v.registro],
         ['Contenido', v.contenido], ['Presentación', v.presentacion], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ])}\n</ul>`;
-      return [`<p>${p}</p>`, car.length ? lst('Características principales:', car) : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
+      return [`<p>${p}</p>`, car.length ? lst('Características principales:', car) : '', ficha, ...extras].filter(Boolean).join('\n');
     }
   },
 
@@ -627,18 +647,18 @@ const CATS = {
       const attrs = cosAttrs(v).ok;
       const extras = [];
       if (v.fps || v.nivel || v.espectro || v.resistencia) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel], ['Espectro', v.espectro], ['Resistencia al agua', v.resistencia]])}\n</ul>`);
-      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
+      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escP(v.modo)}</p>`);
       if (v.inci) extras.push(`<h2>Ingredientes:</h2>\n<p id="lista-ingredientes">${escT(v.inci)}</p>`);
       if (attrs.length) extras.push(`<h2>Características:</h2>\n<ul>\n${attrs.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`);
-      if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escT(v.precauciones)}</p>`);
-      if (v.comercial) extras.push(`<p>${escT(v.comercial)}</p>`);
+      if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escP(v.precauciones)}</p>`);
+      if (v.comercial) extras.push(`<p>${escP(v.comercial)}</p>`);
       extras.push(`<p>${LEGEND.cosResp}</p>`);
       const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
         ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de producto', v.tipo], ['Zona de aplicación', v.zona], ['Tipo de piel', v.piel],
         ['Activo principal', isFpsText(v.atributo) ? '' : v.atributo], ['Variante', v.variante], ['Textura', v.textura], ['Contenido neto', v.contenido], ['Presentación', v.envase],
         ['Laboratorio', v.fabricante], ['Duración después de abierto (PAO)', v.pao], ['País de origen', v.origen], ['Categoría', v.categoria]
       ])}\n</ul>`;
-      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n');
     }
   },
 
@@ -749,18 +769,18 @@ const CATS = {
       if (!ben.length && bebBeneficio(v)) ben.push(cap(bebBeneficio(v)));
       const attrs = cosAttrs(v, v.ingredientes).ok, extras = [];
       if (v.nutrimental) extras.push(nutriTableHtml(v));
-      if (v.modo) extras.push(`<h2>Modo de consumo:</h2>\n<p>${escT(v.modo)}</p>`);
-      if (v.ingredientes) extras.push(`<h2>Ingredientes:</h2>\n<p>${escT(v.ingredientes)}</p>`);
-      if (v.alergenos) extras.push(`<h2>Alérgenos:</h2>\n<p>${escT(v.alergenos)}</p>`);
-      if (v.leyenda) extras.push(`<h2>Sellos y leyendas del empaque:</h2>\n<p>${escT(v.leyenda)}</p>`);
-      if (v.descripcion) extras.push(`<h2>Descripción:</h2>\n<p>${escT(v.descripcion)}</p>`);
-      if (v.caracteristicas) extras.push(`<h2>Características:</h2>\n<p>${escT(v.caracteristicas)}</p>`);
+      if (v.modo) extras.push(`<h2>Modo de consumo:</h2>\n<p>${escP(v.modo)}</p>`);
+      if (v.ingredientes) extras.push(`<h2>Ingredientes:</h2>\n<p>${escP(v.ingredientes)}</p>`);
+      if (v.alergenos) extras.push(`<h2>Alérgenos:</h2>\n<p>${escP(v.alergenos)}</p>`);
+      if (v.leyenda) extras.push(`<h2>Sellos y leyendas del empaque:</h2>\n<p>${escP(v.leyenda)}</p>`);
+      if (v.descripcion) extras.push(`<h2>Descripción:</h2>\n<p>${escP(v.descripcion)}</p>`);
+      if (v.caracteristicas) extras.push(`<h2>Características:</h2>\n<p>${escP(v.caracteristicas)}</p>`);
       if (attrs.length) extras.push(`<h2>Características declaradas:</h2>\n<ul>\n${attrs.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`);
       const ficha = `<h2>Ficha técnica de la bebida:</h2>\n<ul>\n${liRows([
         ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de bebida', v.tipo], ['Sabor', bebSabor(v)], ['Etapa', v.etapa], ['Dirigido a', v.publico],
         ['Atributo verificado', v.atributo], ['Contenido neto', v.contenido], ['Presentación', v.envase], ...portionRows(v), ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
       ])}\n</ul>`;
-      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n');
     }
   },
 
@@ -815,17 +835,17 @@ const CATS = {
       const ben = String(v.beneficios || '').split(/\n+/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean).map(cap);
       if (!ben.length && higBeneficio(v)) ben.push(cap(higBeneficio(v)));
       const attrs = cosAttrs(v).ok, extras = [];
-      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
+      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escP(v.modo)}</p>`);
       if (v.inci) extras.push(`<h2>Ingredientes:</h2>\n<p id="lista-ingredientes">${escT(v.inci)}</p>`);
-      if (v.caracteristicas) extras.push(`<h2>Características:</h2>\n<p>${escT(v.caracteristicas)}</p>`);
+      if (v.caracteristicas) extras.push(`<h2>Características:</h2>\n<p>${escP(v.caracteristicas)}</p>`);
       if (attrs.length) extras.push(`<h2>Características declaradas:</h2>\n<ul>\n${attrs.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`);
-      if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escT(v.precauciones)}</p>`);
+      if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escP(v.precauciones)}</p>`);
       if (higAviso(v)) extras.push(`<p>${LEGEND.cosResp}</p>`);
       const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
         ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de producto', v.tipo], ['Variante o aroma', v.variante], ['Talla o etapa', v.talla], ['Dirigido a', v.publico],
         ['Contenido neto', v.contenido], ['Presentación', v.envase], ['Flúor declarado', v.fluor], ['Duración declarada en el empaque', v.duracion], ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
       ])}\n</ul>`;
-      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n');
     }
   },
 
@@ -886,17 +906,17 @@ const CATS = {
       if (accPresent(v, S)) p += ` Se presenta ${accPresent(v, S)}.`;
       const ben = accBeneficios(v), extras = [];
       if (specRows(v.tallas).length) extras.push(tallasHtml(v.tallas));
-      if (v.compatibilidad) extras.push(`<h2>Compatibilidad:</h2>\n<p>${escT(v.compatibilidad)}</p>`);
-      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
-      if (v.cuidados) extras.push(`<h2>Cuidado y limpieza:</h2>\n<p>${escT(v.cuidados)}</p>`);
+      if (v.compatibilidad) extras.push(`<h2>Compatibilidad:</h2>\n<p>${escP(v.compatibilidad)}</p>`);
+      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escP(v.modo)}</p>`);
+      if (v.cuidados) extras.push(`<h2>Cuidado y limpieza:</h2>\n<p>${escP(v.cuidados)}</p>`);
       extras.push(...secs([['Descripción:', v.queEs], ['Características:', v.caracteristicas], ['Incluye:', v.paquete]]));
-      if (v.declarada) extras.push(`<h2>Declarado en el empaque:</h2>\n<p>${escT(v.declarada)}</p>`);
-      if (v.advertencias) extras.push(`<h2>Advertencias:</h2>\n<p>${escT(v.advertencias)}</p>`);
+      if (v.declarada) extras.push(`<h2>Declarado en el empaque:</h2>\n<p>${escP(v.declarada)}</p>`);
+      if (v.advertencias) extras.push(`<h2>Advertencias:</h2>\n<p>${escP(v.advertencias)}</p>`);
       const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
         ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de accesorio', v.tipo], ['Material', v.material], ['Nivel de compresión', v.compresion], ['Talla', v.talla], ['Lado', v.lado], ['Color', v.color],
         ['Dirigido a', v.publico], ['Registro sanitario', v.registro], ['Contenido', v.contenido], ['Presentación', v.envase], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
       ])}\n</ul>`;
-      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n');
     }
   }
 };
@@ -1220,7 +1240,7 @@ function buildFaq(c, v, seed) {
   const pick = (arr, i) => Array.isArray(arr) ? arr[(h + i) % arr.length] : arr;
   const items = (FAQ_RULES[c.id] || faqGeneric)(v, n).filter(Boolean).map(([q, a], i) => [pick(q, i), sentence(pick(a, i)).replace(/([.!?])\.+$/, '$1')]).filter(([, a]) => a.length <= FAQ_ANSWER_MAX);
   if (items.length < FAQ_MIN) return { items: [], html: '' };
-  return { items, html: '<h2>Preguntas frecuentes:</h2>\n' + items.map(([q, a]) => `<h3>${escT(q)}</h3>\n<p>${escT(a)}</p>`).join('\n') };
+  return { items, html: '<h2>Preguntas frecuentes:</h2>\n' + items.map(([q, a]) => `<h3>${escT(q)}</h3>\n<p>${escP(a)}</p>`).join('\n') };
 }
 
 function buildMg(c, v) {
@@ -1232,7 +1252,7 @@ function buildMg(c, v) {
   const meta = { categoria: c.name, receta: recetaMeta(c, v) };
   if (blocked.length) return { blocked, omitted, html: '', meta };
   const faq = buildFaq(c, v);
-  return { blocked: null, omitted, html: faq.html ? c.mg(v) + '\n<br />\n' + faq.html : c.mg(v), faq: faq.items, meta };
+  return { blocked: null, omitted, html: faq.html ? c.mg(v) + '\n' + faq.html : c.mg(v), faq: faq.items, meta };
 }
 
 function computeFor(catId, raw, keep, metaCfg, flags) {
@@ -1877,12 +1897,14 @@ function magentoBatch(items, keep, metaCfg, opts) {
   if (opts.relations) {
     const map = relations([...entries.values()]);
     for (const [key, row] of bySku) {
-      const r = map.get(key);
+      const r = map.get(key) || ((opts.relOver && opts.relOver.has(key)) ? { upsell: [], related: [], crosssell: [] } : null);
       if (!r) continue;
       /* Complementos confirmados en el catálogo interno: solo si el SKU va en este archivo o ya se exportó antes. */
       const extra = ((opts.catalogCross && opts.catalogCross.get(key)) || []).filter(c => bySku.has(c.toLowerCase()) || (opts.knownSkus && opts.knownSkus.has(c.toLowerCase())));
       const cross = [...new Set([...r.crosssell, ...extra])];
-      const vals = { upsell: r.upsell, related: r.related, crosssell: cross };
+      const ov = (opts.relOver && opts.relOver.get(key)) || {};
+      const man = (list, o) => { const del = new Set(((o && o.del) || []).map(x => x.toLowerCase())); const add = ((o && o.add) || []).filter(c => bySku.has(c.toLowerCase()) || (opts.knownSkus && opts.knownSkus.has(c.toLowerCase()))); return [...new Set([...list.filter(x => !del.has(x.toLowerCase())), ...add])]; };
+      const vals = { upsell: man(r.upsell, ov.upsell), related: man(r.related, ov.related), crosssell: cross };
       [['upsell_skus', 'upsell'], ['related_skus', 'related'], ['crosssell_skus', 'crosssell']].forEach(([col, k]) => {
         if (vals[k].length) { row[MAG_IDX[col]] = sanitizeMagentoCell(vals[k].join(','), col); rel[k]++; }
       });

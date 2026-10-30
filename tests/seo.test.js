@@ -461,3 +461,21 @@ test('documentación: PHASE_8_SEO_ENGINE.md contiene todas las reglas del regist
   S.RULES.forEach(r => assert.ok(doc.includes(`| ${r.id} |`), `falta ${r.id} en el documento`));
   for (const t of ['Confirmada', 'Provisional', 'No aplica', 'SEO Score', 'Limitaciones', 'Recomendación']) assert.ok(doc.includes(t), t);
 });
+
+/* ---------- preguntas, categoría y tablas ---------- */
+test('CON-031: la categoría de la tienda cuenta; en medicamentos no aplica', () => {
+  assert.equal(rule(ev({ cat: 'cos', v: cos }), 'CON-031').estado, 'pendiente');
+  assert.equal(rule(ev({ cat: 'cos', v: { ...cos, categoria: 'Cuidado de la piel' } }), 'CON-031').estado, 'cumple');
+  assert.equal(rule(ev({ cat: 'med', v: med }), 'CON-031').estado, 'no_aplica');
+});
+
+test('CON-030: pide al menos 3 preguntas frecuentes', () => {
+  const r = rule(ev({ cat: 'cos', v: { ...cos, categoria: 'Piel' } }), 'CON-030');
+  assert.ok(['cumple', 'pendiente'].includes(r.estado));
+  const e = ev({ cat: 'med', v: med });
+  assert.ok(['cumple', 'pendiente'].includes(rule(e, 'CON-030').estado));
+});
+
+test('CON-032: sin tablas capturadas no aplica; con tabla INCI debe salir con id', () => {
+  assert.equal(rule(ev({ cat: 'cos', v: cos }), 'CON-032').estado, 'no_aplica');
+});

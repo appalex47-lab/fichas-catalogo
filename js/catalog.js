@@ -11,7 +11,9 @@
 const F = (typeof module !== 'undefined' && module.exports) ? require('./logic.js') : root.Fichas;
 
 const lk = s => String(s ?? '').trim().toLowerCase();
-const empty = () => ({ v: 1, entries: [], links: [] });
+const REL_MAN = ['upsell', 'related'];
+const sameRel = (x, y) => x.kind === y.kind && ((lk(x.a) === lk(y.a) && lk(x.b) === lk(y.b)) || (lk(x.a) === lk(y.b) && lk(x.b) === lk(y.a)));
+const empty = () => ({ v: 1, entries: [], links: [], relMan: [] });
 /* Acepta lo que venga del almacenamiento y devuelve siempre una forma válida. */
 function normalize(c) {
   const out = empty();
@@ -24,6 +26,9 @@ function normalize(c) {
   });
   (Array.isArray(c.links) ? c.links : []).forEach(l => {
     if (l && seen.has(lk(l.p)) && seen.has(lk(l.c)) && lk(l.p) !== lk(l.c) && !out.links.some(x => lk(x.p) === lk(l.p) && lk(x.c) === lk(l.c))) out.links.push(l);
+  });
+  (Array.isArray(c.relMan) ? c.relMan : []).forEach(r => {
+    if (r && seen.has(lk(r.a)) && seen.has(lk(r.b)) && lk(r.a) !== lk(r.b) && REL_MAN.includes(r.kind) && !out.relMan.some(x => sameRel(x, r))) out.relMan.push(r);
   });
   return out;
 }
@@ -111,7 +116,45 @@ function remove(cat, sku) {
   const n = cat.entries.length;
   cat.entries = cat.entries.filter(e => lk(e.sku) !== lk(sku));
   cat.links = cat.links.filter(l => lk(l.p) !== lk(sku) && lk(l.c) !== lk(sku));
+  cat.relMan = (cat.relMan || []).filter(r => lk(r.a) !== lk(sku) && lk(r.b) !== lk(sku));
   return cat.entries.length < n;
+}
+
+
+/* ---------- Compartir: unir el catálogo de otra persona con el propio ----------
+ * - Producto en los dos: gana el dato más reciente (updatedAt); lo cargado a Magento (exportedAt y relSnap) toma lo más reciente.
+ * - Vínculos y relaciones a mano: se suman. Para el mismo par, gana el más reciente.
+ * - Lo que alguien quitó no se propaga: no se guarda qué se borró. Para quitarlo en todos, que cada persona lo quite.
+ * Devuelve cuántos productos se agregaron, se actualizaron o quedaron igual. */
+const later = (a, b) => String(a || '') >= String(b || '');
+function merge(local, incoming) {
+  const inc = normalize(incoming), sum = { added: 0, updated: 0, same: 0, links: 0, rels: 0, invalid: 0 };
+  inc.entries.forEach(n => {
+    const e = find(local, n.sku);
+    if (!e) { local.entries.push(JSON.parse(JSON.stringify(n))); sum.added++; return; }
+    const exp = later(n.exportedAt, e.exportedAt) && n.exportedAt && n.exportedAt !== e.exportedAt;
+    const newer = String(n.updatedAt || '') > String(e.updatedAt || '');
+    if (!newer && !exp) { sum.same++; return; }
+    const keep = { bellSeen: e.bellSeen, exportedAt: e.exportedAt, relSnap: e.relSnap };
+    if (newer) Object.assign(e, JSON.parse(JSON.stringify(n)));
+    Object.assign(e, keep);
+    if (exp) { e.exportedAt = n.exportedAt; e.relSnap = n.relSnap ? JSON.parse(JSON.stringify(n.relSnap)) : e.relSnap; delete e.bellSeen; }
+    sum.updated++;
+  });
+  inc.links.forEach(l => {
+    if (!find(local, l.p) || !find(local, l.c)) { sum.invalid++; return; }
+    const c = find(local, l.c);
+    if (!c.elegible || local.links.some(x => lk(x.p) === lk(l.p) && lk(x.c) === lk(l.c))) return;
+    local.links.push({ ...l }); sum.links++;
+  });
+  local.relMan = local.relMan || [];
+  inc.relMan.forEach(r => {
+    if (!find(local, r.a) || !find(local, r.b)) { sum.invalid++; return; }
+    const mine = local.relMan.find(x => sameRel(x, r));
+    if (!mine) { local.relMan.push({ ...r }); sum.rels++; }
+    else if (String(r.at || '') > String(mine.at || '') && (mine.on !== r.on)) { Object.assign(mine, { on: r.on, at: r.at }); sum.rels++; }
+  });
+  return sum;
 }
 
 /* Para el CSV: principal (minúsculas) → SKU de sus complementos. Vuelve a comprobar que el complemento siga siendo elegible. */
@@ -133,13 +176,50 @@ const knownSkus = cat => new Set(cat.entries.filter(e => e.exportedAt).map(e => 
  * en Magento. Los complementos (cross sell) avisan al producto principal; relacionados y alternativas, a los dos lados. */
 const REL_KINDS = ['crosssell', 'upsell', 'related'];
 const REL_LABEL = { crosssell: 'cross sell', upsell: 'alternativas', related: 'relacionados' };
-function currentRels(cat) {
+/* Alternativas y relacionados a mano: «on» los agrega, «off» los quita aunque la regla los proponga. Valen para los dos productos. */
+function setRel(cat, a, b, kind, on, at) {
+  const x = find(cat, a), y = find(cat, b);
+  if (!x || !y || lk(a) === lk(b) || !REL_MAN.includes(kind)) return false;
+  cat.relMan = (cat.relMan || []).filter(r => !sameRel(r, { a, b, kind }));
+  cat.relMan.push({ a: x.sku, b: y.sku, kind, on: !!on, at: at || null });
+  return true;
+}
+/* Vuelve a lo que digan las reglas. */
+function clearRel(cat, a, b, kind) {
+  const n = (cat.relMan || []).length;
+  cat.relMan = (cat.relMan || []).filter(r => !sameRel(r, { a, b, kind }));
+  return cat.relMan.length < n;
+}
+/* Mapa por SKU (minúsculas) → { upsell: {add, del}, related: {add, del} } con las dos direcciones. */
+function relOver(cat) {
+  const out = new Map(), slot = k => { if (!out.has(k)) out.set(k, { upsell: { add: [], del: [] }, related: { add: [], del: [] } }); return out.get(k); };
+  (cat.relMan || []).forEach(r => {
+    slot(lk(r.a))[r.kind][r.on ? 'add' : 'del'].push(r.b);
+    slot(lk(r.b))[r.kind][r.on ? 'add' : 'del'].push(r.a);
+  });
+  return out;
+}
+function applyOver(list, o) {
+  const del = new Set(((o && o.del) || []).map(lk)), seen = new Set(), out = [];
+  [...(list || []).filter(x => !del.has(lk(x))), ...((o && o.add) || [])].forEach(x => { if (!seen.has(lk(x))) { seen.add(lk(x)); out.push(x); } });
+  return out;
+}
+/* Lo que valen las reglas más lo hecho a mano, sin filtrar por lo ya cargado a Magento (para mostrar en pantalla). */
+function effectiveRels(cat) {
   const map = F.relations(cat.entries.map(e => ({ sku: e.sku, cat: e.cat, v: e.rv || { marca: e.marca } })));
-  const cm = crosssellMap(cat), known = knownSkus(cat), out = new Map();
+  const cm = crosssellMap(cat), ov = relOver(cat), out = new Map();
+  cat.entries.forEach(e => {
+    const k = lk(e.sku), r = map.get(k) || { upsell: [], related: [], crosssell: [] }, o = ov.get(k) || {};
+    out.set(k, { upsell: applyOver(r.upsell, o.upsell), related: applyOver(r.related, o.related), crosssell: [...new Set([...r.crosssell, ...(cm.get(k) || [])])] });
+  });
+  return out;
+}
+function currentRels(cat) {
+  const eff = effectiveRels(cat), known = knownSkus(cat), out = new Map();
   const ok = a => [...new Set(a)].filter(x => known.has(lk(x))).sort();
   cat.entries.forEach(e => {
-    const k = lk(e.sku), r = map.get(k) || { upsell: [], related: [], crosssell: [] };
-    out.set(k, { upsell: ok(r.upsell), related: ok(r.related), crosssell: ok([...r.crosssell, ...(cm.get(k) || [])]) });
+    const k = lk(e.sku), r = eff.get(k);
+    out.set(k, { upsell: ok(r.upsell), related: ok(r.related), crosssell: ok(r.crosssell) });
   });
   return out;
 }
@@ -198,7 +278,7 @@ function relUpdateCsv(cat, skus) {
   return { header: H, rows };
 }
 
-const api = { routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
+const api = { merge, setRel, clearRel, relOver, effectiveRels, REL_MAN, routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasCatalog = api;
 })(typeof self !== 'undefined' ? self : this);
