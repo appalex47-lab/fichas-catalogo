@@ -13,7 +13,7 @@ const lc  = s => (s && !/^[A-ZÁÉÍÓÚÑ]{2}/.test(s)) ? s.charAt(0).toLowerCa
 const join = (sep, ...a) => a.filter(Boolean).join(sep);
 const sentence = s => { s = (s || '').trim(); if (!s) return ''; s = cap(s); return /[.!?]$/.test(s) ? s : s + '.'; };
 const F = (key, label, o = {}) => ({ key, label, ...o });
-const seg = (label, parts, fn, anyOf) => ({ label, parts, fn, anyOf });
+const seg = (label, parts, fn, anyOf, meta) => ({ label, parts, fn, anyOf, ...(meta || {}) });
 
 /* ---------- Normalización ---------- */
 const SMALL = new Set(['de','del','la','el','y','e','o','con','para','en','por','sin','a','al','los','las','un','una']);
@@ -96,11 +96,14 @@ function formaConPiezas(forma, contenido) {
   const word = n === 1 ? head.replace(/(?<=[aeiou])s$/i, '').replace(/es$/i, '') : (/s$/i.test(head) ? head : head + (/[aeiou]$/i.test(head) ? 's' : 'es'));
   return `${n} ${word}${resto}`;
 }
+/* porPieza: «28 cápsulas». 'sup': además «Líquido 200 mL» (sin coma si la presentación es solo la cantidad) y «Bebible» se lee «Líquido». */
 function joinForm(forma, contenido, porPieza) {
+  if (porPieza === 'sup' && forma) forma = String(forma).replace(/^bebibles?$/i, 'Líquido');
   if (!forma) return contenido || '';
   if (!contenido) return forma;
   const piezas = porPieza ? formaConPiezas(forma, contenido) : '';
   if (piezas) return piezas;
+  if (porPieza === 'sup' && /^\d/.test(String(contenido).trim()) && !String(forma).toLowerCase().replace(/s$/, '').split(/\s+/).includes(String(contenido).trim().toLowerCase())) return `${forma} ${String(contenido).trim()}`;
   const base = forma.toLowerCase().replace(/s$/, '');
   if (contenido.toLowerCase().includes(base)) return contenido;
   return `${forma}, ${contenido}`;
@@ -687,8 +690,9 @@ const CATS = {
     ],
     title: [
       seg('Marca + componente', ['marca','componente']),
-      seg('Forma + contenido', ['forma','contenido'], v => joinForm(v.forma, v.contenido)),
-      seg('Sabor', ['sabor'], v => saborTxt(v.sabor)),
+      /* En el título el sabor va antes de la presentación; las plantillas de meta con {seg2} conservan el orden y el texto anteriores. */
+      seg('Sabor', ['sabor'], v => saborTxt(v.sabor), undefined, { mo: 2 }),
+      seg('Forma + contenido', ['forma','contenido'], v => joinForm(v.forma, v.contenido, 'sup'), undefined, { mo: 1, mfn: v => joinForm(v.forma, v.contenido) }),
       seg('Laboratorio', ['fabricante'])
     ],
     vital: ['componente'],
@@ -1044,7 +1048,8 @@ function buildTitle(c, v) {
     const missing = parts.filter(p => p.req && !p.value).map(p => p.label);
     if (s.anyOf && !s.anyOf.some(k => v[k])) missing.push(s.anyOf.map((k, i) => i ? lc(labelOf(c, k)) : labelOf(c, k)).join(' o '));
     const omitted = s.parts.filter(k => v[k] && !d[k]).map(k => labelOf(c, k));
-    return { label: s.label, text, parts, missing, omitted, soft: !!s.soft, state: !text ? 'missing' : (missing.length ? 'partial' : 'ok') };
+    const mtext = s.mfn ? capNouns(cap((s.mfn(d) || '').trim())) : text;
+    return { label: s.label, text, mtext, mo: s.mo, parts, missing, omitted, soft: !!s.soft, state: !text ? 'missing' : (missing.length ? 'partial' : 'ok') };
   });
   const build = () => segs.filter(s => s.text && !s.softDropped).map(s => s.text).join(' | ');
   let title = build();
@@ -1691,7 +1696,7 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   const dv = dedupeFields(v);
   c.fields.forEach(fd => { tokens[fd.key] = dv[fd.key] || ''; });
   /* {seg1} a {seg4} son los segmentos del título que sí tienen texto, en orden: un segmento opcional vacío (por ejemplo el sabor) no deja un hueco. */
-  const segTexts = title.segs.map(x => x && x.text).filter(Boolean);
+  const segTexts = title.segs.map((x, i) => ({ t: x && (x.mtext != null ? x.mtext : x.text), o: x && x.mo != null ? x.mo : i })).filter(x => x.t).sort((a, b) => a.o - b.o).map(x => x.t);
   for (let i = 1; i <= 4; i++) tokens['seg' + i] = segTexts[i - 1] || '';
   /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
   tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';

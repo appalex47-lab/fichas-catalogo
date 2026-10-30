@@ -433,7 +433,7 @@ test('sabor: los suplementos también lo reconocen y entra en el título solo si
   const base = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', contenido: 'Bote 900 g', fabricante: 'GNC' };
   const sin = F.computeFor('sup', base, keep, meta), con = F.computeFor('sup', { ...base, sabor: 'Chocolate' }, keep, meta);
   assert.ok(!/Sabor/.test(sin.title.title));
-  assert.match(con.title.title, /GNC Proteína whey \| Polvo, Bote 900 g \| Sabor Chocolate \| GNC/);
+  assert.match(con.title.title, /GNC Proteína whey \| Sabor Chocolate \| Polvo, Bote 900 g \| GNC/);
   assert.equal(F.computeFor('sup', base, keep, meta).mg.html, sin.mg.html);
 });
 
@@ -474,7 +474,7 @@ test('sugerencias: los campos de forma y tipo traen listas de ayuda que no limit
   assert.ok(sug('dis', 'tipo').includes('Baumanómetro') && sug('cos', 'tipo').includes('Sérum') && sug('beb', 'tipo').includes('Suero oral'));
   assert.ok(sug('hig', 'producto').includes('Shampoo') && sug('acc', 'producto').includes('Venda'));
   const r = F.computeFor('sup', { marca: 'X', componente: 'Z', forma: 'Pastillas de goma', contenido: 'Frasco con 30', fabricante: 'X' }, keep, meta);
-  assert.match(r.title.title, /Pastillas de goma/, 'una forma que no está en la lista funciona igual');
+  assert.match(r.title.title, /30 pastillas de goma/, 'una forma que no está en la lista funciona igual');
 });
 
 /* ---------- Meta title largo: versión corta ---------- */
@@ -1323,4 +1323,13 @@ test('HTML de Magento: sin <br /> entre secciones y las líneas capturadas conse
   const h = F.buildMg(F.CATS.med, v).html;
   assert.ok(!/\n<br \/>\n<h2>/.test(h), 'las secciones no se separan con <br />');
   assert.match(h, /<p>Consulte a su médico<br \/>\nLea el instructivo<\/p>/);
+});
+
+test('título de suplementos: sabor antes de la presentación, «Líquido 200 mL» sin coma y «Bebible» se lee «Líquido»', () => {
+  const base = { marca: 'Fresubin HPC', componente: 'Fórmula Hipercalórica e Hiperproteica', sabor: 'Frutos del Bosque', fabricante: 'Fresenius Kabi' };
+  const t = (forma, contenido) => F.buildTitle(F.CATS.sup, { ...base, forma, contenido }).title;
+  assert.equal(t('Bebible', '200 mL'), 'Fresubin HPC Fórmula Hipercalórica e Hiperproteica | Sabor Frutos del Bosque | Líquido 200 mL | Fresenius Kabi');
+  assert.match(t('Polvo', '400 g'), /\| Polvo 400 g \|/);
+  assert.match(t('Cápsulas', 'Frasco con 60 piezas'), /\| 60 cápsulas \|/);
+  assert.match(t('Líquido', 'Botella con 200 mL'), /\| Líquido, Botella con 200 mL \|/, 'con envase se conserva la coma');
 });
