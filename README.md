@@ -207,6 +207,8 @@ HTML de Magento: las secciones ya no se separan con `<br />` (el margen del `<h2
 
 Título de suplementos: el sabor va antes de la presentación, la presentación que es solo cantidad se une sin coma («Líquido 200 mL», «Polvo 400 g»), las formas de pieza se leen «60 cápsulas» y «Bebible» se lee «Líquido». Las plantillas de meta con `{seg2}` conservan el orden y el texto anteriores.
 
+Tablas en Magento (información nutrimental, especificaciones técnicas, guía de tallas): llevan estilos en línea (`style="..."`) para verse como tabla —bordes, columnas alineadas, subfilas con sangría— aunque la plantilla de la tienda no les dé formato. No usan un bloque `<style>`, porque el editor de Magento puede quitarlo.
+
 Mejoras del catálogo:
 - **Lote**: un complemento sin producto principal muestra la etiqueta «Espera producto principal» en su fila.
 - **Alternativas y relacionados a mano**: en la tabla del catálogo, cada producto muestra sus alternativas y relacionados (los de las reglas y los tuyos, marcados «a mano»). «×» quita uno (si lo proponía la regla queda como «Quitado» con «Deshacer»); «Agregar» pide el SKU de otro producto del catálogo. Vale para los dos productos y también se aplica en el CSV de Magento y en la campana. Igual que antes, solo salen los SKU que van en el archivo o que ya se cargaron.
