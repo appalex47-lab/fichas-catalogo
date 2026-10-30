@@ -424,10 +424,10 @@ test('meta title largo: la pestaña Meta sugiere la versión corta y «Usar vers
   Object.entries({ marca: 'Dove Men Care', producto: 'Shampoo Fortificante Anticaída', variante: 'Cuidado Total', contenido: '750 mL', fabricante: 'Unilever' }).forEach(([k, v]) => a.fill('f-' + k, v));
   a.fill('sku', 'SUP-1');
   a.d.getElementById('tab-meta').click(); await wait(30);
-  assert.match(a.text('#meta-short'), /Versión corta sugerida \(60 de 60 caracteres\)/);
-  assert.match(a.text('#meta-mt'), /87 caracteres de 60/);
+  assert.match(a.text('#meta-short'), /Versión corta sugerida \(44 de 60 caracteres\)/);
+  assert.match(a.text('#meta-mt'), /68 caracteres de 60/);
   a.d.querySelector('[data-mtshort="on"]').click(); await wait(30);
-  assert.match(a.text('#meta-mt'), /60 caracteres de 60/);
+  assert.match(a.text('#meta-mt'), /44 caracteres de 60/);
   assert.match(a.text('#meta-short'), /Se usa la versión corta/);
   a.d.getElementById('add').click(); await wait(40);
   assert.equal(JSON.parse(a.w.localStorage.getItem('fichas.lote.v1'))[0].mtShort, true);

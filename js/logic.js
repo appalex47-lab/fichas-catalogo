@@ -220,7 +220,7 @@ const LEGEND = {
 };
 /* Frase de presentación según los datos: «en forma de líquido, en una botella de 200 ml». El envase solo entra si es una palabra; si el contenido ya
    empieza por el envase («Frasco con 100 piezas») se usa tal cual; sin envase, «en una presentación de …». `w` envuelve los datos (negritas en Magento). */
-const ENVASE_ART = { frasco: 'un', bote: 'un', tarro: 'un', sobre: 'un', sachet: 'un', 'blíster': 'un', estuche: 'un', tubo: 'un', vial: 'un', pouch: 'un', display: 'un', botella: 'una', caja: 'una', lata: 'una', bolsa: 'una' };
+const ENVASE_ART = { paquete: 'un', frasco: 'un', bote: 'un', tarro: 'un', sobre: 'un', sachet: 'un', 'blíster': 'un', estuche: 'un', tubo: 'un', vial: 'un', pouch: 'un', display: 'un', botella: 'una', caja: 'una', lata: 'una', bolsa: 'una' };
 const firstWord = t => (fold(String(t || '')).toLowerCase().match(/^\p{L}+/u) || [''])[0];
 function presentPhrase(v, w = x => x) {
   const parts = [];
@@ -278,6 +278,7 @@ const COS_ATTR = [
   ['fragancia', /\bsin (?:fragancia|perfume|aroma)s?\b|\blibre de (?:fragancia|perfume)s?\b|\bfragrance[- ]free\b/i, /\b(parfum|fragrance|aroma|perfume)\b/i, /\b(linalool|limonene|citronellol|geraniol|citral|eugenol|coumarin|hexyl cinnamal|benzyl salicylate|benzyl alcohol)\b/i],
   ['alcohol', /\bsin alcohol\b|\blibre de alcohol\b|\balcohol[- ]free\b/i, /\b(alcohol denat\.?|denatured alcohol|sd alcohol|ethanol)\b/i, null],
   ['parabenos', /\bsin parabenos?\b|\blibre de parabenos?\b|\bparaben[- ]free\b/i, /\b(?:methyl|ethyl|propyl|butyl|isobutyl|isopropyl)paraben\b/i, null],
+  ['aluminio', /\bsin aluminio\b|\blibre de aluminio\b|\baluminum[- ]free\b/i, /\b(?:aluminum|aluminium|aluminio)\b/i, null],
   ['sulfatos', /\bsin sulfatos?\b|\blibre de sulfatos?\b|\bsulfate[- ]free\b/i, /\b(?:sodium|ammonium) (?:lauryl|laureth) sulfate\b|\bsl?es\b/i, null]
 ];
 function cosAttrs(v) {
@@ -304,6 +305,36 @@ function cosIntro(v, w = x => x, withLab = false) {
   if (withs.length) p += ', ' + withs.join(', ');
   if (v.piel) p += `, para ${lc(v.piel)}`;
   return p;
+}
+/* ---------- Cuidado personal: género y número del tipo, aviso y presentación ---------- */
+const HIG_ART = { pasta: 'una', shampoo: 'un', champu: 'un', desodorante: 'un', antitranspirante: 'un', jabon: 'un', enjuague: 'un', acondicionador: 'un', gel: 'un', crema: 'una', locion: 'una', espuma: 'una', repelente: 'un', cepillo: 'un', hilo: 'un', talco: 'un', aceite: 'un', toallita: 'una', panal: 'un', hisopo: 'un', cotonete: 'un', panuelo: 'un', rastrillo: 'un', tampon: 'un' };
+const HIG_PLURAL = new Set(['toallas', 'panales', 'tampones', 'cotonetes', 'hisopos', 'panuelos', 'rastrillos', 'toallitas', 'protectores', 'cepillos']);
+/* Artículos de higiene que nadie confunde con un medicamento: sin el aviso «no es un medicamento». */
+const HIG_SIN_AVISO = new Set(['toalla', 'toallas', 'panal', 'panales', 'tampon', 'tampones', 'cotonete', 'cotonetes', 'hisopo', 'hisopos', 'panuelo', 'panuelos', 'rastrillo', 'rastrillos', 'cepillo', 'cepillos', 'hilo', 'protectores']);
+const higTipo = v => v.tipo || v.producto || '';
+const higAviso = v => !HIG_SIN_AVISO.has(firstWord(higTipo(v)));
+const higBeneficio = v => v.beneficio || v.uso || '';
+function higIntro(v, w = x => x, withLab = false) {
+  const d = dedupeFields(v), name = join(' ', v.marca, v.tipo ? d.producto : ''), f = firstWord(v.tipo), plural = HIG_PLURAL.has(f);
+  const tipo = v.tipo ? lc(v.tipo) : '';
+  let p = !v.tipo ? `${w(join(' ', v.marca, v.producto))} es un producto de higiene y cuidado personal` : plural ? `${w(name)} son ${tipo}` : `${w(name)} es ${HIG_ART[f] || 'un'} ${tipo}`;
+  if (withLab && v.fabricante) p += ` de ${w(v.fabricante)}`;
+  if (v.variante) p += /^(aroma|sabor|tono)\b/i.test(v.variante) ? ` en ${w(lc(v.variante))}` : ` en variante ${w(lc(v.variante))}`;
+  if (v.talla) p += `, ${w(lc(v.talla))}`;
+  const withs = [], act = v.ingredientes;
+  if (v.fluor) withs.push('con flúor');
+  if (act) withs.push(`con ${lc(act)}`);
+  if (withs.length) p += ', ' + withs.join(', ');
+  if (v.publico) p += `, para ${lc(v.publico)}`;
+  return p;
+}
+function higPresent(v, w = x => x) {
+  const env = String(v.envase || '').trim();
+  if (v.contenido) {
+    if (env) { const art = ENVASE_ART[firstWord(env)]; return `en ${art ? art + ' ' : ''}${lc(env)} de ${w(v.contenido)}`; }
+    return `con contenido neto de ${w(v.contenido)}`;
+  }
+  return env ? `en ${lc(env)}` : '';
 }
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
@@ -602,47 +633,67 @@ const CATS = {
   },
 
   hig: {
-    emoji: '🪥', name: 'Cuidado personal e higiene',
+    emoji: '🪥', name: 'Cuidado personal e higiene', titleSoft: 70,
     fields: [
       F('marca','Marca',{req:1,ph:'Colgate'}),
-      F('producto','Producto',{req:1,ph:'Total 12 pasta dental'}),
-      F('variante','Variante o característica principal',{req:1,ph:'Salud bucal completa'}),
-      F('contenido','Contenido',{req:1,pres:1,ph:'Crema 150 mL'}),
+      F('producto','Línea o nombre del producto',{ph:'Total 12',hint:'La línea o el nombre comercial, sin repetir el tipo. Captura al menos el nombre o el tipo.'}),
+      F('tipo','Tipo de producto',{ph:'Pasta dental',hint:'Qué es: Pasta dental, Shampoo, Desodorante en barra, Toallas sanitarias, Pañales desechables. Si el nombre ya lo dice no se repite en el título.'}),
+      F('beneficio','Beneficio principal',{ph:'Salud bucal completa',hint:'Para qué sirve, como lo dice el empaque. Sin promesas médicas.'}),
+      F('variante','Aroma o variante',{ph:'Menta',hint:'Opcional. Aroma, sabor, tono o versión. Entra al título y al meta title para que cada variante tenga el suyo.'}),
+      F('contenido','Contenido neto',{req:1,pres:1,ph:'100 mL',hint:'Solo la cantidad: 100 mL, 50 g, 60 piezas. La presentación va en «Presentación»; si escribes «Paquete con 60 piezas» se separa sola.'}),
       F('fabricante','Laboratorio',{req:1,ph:'Colgate-Palmolive'}),
-      F('uso','Uso objetivo',{g:'d'}),
-      F('ingredientes','Ingredientes destacados',{g:'d',type:'area'}),
-      F('caracteristicas','Características',{g:'d',type:'area'})
+      F('talla','Talla o etapa',{g:'d',ph:'Etapa 3',hint:'Opcional. Para pañales, toallas y similares. Entra al título.'}),
+      F('publico','Dirigido a',{g:'d',ph:'Bebés de 6 a 10 kg',hint:'Opcional. Tal como aparece en el empaque.'}),
+      F('envase','Presentación (envase)',{g:'d',pres:1,ph:'Tubo',hint:'Opcional. Tubo, barra, paquete, botella con dosificador… Separado de la cantidad.'}),
+      F('uso','Uso objetivo',{g:'d',hint:'Opcional. Si coincide con el beneficio principal, captura solo el beneficio.'}),
+      F('ingredientes','Activos destacados',{g:'d',type:'area',hint:'Opcional. Los activos que destaca el empaque, por ejemplo «Aceite de coco». Salen en la introducción.'}),
+      F('beneficios','Beneficios',{g:'d',type:'area',lines:1,rows:4,hint:'Opcional. Uno por línea, como aparecen en el empaque. Sin promesas médicas. Salen como lista al inicio de la ficha.'}),
+      F('caracteristicas','Características',{g:'d',type:'area'}),
+      F('atributos','Características declaradas',{g:'d',type:'area',sentence:1,hint:'Opcional. Solo lo que dice el empaque, separado por comas: Sin sulfatos, Sin parabenos, Con alas. Se revisa contra la lista de ingredientes.'}),
+      F('fluor','Flúor declarado',{g:'d',ph:'1,450 ppm',hint:'Opcional. Solo pastas dentales y solo si el empaque lo declara.'}),
+      F('duracion','Duración declarada',{g:'d',ph:'48 horas',hint:'Opcional. Solo si el empaque la declara. Se publica como «declarada en el empaque» y requiere sustento.'}),
+      F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Pasta dental',hint:'Opcional. Versión corta del tipo para las metas. No sale en la ficha.'}),
+      F('inci','Lista de ingredientes (INCI)',{g:'d',type:'area',raw:1,hint:'Opcional. Cópiala tal cual del empaque, en el mismo orden. Aparece en una sección aparte.'}),
+      F('modo','Modo de uso',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal como aparece en el empaque. Aparece en una sección aparte.'}),
+      F('precauciones','Precauciones',{g:'d',type:'area',sentence:1,hint:'Opcional. Leyendas del empaque, tal cual. Aparece en una sección aparte.'})
     ],
     title: [
-      seg('Marca + producto', ['marca','producto']),
-      seg('Variante o característica principal', ['variante']),
-      seg('Contenido', ['contenido']),
-      seg('Laboratorio', ['fabricante'])
+      seg('Marca + línea + tipo', ['marca','producto','tipo'], v => join(' ', v.marca, mergeTipo(v.producto, v.tipo)), ['producto','tipo']),
+      Object.assign(seg('Beneficio', ['beneficio','uso'], v => v.beneficio || v.uso), { soft: true }),
+      seg('Aroma o variante', ['variante']),
+      seg('Talla o etapa', ['talla']),
+      seg('Contenido', ['contenido'])
     ],
     vital: [],
-    mcUses: ['marca','producto','variante','contenido','fabricante','uso','ingredientes'],
-    mgUses: ['marca','producto','variante','contenido','fabricante','uso'],
+    mcUses: ['marca','producto','tipo','beneficio','contenido','publico','ingredientes'],
+    mgUses: ['marca','producto','tipo','beneficio','contenido','fabricante','publico'],
     mc: v => [
-      join(' - ', join(' ', v.marca, v.producto, v.variante, v.contenido), v.fabricante),
-      v.uso && `${cap(v.producto || 'Producto')} para ${lc(v.uso)}`,
-      v.ingredientes && `Contiene ${lc(v.ingredientes)}`,
-      v.caracteristicas,
-      v.contenido && `Presentación de ${lc(v.contenido)}`,
-      LEGEND.higMc
+      higIntro(v),
+      optMc('Beneficio', higBeneficio(v) && `Ofrece ${lc(higBeneficio(v))}`),
+      optMc('Modo de uso', v.modo),
+      optMc('Características', v.caracteristicas),
+      optMc('Duración declarada', v.duracion && `Según su empaque, declara ${lc(v.duracion)} de duración`),
+      optMc('Presentación', higPresent(v) && `Se presenta ${higPresent(v)}`),
+      higAviso(v) && LEGEND.cosResp
     ],
     mg: v => {
-      let p = `${S(join(' ', v.marca, v.producto))} es un artículo de higiene y cuidado diario` + (v.fabricante ? ` producido por ${S(v.fabricante)}` : '') + '.';
-      if (v.variante || v.uso || v.contenido) {
-        let c = v.variante ? ` Esta variante con características de ${S(v.variante)}` : ' Este producto';
-        if (v.uso) c += ` está diseñad${v.variante ? 'a' : 'o'} para cumplir con el uso objetivo de ${S(v.uso)}`;
-        if (v.contenido) c += (v.uso ? ', entregándose' : ' se entrega') + ` en una presentación de ${S(v.contenido)}`;
-        if (!v.uso && !v.contenido) c += ' se presenta';
-        p += c + ' para ser utilizado conforme a las instrucciones del empaque.';
-      }
-      return assemble(p, 'Información de cuidado personal:', [
-        ['Marca', v.marca], ['Producto', v.producto], ['Variante o Característica Principal', v.variante],
-        ['Contenido', v.contenido], ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
-      ], secs([['Ingredientes:', v.ingredientes], ['Características:', v.caracteristicas]]));
+      const d = dedupeFields(v);
+      let p = higIntro(v, S, true) + '.';
+      if (higPresent(v, S)) p += ` Se presenta ${higPresent(v, S)}.`;
+      const ben = String(v.beneficios || '').split(/\n+/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean).map(cap);
+      if (!ben.length && higBeneficio(v)) ben.push(cap(higBeneficio(v)));
+      const attrs = cosAttrs(v).ok, extras = [];
+      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
+      if (v.inci) extras.push(`<h2>Ingredientes:</h2>\n<p id="lista-ingredientes">${escT(v.inci)}</p>`);
+      if (v.caracteristicas) extras.push(`<h2>Características:</h2>\n<p>${escT(v.caracteristicas)}</p>`);
+      if (attrs.length) extras.push(`<h2>Características declaradas:</h2>\n<ul>\n${attrs.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`);
+      if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escT(v.precauciones)}</p>`);
+      if (higAviso(v)) extras.push(`<p>${LEGEND.cosResp}</p>`);
+      const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
+        ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de producto', v.tipo], ['Variante o aroma', v.variante], ['Talla o etapa', v.talla], ['Dirigido a', v.publico],
+        ['Contenido neto', v.contenido], ['Presentación', v.envase], ['Flúor declarado', v.fluor], ['Duración declarada en el empaque', v.duracion], ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
+      ])}\n</ul>`;
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
     }
   },
 
@@ -699,7 +750,7 @@ Object.keys(CATS).forEach(id => { CATS[id].id = id; });
     cos: [['atributo', 'variante', 'fps', 'nivel', 'espectro', 'envase', 'zona', 'modo', 'comercial'], ['atributo', 'ingredientes', 'beneficios', 'atributos', 'zona', 'variante', 'envase', 'fps', 'nivel', 'espectro', 'resistencia', 'pao', 'origen', 'modo', 'inci', 'precauciones', 'comercial', 'categoria']],
     sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'publico'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'categoria']],
     beb: [['descripcion', 'caracteristicas', 'leyenda'], ['descripcion', 'caracteristicas', 'leyenda', 'categoria']],
-    hig: [['ingredientes', 'caracteristicas'], ['ingredientes', 'caracteristicas', 'categoria']],
+    hig: [['uso', 'modo', 'caracteristicas', 'duracion', 'envase', 'talla', 'variante', 'fluor'], ['uso', 'ingredientes', 'beneficios', 'caracteristicas', 'atributos', 'talla', 'variante', 'envase', 'fluor', 'duracion', 'modo', 'inci', 'precauciones', 'categoria']],
     acc: [['queEs', 'caracteristicas', 'paquete'], ['queEs', 'caracteristicas', 'paquete', 'categoria']]
   };
   Object.entries(opt).forEach(([id, [mc, mg]]) => { CATS[id].mcOpt = mc; CATS[id].mgOpt = mg; });
@@ -725,13 +776,13 @@ const labelOf = (c, k) => (c.fields.find(x => x.key === k) || {}).label || k;
 /* El tipo dice qué es el producto y el contenido cuánto trae. Si llegan mezclados se acomodan: una cantidad escrita en el tipo pasa a
    «Contenido», un contenido sin cantidad pasa a ser el tipo, y si están al revés se intercambian. Las concentraciones (mg, mcg, UI)
    no son contenido y se dejan donde están. No cambia nada que ya esté bien puesto. */
-const COS_PACK = /^((?:frasco|botella|tubo|bote|caja|sobre|bolsa|lata|tarro|estuche|pomo|dispensador|ampolleta|atomizador|spray|stick|pump)s?(?:\s+(?:con|de)\s+(?:gotero|bomba|dosificador|atomizador|aplicador|spray|pistola|v[aá]lvula|pump))?)\s*(?:de|con)?\s*(\d.*)$/i;
+const COS_PACK = /^((?:frasco|botella|tubo|bote|caja|sobre|bolsa|lata|tarro|estuche|pomo|dispensador|ampolleta|atomizador|spray|stick|pump|paquete|barra)s?(?:\s+(?:con|de)\s+(?:gotero|bomba|dosificador|atomizador|aplicador|spray|pistola|v[aá]lvula|pump))?)\s*(?:de|con)?\s*(\d.*)$/i;
 const TIPO_KEY = { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' };
 const PACK_QTY = String.raw`(?:(?:frasco|caja|botella|bolsa|sobre|lata|tubo|bote|paquete)s?\s+(?:con|de)?\s*)?\d+(?:[.,]\d+)?\s*(?:ml|l|g|kg|piezas?|pzas?|pz|tabletas?|c[aá]psulas?|sobres?|unidades?|gomitas?|ampolletas?|tiras?)\b`;
 const PACK_END = new RegExp(`\\s*[-–,(]?\\s*(${PACK_QTY})\\s*\\)?\\s*$`, 'i'), PACK_ALL = new RegExp(`^\\s*${PACK_QTY}\\s*$`, 'i');
 const noQty = n => !/\d/.test(n) && !/\b(?:[uú]nic[oa]|par|kit|pieza|unidad)\b/i.test(n);
 function placeFields(c, raw) {
-  const tk = TIPO_KEY[c.id], out = { raw, changes: [] };
+  const tk = c.id === 'hig' && raw.tipo ? 'tipo' : TIPO_KEY[c.id], out = { raw, changes: [] };
   if (!tk) return out;
   let t = String(raw[tk] ?? '').replace(/\s+/g, ' ').trim(), n = String(raw.contenido ?? '').replace(/\s+/g, ' ').trim();
   const t0 = t, n0 = n;
@@ -742,11 +793,11 @@ function placeFields(c, raw) {
   } else if (!t && n && noQty(n)) { t = n; n = ''; }
   /* Cosméticos: «Frasco con gotero de 30 mL» se separa en presentación y cantidad. */
   let env = String(raw.envase ?? '').trim();
-  if (c.id === 'cos' && n && !env) { const m = n.match(COS_PACK); if (m) { env = m[1].replace(/\s+/g, ' ').trim(); n = m[2].trim(); } }
+  if ((c.id === 'cos' || c.id === 'hig') && n && !env) { const m = n.match(COS_PACK); if (m) { env = m[1].replace(/\s+/g, ' ').trim(); n = m[2].trim(); } }
   if (t === t0 && n === n0 && env === String(raw.envase ?? '').trim()) return out;
   const lbl = k => (c.fields.find(f => f.key === k) || {}).label || k;
-  out.raw = { ...raw, [tk]: t, contenido: n, ...(c.id === 'cos' ? { envase: env } : {}) };
-  if (c.id === 'cos' && env !== String(raw.envase ?? '').trim()) out.changes.push({ label: lbl('envase'), from: n0, to: env });
+  out.raw = { ...raw, [tk]: t, contenido: n, ...(c.id === 'cos' || c.id === 'hig' ? { envase: env } : {}) };
+  if ((c.id === 'cos' || c.id === 'hig') && env !== String(raw.envase ?? '').trim()) out.changes.push({ label: lbl('envase'), from: n0, to: env });
   if (t !== t0) out.changes.push({ label: lbl(tk), from: t0, to: t || '(vacío)' });
   if (n !== n0) out.changes.push({ label: lbl('contenido'), from: n0 || t0, to: n || '(vacío)' });
   return out;
@@ -887,6 +938,26 @@ const FAQ_RULES = {
       [[`¿${n} es un medicamento?`, `¿Se considera ${n} un medicamento?`], `No. ${LEGEND.cosResp}`]
     ];
   },
+  hig: (v, n) => {
+    const attrs = cosAttrs(v).ok, ben = higBeneficio(v), plural = HIG_PLURAL.has(firstWord(v.tipo)), art = HIG_ART[firstWord(v.tipo)] || 'un';
+    return [
+      v.tipo && [[`¿Qué es ${n}?`, `¿Qué tipo de producto es ${n}?`], [`${plural ? 'Son' : 'Es'} ${plural ? '' : art + ' '}${lc(v.tipo)}${v.fabricante ? ` de ${v.fabricante}` : ''}${v.fluor ? ', con flúor' : ''}${v.ingredientes ? `, con ${lc(v.ingredientes)}` : ''}.`]],
+      ben && [[`¿Para qué sirve ${n}?`, `¿Qué beneficio ofrece ${n}?`], [`Ofrece ${lc(ben)}.`, `Su beneficio principal es ${lc(ben)}.`]],
+      v.publico && [[`¿Para quién es ${n}?`, `¿A quién está dirigido ${n}?`], [`Está dirigido a ${lc(v.publico)}.`, `Va dirigido a ${lc(v.publico)}.`]],
+      v.talla && [[`¿Qué talla o etapa es ${n}?`, `¿Cuál es la talla de ${n}?`], [`Es ${lc(v.talla)}.`]],
+      v.variante && [[`¿Qué variante es ${n}?`, `¿Cuál es la variante de ${n}?`], [`Es la variante ${v.variante}.`]],
+      v.fluor && [[`¿Cuánto flúor declara ${n}?`, `¿Qué flúor tiene ${n}?`], [`Según su empaque, declara ${v.fluor}.`]],
+      v.duracion && [[`¿Cuánto dura la protección de ${n}?`, `¿Qué duración declara ${n}?`], [`Según su empaque, declara ${lc(v.duracion)}.`]],
+      v.modo && [[`¿Cómo se usa ${n}?`, `¿Cómo se aplica ${n}?`], v.modo],
+      v.inci && [[`¿Cuál es la lista completa de ingredientes de ${n}?`, `¿Qué ingredientes (INCI) tiene ${n}?`], v.inci],
+      attrs.length && [[`¿Qué características declara el empaque de ${n}?`, `¿Qué características tiene ${n}?`], attrs.map(cap).join(', ') + '.'],
+      v.precauciones && [[`¿Qué precauciones tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.precauciones],
+      v.contenido && [[/pieza|unidad/i.test(v.contenido) ? `¿Cuántas piezas trae ${n}?` : `¿Cuánto producto trae ${n}?`, `¿Qué contenido tiene ${n}?`], [`Se presenta ${higPresent(v)}.`, `Su contenido es ${v.contenido}${v.envase ? `, en ${lc(v.envase)}` : ''}.`]],
+      v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${v.fabricante}.`, `Lo desarrolla ${v.fabricante}.`]],
+      v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
+      higAviso(v) && [[`¿${n} es un medicamento?`, `¿Se considera ${n} un medicamento?`], `No. ${LEGEND.cosResp}`]
+    ];
+  },
   sup: (v, n) => [
     v.composicion && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(flatBullets(v.composicion))}.`, `Su composición incluye ${lc(flatBullets(v.composicion))}.`]],
     v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
@@ -1020,9 +1091,16 @@ function lint(c, raw) {
       COS_MED.forEach(([re, name]) => { if (re.test(t)) out.med.push({ term: name, field: fd.label }); });
     }
   }
+  if (c.id === 'hig') {
+    cosAttrs(raw).bad.forEach(b => out.check.push(`«${b.attr}», pero la lista de ingredientes (INCI) incluye ${{ fragancia: 'fragancia (Parfum, Fragrance o Aroma)', alcohol: 'alcohol (Alcohol Denat. o Ethanol)', parabenos: 'parabenos', aluminio: 'aluminio', sulfatos: 'sulfatos' }[b.why]}. Una de las dos está mal: esa característica no se publica hasta que lo resuelvas.`));
+    if (raw.duracion) out.check.push(`La duración «${String(raw.duracion).trim()}» es una afirmación que requiere sustento. Se publica solo como declarada en el empaque; pide a Regulatorio que la revise.`);
+    const tp = String(raw.tipo || raw.producto || '');
+    if (/pa[nñ]al/i.test(tp) && !raw.talla) out.check.push('Pañales sin talla o etapa. Es lo que más se compara; captúrala tal como aparece en el empaque.');
+    if (/pa[nñ]al|toalla|tampon|tampón/i.test(tp) && raw.contenido && !/\b(?:piezas?|pzas?|unidades?)\b/i.test(raw.contenido) && !/\d\s*(?:pz|pzas?)\b/i.test(raw.contenido)) out.check.push('Escribe cuántas piezas trae el paquete, por ejemplo «60 piezas». Es lo que más se compara en este producto.');
+  }
   if (c.id === 'cos') {
     const ca = cosAttrs(raw);
-    ca.bad.forEach(b => out.check.push(`«${b.attr}», pero la lista de ingredientes (INCI) incluye ${b.why === 'fragancia' ? 'fragancia (Parfum, Fragrance o Aroma)' : b.why === 'alcohol' ? 'alcohol (Alcohol Denat. o Ethanol)' : b.why === 'parabenos' ? 'parabenos' : 'sulfatos'}. Una de las dos está mal: esa característica no se publica hasta que lo resuelvas.`));
+    ca.bad.forEach(b => out.check.push(`«${b.attr}», pero la lista de ingredientes (INCI) incluye ${{ fragancia: 'fragancia (Parfum, Fragrance o Aroma)', alcohol: 'alcohol (Alcohol Denat. o Ethanol)', parabenos: 'parabenos', aluminio: 'aluminio', sulfatos: 'sulfatos' }[b.why]}. Una de las dos está mal: esa característica no se publica hasta que lo resuelvas.`));
     ca.warn.forEach(b => out.check.push(`«${b.attr}», pero el INCI trae componentes que suelen venir de fragancias (por ejemplo linalool o limonene). Revisa el empaque.`));
     const zt = COS_ZONA.find(([tipoRe, zonaMal, zonaBien]) => tipoRe.test(raw.tipo || '') && zonaMal.test(raw.zona || '') && !zonaBien.test(raw.zona || ''));
     if (zt) out.check.push(`El tipo «${raw.tipo}» y la zona de aplicación «${raw.zona}» no coinciden. Revisa cuál está mal.`);
@@ -1039,7 +1117,7 @@ function lint(c, raw) {
   }
   if (c.id === 'sup' && /^\s*(suplementos?(\s+alimenticios?)?|productos?|alimentos?)\s*$/i.test(raw.componente || '')) out.check.push(`«${String(raw.componente).trim()}» no describe el producto. Escribe qué es o su ingrediente principal, por ejemplo «Fórmula hipercalórica» o «Vitamina C».`);
   /* El tipo y el contenido no se mezclan: el tipo dice qué es el producto y el contenido cuánto trae. */
-  const tipoKey = { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' }[c.id];
+  const tipoKey = c.id === 'hig' && raw.tipo ? 'tipo' : { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' }[c.id];
   if (tipoKey && raw[tipoKey]) {
     const t = String(raw[tipoKey]).trim(), lbl = (c.fields.find(f => f.key === tipoKey) || {}).label || tipoKey;
     if (QTY_RE.test(t) && !/\b(?:vitamina|omega|b\d+|d\d|q\d+)\b/i.test(t.replace(QTY_RE, ''))) out.check.push(`«${t}» parece una cantidad o presentación y va en «Contenido». En «${lbl}» escribe qué es el producto.`);
@@ -1198,6 +1276,11 @@ const META_COS = {
   mt: { tpl: '{marca} {nombre_seo}[ {con_activo}]\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
   md: { tpl: '{marca} {nombre}[ {con_activo}]\n{beneficio_piel}\n{presentacion}\n[Compra en {tienda}]', sep: '. ', max: 155 }
 };
+/* Cuidado personal: lo que distingue a cada variante (aroma, talla, cantidad) va antes de la tienda. */
+const META_HIG = {
+  mt: { tpl: '{marca} {nombre_seo}\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
+  md: { tpl: '{marca} {nombre}\n{beneficio_pub}\n{presentacion}\n[Compra en {tienda}]', sep: '. ', max: 155 }
+};
 const ALT_DEF = {
   med: '{marca} {concentracion}\n{principio}\n{contenido:lc}',
   dis: '{marca} {modelo} {tipo:lc}\n{tecnologia:lc}',
@@ -1209,8 +1292,8 @@ const ALT_DEF = {
 };
 const defMetaCat = id => ({
   confirmed: id === 'med',
-  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : META_GEN.mt) },
-  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : META_GEN.md) },
+  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : id === 'hig' ? META_HIG.mt : META_GEN.mt) },
+  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : id === 'hig' ? META_HIG.md : META_GEN.md) },
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
 /* Lo guardado con la plantilla genérica de antes pasa a la nueva de suplementos, salvo que la persona ya haya confirmado esa estructura. */
@@ -1224,6 +1307,11 @@ function migrateMeta(m) {
   if (cos && !cos.confirmed) {
     if (cos.mt && cos.mt.tpl === META_GEN.mt.tpl) cos.mt = { ...cos.mt, tpl: META_COS.mt.tpl };
     if (cos.md && cos.md.tpl === META_GEN.md.tpl) cos.md = { ...cos.md, tpl: META_COS.md.tpl };
+  }
+  const hig = m && m.cats && m.cats.hig;
+  if (hig && !hig.confirmed) {
+    if (hig.mt && hig.mt.tpl === META_GEN.mt.tpl) hig.mt = { ...hig.mt, tpl: META_HIG.mt.tpl };
+    if (hig.md && hig.md.tpl === META_GEN.md.tpl) hig.md = { ...hig.md, tpl: META_HIG.md.tpl };
   }
   return m;
 }
@@ -1315,7 +1403,15 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   for (let i = 1; i <= 4; i++) tokens['seg' + i] = segTexts[i - 1] || '';
   /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
   tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';
-  tokens.variante_seo = [dv.sabor || dv.variante, dv.contenido].filter(Boolean).join(', ');
+  tokens.variante_seo = [dv.sabor || dv.variante, dv.talla, dv.contenido].filter(Boolean).join(', ');
+  if (c.id === 'hig') {
+    const nm = tipo => mergeTipo(dv.producto, tipo), ben = dv.beneficio || dv.uso;
+    tokens.nombre = nm(dv.tipo);
+    tokens.nombre_seo = nm(dv.tipoCorto || dv.tipo);
+    tokens.beneficio = ben || '';
+    tokens.beneficio_pub = ben ? (dv.publico ? `${ben} para ${lc(dv.publico)}` : ben) : (dv.publico ? `Para ${lc(dv.publico)}` : '');
+    tokens.presentacion = dv.contenido ? (dv.envase ? `${dv.envase} de ${dv.contenido}` : dv.contenido) : '';
+  }
   if (c.id === 'cos') {
     const nm = tipo => mergeTipo(dv.producto, tipo);
     tokens.nombre = nm(dv.tipo);
@@ -1863,6 +1959,7 @@ const api = {
   migrateMeta,
   META_SUP,
   META_COS,
+  META_HIG,
   RUTINAS,
   rutinaDe,
   mergeTipo,

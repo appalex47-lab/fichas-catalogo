@@ -978,3 +978,91 @@ test('cosméticos: la plantilla de meta genérica guardada pasa a la nueva si no
   F.migrateMeta(c);
   assert.equal(c.cats.cos.mt.tpl, F.META_GEN.mt.tpl, 'confirmada: no se toca');
 });
+
+/* ---------- Cuidado personal: ficha homologada ---------- */
+const HIGX = {
+  pasta: { marca: 'Colgate', producto: 'Total 12', tipo: 'Pasta dental', beneficio: 'Salud bucal completa', variante: 'Menta', publico: 'Adultos', contenido: '100 mL', envase: 'Tubo', fabricante: 'Colgate-Palmolive', fluor: '1,450 ppm', modo: 'Aplicar sobre el cepillo.', precauciones: 'No tragar.' },
+  shampoo: { marca: 'Marca Ejemplo', producto: 'Coco Nutritivo', tipo: 'Shampoo hidratante', beneficio: 'Hidratación del cabello', variante: 'Aroma coco', publico: 'Todo tipo de cabello', ingredientes: 'Aceite de coco', contenido: '750 mL', envase: 'Botella con dosificador', fabricante: 'Laboratorios Ejemplo' },
+  toallas: { marca: 'Marca Ejemplo', producto: 'Noche', tipo: 'Toallas sanitarias', beneficio: 'Protección nocturna', variante: 'Nocturnas', publico: 'Mujeres', contenido: '10 piezas', envase: 'Paquete', fabricante: 'Laboratorios Ejemplo' },
+  panales: { marca: 'Marca Ejemplo', producto: 'Etapa Activa', tipo: 'Pañales desechables', beneficio: 'Absorción', talla: 'Etapa 3', publico: 'Bebés de 6 a 10 kg', contenido: '60 piezas', envase: 'Paquete', fabricante: 'Laboratorios Ejemplo' }
+};
+
+test('cuidado personal: título con línea, tipo, variante, talla y cantidad, sin laboratorio', () => {
+  const t = k => F.computeFor('hig', HIGX[k], keep, mt()).title;
+  assert.equal(t('pasta').title, 'Colgate Total 12 Pasta dental | Salud bucal completa | Menta | 100 mL');
+  assert.equal(t('shampoo').title, 'Marca Ejemplo Coco Nutritivo Shampoo hidratante | Aroma coco | 750 mL');
+  assert.deepEqual(t('shampoo').softDropped, ['Hidratación del cabello'], 'el beneficio se omite si el título pasa de 70 y se avisa');
+  assert.equal(t('panales').title, 'Marca Ejemplo Etapa Activa Pañales desechables | Etapa 3 | 60 piezas');
+  assert.ok(!/Laboratorios Ejemplo|Colgate-Palmolive/.test(t('pasta').title + t('toallas').title));
+});
+
+test('cuidado personal: lo mínimo es el nombre o el tipo, y la presentación se separa de la cantidad', () => {
+  const base = { marca: 'M', contenido: '60 piezas', fabricante: 'L' };
+  assert.deepEqual(F.computeFor('hig', base, keep, mt()).title.missing, ['Línea o nombre del producto o tipo de producto']);
+  assert.deepEqual(F.computeFor('hig', { ...base, tipo: 'Pañales' }, keep, mt()).title.missing, []);
+  const r = F.computeFor('hig', { ...HIGX.panales, contenido: 'Paquete con 60 piezas', envase: '' }, keep, mt()).vt.v;
+  assert.deepEqual([r.envase, r.contenido], ['Paquete', '60 piezas']);
+  const q = F.computeFor('hig', { ...HIGX.pasta, tipo: 'Pasta dental 100 mL', contenido: '', envase: '' }, keep, mt()).vt.v;
+  assert.deepEqual([q.tipo, q.contenido], ['Pasta dental', '100 mL'], 'una cantidad escrita en el tipo pasa al contenido');
+});
+
+test('cuidado personal: metas con la variante primero y descripción de Merchant Center con género y número', () => {
+  const r = k => F.computeFor('hig', HIGX[k], keep, mt());
+  assert.equal(r('pasta').meta.mt.text, 'Colgate Total 12 Pasta dental | Menta, 100 mL');
+  assert.equal(r('panales').meta.mt.text, 'Marca Ejemplo Etapa Activa Pañales desechables | Etapa 3, 60 piezas');
+  assert.equal(r('pasta').meta.md.text, 'Colgate Total 12 Pasta dental. Salud bucal completa para adultos. Tubo de 100 mL. Compra en Farmacias Especializadas.');
+  assert.match(r('pasta').mc.text, /^Colgate Total 12 es una pasta dental en variante menta, con flúor, para adultos\. Ofrece salud bucal completa\. Aplicar sobre el cepillo\. Se presenta en un tubo de 100 mL\. Este producto no es un medicamento\.$/);
+  assert.match(r('toallas').mc.text, /^Marca Ejemplo Noche son toallas sanitarias en variante nocturnas, para mujeres\./);
+  assert.match(r('panales').mc.text, /^Marca Ejemplo Etapa Activa son pañales desechables, etapa 3, para bebés de 6 a 10 kg\./);
+});
+
+test('cuidado personal: el aviso «no es un medicamento» solo en aseo y belleza, no en pañales ni toallas', () => {
+  const r = k => F.computeFor('hig', HIGX[k], keep, mt());
+  for (const k of ['pasta', 'shampoo']) {
+    assert.match(r(k).mc.text, /Este producto no es un medicamento\.$/);
+    assert.match(r(k).mg.html, /<p>Este producto no es un medicamento\.<\/p>/);
+    assert.match(r(k).mg.faq.map(x => x.join(' ')).join('\n'), /No\. Este producto no es un medicamento\./);
+  }
+  for (const k of ['toallas', 'panales']) {
+    assert.ok(!/medicamento/.test(r(k).mc.text + r(k).mg.html), k);
+  }
+});
+
+test('cuidado personal: la ficha de Magento ordena beneficios, ficha técnica, uso, ingredientes y preguntas', () => {
+  const h = F.computeFor('hig', { ...HIGX.shampoo, modo: 'Aplicar sobre el cabello húmedo.', inci: 'Aqua, Parfum', atributos: 'Sin parabenos', precauciones: 'Uso externo.', duracion: '48 horas', fluor: '' }, keep, mt()).mg.html;
+  const orden = [/<p><strong>Marca Ejemplo Coco Nutritivo<\/strong> es un shampoo hidratante de <strong>Laboratorios Ejemplo<\/strong>/, /<h2>Beneficios principales:/, /<h2>Ficha técnica del producto:/, /<h2>Modo de uso:/, /<h2>Ingredientes:/, /<h2>Características declaradas:/, /<h2>Precauciones:/, /<p>Este producto no es un medicamento\.<\/p>/, /<h2>Preguntas frecuentes:/].map(re => h.search(re));
+  assert.ok(orden.every((n, i) => n >= 0 && (!i || n > orden[i - 1])), orden.join(','));
+  assert.match(h, /Duración declarada en el empaque:<\/strong> 48 horas/);
+  assert.match(h, /Se presenta en una botella con dosificador de <strong>750 ml<\/strong>\./);
+  assert.ok(!/artículo de higiene|Esta variante con características/.test(h));
+  const faq = F.computeFor('hig', { ...HIGX.pasta }, keep, mt()).mg.faq.map(x => x.join(' ')).join('\n');
+  assert.match(faq, /¿Cuánto flúor declara[^\n]*Según su empaque, declara 1,450 ppm\./);
+  assert.match(faq, /¿Cuántas piezas trae|¿Cuánto producto trae|¿Qué contenido tiene/);
+  assert.match(F.computeFor('hig', HIGX.panales, keep, mt()).mg.faq.map(x => x.join(' ')).join('\n'), /¿(?:Qué talla o etapa es|Cuál es la talla de)[^\n]*Es etapa 3\./);
+});
+
+test('cuidado personal: características declaradas contra el INCI, duración, pañales sin talla y lenguaje subjetivo', () => {
+  const L = (extra) => F.lint(F.CATS.hig, { ...HIGX.shampoo, ...extra });
+  assert.match(L({ atributos: 'Sin sulfatos', inci: 'Aqua, Sodium Laureth Sulfate' }).check.join(' '), /«Sin sulfatos», pero la lista de ingredientes \(INCI\) incluye sulfatos/);
+  assert.equal(L({ atributos: 'Sin sulfatos', inci: 'Aqua, Glycerin' }).check.length, 0);
+  assert.match(L({ atributos: 'Sin aluminio', inci: 'Aluminum Chlorohydrate, Aqua' }).check.join(' '), /aluminio/);
+  assert.match(L({ duracion: '48 horas' }).check.join(' '), /«48 horas» es una afirmación que requiere sustento/);
+  assert.match(F.lint(F.CATS.hig, { ...HIGX.panales, talla: '' }).check.join(' '), /Pañales sin talla o etapa/);
+  assert.match(F.lint(F.CATS.hig, { ...HIGX.panales, contenido: '60' }).check.join(' '), /cuántas piezas trae/);
+  assert.equal(F.lint(F.CATS.hig, HIGX.panales).check.length, 0);
+  assert.ok(F.lint(F.CATS.hig, { ...HIGX.panales, beneficios: 'Ajuste cómodo' }).vacio.some(x => x.term === 'cómodo'));
+  const bad = F.computeFor('hig', { ...HIGX.shampoo, atributos: 'Sin sulfatos, Sin parabenos', inci: 'Aqua, Sodium Laureth Sulfate' }, keep, mt()).mg.html;
+  assert.ok(!/Sin sulfatos/.test(bad) && /<li>Sin parabenos<\/li>/.test(bad), 'la característica en conflicto no se publica');
+});
+
+test('cuidado personal: etiquetas nuevas, meta migrada y datos viejos que siguen funcionando', () => {
+  const lbl = k => F.CATS.hig.fields.find(f => f.key === k).label;
+  assert.deepEqual([lbl('producto'), lbl('variante'), lbl('contenido'), lbl('talla')], ['Línea o nombre del producto', 'Aroma o variante', 'Contenido neto', 'Talla o etapa']);
+  const m = F.defMeta(); m.cats.hig.mt = { ...F.META_GEN.mt };
+  F.migrateMeta(m);
+  assert.equal(m.cats.hig.mt.tpl, F.META_HIG.mt.tpl);
+  const viejo = F.computeFor('hig', { marca: 'Colgate', producto: 'Total 12 pasta dental', variante: 'Salud bucal completa', contenido: 'Crema 150 mL', fabricante: 'Colgate-Palmolive' }, keep, mt());
+  assert.deepEqual(viejo.title.missing, []);
+  assert.equal(viejo.mg.blocked, null);
+  assert.match(viejo.title.title, /^Colgate Total 12 pasta dental \| Salud bucal completa \| Crema 150 mL$/);
+});

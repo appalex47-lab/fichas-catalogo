@@ -146,6 +146,15 @@ La página solo necesita `index.html`, `styles/styles.css`, `js/logic.js`, `js/a
   - **Revisiones nuevas:** «trata» y «tratar» como lenguaje terapéutico, y el tipo contra la zona de aplicación («Sérum facial» con zona «Cuerpo»).
   - **Paso de rutina** (dato interno, no se exporta): limpieza, tratamiento, hidratación, protección solar, maquillaje o cabello. Si no lo declaras se deduce del tipo. Al asignar complementos, los cosméticos de otro paso y la misma zona aparecen con «Completa la rutina».
   - **Productos ya guardados:** siguen funcionando. Si su «Activo principal» era en realidad un beneficio («Cobertura media»), pásalo al campo «Beneficio principal».
+- Cuidado personal e higiene, ficha homologada (mismo molde que cosméticos):
+  - **Campos:** «Línea o nombre» y «Tipo de producto» por separado; «Beneficio principal» y «Aroma o variante» por separado; talla o etapa; dirigido a; contenido neto y presentación (se separan solos); beneficios; características declaradas; flúor y duración declarados; INCI, modo de uso y precauciones. Basta con el nombre o el tipo.
+  - **Título:** marca + línea + tipo | beneficio (opcional, se omite si pasa de 70 caracteres) | aroma o variante | talla o etapa | cantidad. Sin laboratorio.
+  - **Meta:** aroma o variante, talla y cantidad primero, la tienda al final solo si cabe. La estructura sigue «sin confirmar».
+  - **Merchant Center y Magento:** introducción con género y número correctos («es una pasta dental», «son toallas sanitarias»), beneficios, ficha técnica, modo de uso, ingredientes con `id="lista-ingredientes"`, características declaradas, precauciones y preguntas frecuentes.
+  - **Aviso «Este producto no es un medicamento.»:** sale en aseo y belleza (pasta dental, shampoo, desodorante, jabón…) y no en pañales, toallas sanitarias, tampones, cotonetes, hisopos, pañuelos, rastrillos ni cepillos.
+  - **Datos declarados:** «Flúor declarado» y «Duración declarada» salen en la ficha como «declarado en el empaque», en las preguntas y en Merchant Center. La duración genera un aviso de que requiere sustento. El rango de flúor no se revisa hasta que Regulatorio lo confirme.
+  - **Revisiones:** características declaradas contra el INCI (sin sulfatos, parabenos, alcohol, fragancia y aluminio), pañales sin talla, piezas sin indicar y lenguaje subjetivo o terapéutico en beneficios.
+  - **Productos ya guardados:** siguen funcionando. Si su «Variante» era en realidad un beneficio («Salud bucal completa»), pásalo a «Beneficio principal».
 - Cosméticos (NOM-141-SSA1/SCFI-2012): las secciones Ingredientes, Modo de uso, Precauciones y Protección solar solo salen si tienen datos. Avisa de "bloqueador", "protección total" o "100%", de términos de acción medicinal, y verifica que el nivel de protección coincida con la tabla de la norma según el FPS. Los textos tomados del empaque no pasan por la revisión de lenguaje.
 
 ## Formato del CSV para Magento
