@@ -32,13 +32,13 @@ Clasificación por clase:
 - **Alt**: ALT-001, ALT-003
 - **Claims**: MT-006, MT-007, MD-006, MD-007, ALT-004, CON-010, CON-011, CON-012, CON-013, CON-014
 - **Longitud**: TIT-003, MT-003, MD-003, ALT-002
-- **Estructura**: TIT-008, TIT-010, MT-004, MT-005, MT-010, MD-004, MD-005, MD-010, ALT-005, ALT-006, ALT-010, ALT-020, CON-020
+- **Estructura**: TIT-008, TIT-010, MT-004, MT-005, MT-010, MD-004, MD-005, MD-010, ALT-005, ALT-006, ALT-010, ALT-020, CON-020, CON-032
 - **Campos obligatorios**: TIT-002, CON-001
 - **Duplicación**: TIT-004, TIT-005, TIT-006, TIT-007, MT-008, MD-008, ALT-011, COH-003, MAG-005
 - **Coherencia**: COH-001, COH-002, COH-004, COH-006
 - **Confirmación por categoría**: MT-002, MD-002, CAT-001
 - **Imagen**: IMG-001
-- **Contenido**: CON-002, CON-004
+- **Contenido**: CON-002, CON-004, CON-030, CON-031
 - **Magento relacionado con SEO**: MAG-001, MAG-002, MAG-003, MAG-004, MAG-006
 
 Campos de cada regla: ID, descripción, fuente (archivo y símbolo), origen (mismo vocabulario que `rules.js`), categoría, campo, tipo, severidad, acción, confirmación, si bloquea, si solo avisa, si corrige solo, puntos y si se evalúa.
@@ -81,14 +81,17 @@ Una regla se asigna a **una clase principal**. «Confirmación» puede ser *Conf
 | ALT-005 | Estructura | Todos los bloques de la estructura de alt se generaron. | logic.js: renderMetaTpl (skipped) | Criterio de la herramienta | Todas | alt | Existente | Aviso | Completa los datos de los bloques omitidos. | Confirmada | No | Sí | No | 1 | Sí |
 | ALT-006 | Estructura | La estructura de alt no usa tokens desconocidos. | logic.js: buildMeta (unknown) | Criterio de la herramienta | Todas | alt | Existente | Aviso | Corrige la estructura de alt en Ajustes, pestaña Magento. | Confirmada | No | Sí | No | — | Sí |
 | ALT-020 | Estructura | La estructura del alt de cada categoría es la definida en ALT_DEF. | logic.js: ALT_DEF | Estructura de la agencia de SEO | Todas | alt | Existente | Informativo | Ninguna. | Confirmada | No | No | No | — | Documental |
-| CON-001 | Campos obligatorios | La descripción de Magento se genera (datos regulatorios y vitales presentes). | logic.js: buildMg (blocked), CATS[cat].vital | Prompt aprobado de descripciones de Magento | Todas | magentoHtml | Existente | Error | Completa el dato que bloquea el HTML. | Confirmada | Sí | No | No | 4 | Sí |
-| CON-002 | Contenido | Las descripciones usan todos los datos disponibles de la categoría. | logic.js: buildMC (omitted), buildMg (omitted) | Prompt aprobado de Merchant Center; Prompt aprobado de descripciones de Magento | Todas | mc | Existente | Aviso | Completa los datos omitidos. | Confirmada | No | Sí | No | 2 | Sí |
-| CON-010 | Claims | Los datos de entrada no contienen claims prohibidos. | logic.js: lint (RED kind=claim, COS_CLAIM) | Criterio de la herramienta; NOM-141-SSA1/SCFI-2012 | Todas | v.* | Existente | Error | Corrige el dato de entrada que contiene el claim. | Confirmada | No | Sí | No | 3 | Sí |
-| CON-011 | Claims | Los datos de entrada no contienen lenguaje subjetivo o superlativo. | logic.js: lint (RED kind=vacio) | Criterio de la herramienta | Todas | v.* | Existente | Aviso | Reescribe el dato de entrada con una descripción objetiva. | Confirmada | No | Sí | No | 2 | Sí |
+| CON-001 | Campos obligatorios | La descripción de Magento se genera (datos regulatorios y vitales presentes). | logic.js: buildMg (blocked), CATS[cat].vital | Prompt aprobado de descripciones de Magento | Todas | magentoHtml | Existente | Error | Completa el dato que bloquea el HTML. | Confirmada | Sí | No | No | 3 | Sí |
+| CON-002 | Contenido | Las descripciones usan todos los datos disponibles de la categoría. | logic.js: buildMC (omitted), buildMg (omitted) | Prompt aprobado de Merchant Center; Prompt aprobado de descripciones de Magento | Todas | mc | Existente | Aviso | Completa los datos omitidos. | Confirmada | No | Sí | No | 1 | Sí |
+| CON-010 | Claims | Los datos de entrada no contienen claims prohibidos. | logic.js: lint (RED kind=claim, COS_CLAIM) | Criterio de la herramienta; NOM-141-SSA1/SCFI-2012 | Todas | v.* | Existente | Error | Corrige el dato de entrada que contiene el claim. | Confirmada | No | Sí | No | 2 | Sí |
+| CON-011 | Claims | Los datos de entrada no contienen lenguaje subjetivo o superlativo. | logic.js: lint (RED kind=vacio) | Criterio de la herramienta | Todas | v.* | Existente | Aviso | Reescribe el dato de entrada con una descripción objetiva. | Confirmada | No | Sí | No | 1 | Sí |
 | CON-012 | Claims | Las afirmaciones que requieren validación están respaldadas en la ficha de origen. | logic.js: lint (AMBER) | Criterio de la herramienta | Todas | v.* | Existente | Aviso | Valida la afirmación contra la ficha de origen. | Confirmada | No | Sí | No | 1 | Sí |
 | CON-013 | Claims | Cosméticos: no se atribuyen acciones propias de medicamentos. | logic.js: lint (COS_MED) | NOM-141-SSA1/SCFI-2012; Por completar por Regulatorio | cos | v.* | Existente | Aviso | Quita el término de acción medicinal. | Provisional | No | Sí | No | 1 | Sí |
 | CON-014 | Claims | Cosméticos: FPS, nivel, modo de uso y precauciones son coherentes con la norma. | logic.js: lint (check), nivelPorFps | NOM-141-SSA1/SCFI-2012; Por completar por Regulatorio | cos | v.fps | Existente | Aviso | Confirma el dato contra el empaque y captúralo. | Provisional | No | Sí | No | 1 | Sí |
 | CON-020 | Estructura | La descripción de Magento sigue la plantilla aprobada de la categoría. | logic.js: CATS[cat].mg, assemble | Prompt aprobado de descripciones de Magento | Todas | magentoHtml | Existente | Informativo | Ninguna. | Confirmada | No | No | No | — | Documental |
+| CON-030 | Contenido | La ficha de Magento tiene al menos 3 preguntas frecuentes. | logic.js: buildFaq | Propuesta de la herramienta (Fase 8), sin validar | Todas | magentoHtml | Existente | Aviso | Captura más datos del producto para que salgan más preguntas. | Provisional | No | No | No | 2 | Sí |
+| CON-031 | Contenido | La ficha indica la categoría del árbol de la tienda. | logic.js: campo «categoria» | Propuesta de la herramienta (Fase 8), sin validar | sup, cos, hig, beb, dis, acc | v.categoria | Existente | Aviso | Captura la categoría. | Provisional | No | No | No | 1 | Sí |
+| CON-032 | Estructura | Las tablas y listas largas capturadas salen en la ficha con su identificador. | logic.js: nutriTableHtml, specHtml, tallasHtml | Propuesta de la herramienta (Fase 8), sin validar | Todas | magentoHtml | Existente | Aviso | Revisa el formato del dato: una línea «Nombre | Valor» por fila. | Provisional | No | No | No | 1 | Sí |
 | COH-006 | Coherencia | Medicamentos: la meta description es coherente con la declaración de receta. | logic.js: buildMeta (receta_txt); rules.js sección 5 | Estructura de la agencia de SEO | med | metaDescription | Existente | Error | Revisa el dato de receta o la estructura de la meta description. | Según categoría | No | Sí | No | 2 | Sí |
 | MAG-001 | Magento relacionado con SEO | El producto tiene SKU. | logic.js: magentoBatch (sinSku) | Formato de carga de Magento (Batch) | Todas | sku | Existente | Informativo | Captura el SKU tal como está en Magento. | Confirmada | Sí | No | No | — | Sí |
 | MAG-002 | Magento relacionado con SEO | Las comas internas de los textos se reemplazan por «;» al exportar (corrección automática). | logic.js: sanitizeMagentoCell, MAG_CONTRACT | Formato de carga de Magento (Batch) | Todas | metaDescription | Existente | Informativo | Ninguna: se aplica al exportar. Revisa el resultado en la prueba de carga. | Confirmada | No | No | Sí | — | Sí |
@@ -189,7 +192,7 @@ Componentes y reglas que puntúan:
 | Meta title | 20 | MT-001 (4), MT-003 (4), MT-004 (4), MT-005 (1), MT-006 (2), MT-007 (1), MT-008 (2), MT-010 (2) |
 | Meta description | 20 | MD-001 (4), MD-003 (4), MD-004 (4), MD-005 (1), MD-006 (2), MD-007 (1), MD-008 (2), MD-010 (2) |
 | Alt | 15 | ALT-001 (4), ALT-002 (3), ALT-003 (3), ALT-004 (2), ALT-005 (1), ALT-010 (1), ALT-011 (1) |
-| Contenido | 15 | CON-001 (4), CON-002 (2), CON-004 (1), CON-010 (3), CON-011 (2), CON-012 (1), CON-013 (1), CON-014 (1) |
+| Contenido | 15 | CON-001 (3), CON-002 (1), CON-004 (1), CON-010 (2), CON-011 (1), CON-012 (1), CON-013 (1), CON-014 (1), CON-030 (2), CON-031 (1), CON-032 (1) |
 | Coherencia | 10 | COH-001 (3), COH-002 (2), COH-003 (1), COH-004 (2), COH-006 (2) |
 
 Los hallazgos de Magento (`MAG-*`) se muestran aparte y **no puntúan**.
