@@ -52,7 +52,7 @@ const round2 = n => Math.round(n * 100) / 100;
 /* Qué información necesita saber quien compra, por categoría. «a|b» = basta con uno de los dos. */
 const INFO = {
   med: { identidad: ['marca', 'principio'], tecnica: ['concentracion', 'forma', 'via'], origen: ['laboratorio'] },
-  dis: { identidad: ['marca', 'modelo', 'tipo'], tecnica: ['tecnologia', 'uso'], origen: ['fabricante'] },
+  dis: { identidad: ['marca', 'modelo', 'tipo'], tecnica: ['tecnologia|uso|caracteristicas'], origen: ['fabricante'] },
   cos: { identidad: ['marca', 'producto|tipo'], tecnica: ['atributo|beneficio|fps'], origen: ['fabricante'] },
   sup: { identidad: ['marca', 'componente'], tecnica: ['forma'], origen: ['fabricante'] },
   beb: { identidad: ['marca', 'tipo'], tecnica: ['sabor|atributo|beneficio'], origen: ['fabricante'] },

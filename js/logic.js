@@ -76,7 +76,7 @@ function expandPres(t) {
   s = s.replace(SINGULAR_ONE_RE, (m, noun) => SINGULAR_NOUN[noun.toLowerCase()] ? `1 ${SINGULAR_NOUN[noun.toLowerCase()]}` : m);
   return cap(s.trim());
 }
-const COUNT_NOUN_RE = /(\d+)\s+(tabletas?|cápsulas?|capsulas?|piezas?|sobres?|comprimidos?|parches?|pastillas?|gomitas?|unidades|unidad|ampolletas?|plumas?|tiras|lancetas?|grageas?|sachets?|toallitas?|jeringas?|perlas?|softgels?|barras?|shots?|chicles?|porciones|viales?)(?![\p{L}])/giu;
+const COUNT_NOUN_RE = /(?<![\p{L}\d-])(\d+)\s+(tabletas?|cápsulas?|capsulas?|piezas?|sobres?|comprimidos?|parches?|pastillas?|gomitas?|unidades|unidad|ampolletas?|plumas?|tiras|lancetas?|grageas?|sachets?|toallitas?|jeringas?|perlas?|softgels?|barras?|shots?|chicles?|porciones|viales?)(?![\p{L}])/giu;
 const capNouns = s => s.replace(COUNT_NOUN_RE, (m, n, w) => `${n} ${w.toLowerCase()}`);
 function joinForm(forma, contenido) {
   if (!forma) return contenido || '';
@@ -215,6 +215,7 @@ const LEGEND = {
   cosMc: 'Aplicar conforme a las indicaciones del fabricante.',
   higMc: 'Utilizar conforme a las indicaciones del fabricante.',
   cosResp: 'Este producto no es un medicamento.',
+  disMedico: 'Consulte a su médico ante cualquier duda sobre sus mediciones.',
   supResp: 'El consumo de este producto es responsabilidad de quien lo recomienda y de quien lo usa. Este producto no es un medicamento.',
   supConservacion: 'Consérvese bien cerrado en un lugar fresco y seco. No se deje al alcance de los niños.'
 };
@@ -368,6 +369,35 @@ function bebPresent(v, w = x => x) {
   }
   return env ? `en ${lc(env)}` : '';
 }
+/* ---------- Dispositivos médicos: género y número del tipo, tecnología sin repetir y cierre de mediciones ---------- */
+const DIS_ART = { baumanometro: 'un', tensiometro: 'un', glucometro: 'un', termometro: 'un', oximetro: 'un', pulsioximetro: 'un', nebulizador: 'un', lancetero: 'un', bascula: 'una', humidificador: 'un', vaporizador: 'un', estetoscopio: 'un', inhalocamara: 'una', esfigmomanometro: 'un', aspirador: 'un' };
+const DIS_PLURAL = new Set(['tiras', 'lancetas', 'agujas', 'jeringas', 'guantes', 'gasas', 'electrodos', 'canulas', 'algodones', 'mascarillas', 'cubrebocas']);
+const DIS_MEDIDOR = new Set(['baumanometro', 'tensiometro', 'glucometro', 'termometro', 'oximetro', 'pulsioximetro', 'bascula', 'esfigmomanometro']);
+const disPlural = v => DIS_PLURAL.has(firstWord(v.tipo));
+const disMedidor = v => DIS_MEDIDOR.has(firstWord(v.tipo));
+/* La tecnología sin las palabras que el tipo ya dice: «Termómetro infrarrojo» + «Infrarrojo sin contacto» = «sin contacto». */
+const disTec = v => { const have = new Set(foldTok(v.tipo)); return String(v.tecnologia || '').split(/\s+/).filter(w => w && !foldTok(w).every(t => have.has(t))).join(' '); };
+const disList = t => String(t || '').split(/\s*(?:\n|;|,|\s+y\s+)\s*/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean);
+function disIntro(v, w = x => x, withFab = false) {
+  const f = firstWord(v.tipo), plural = disPlural(v), art = plural ? 'unas' : (DIS_ART[f] || 'un');
+  let p = `${w(join(' ', v.marca, v.modelo))} ${plural ? 'son' : 'es'} ${art} ${lc(v.tipo || 'producto')}`;
+  if (withFab && v.fabricante) p += ` de ${w(v.fabricante)}`;
+  if (disTec(v)) p += `, ${w(lc(disTec(v)))}`;
+  if (v.publico) p += `, para ${lc(v.publico)}`;
+  return p;
+}
+function disPresent(v, w = x => x) {
+  const env = String(v.presentacion || '').trim();
+  if (v.contenido) {
+    if (env) { const art = ENVASE_ART[firstWord(env)]; return `en ${art ? art + ' ' : ''}${lc(env)} con ${w(v.contenido)}`; }
+    return `con contenido de ${w(v.contenido)}`;
+  }
+  return env ? `en ${lc(env)}` : '';
+}
+/* Especificaciones: una línea «Nombre | Valor». Las líneas sin barra se ignoran en la tabla y la revisión avisa. */
+const specRows = t => String(t || '').split(/\r?\n/).map(l => l.trim()).filter(l => l.includes('|')).map(l => { const i = l.indexOf('|'); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }).filter(r => r[0] && r[1]);
+const specHtml = t => { const r = specRows(t); return r.length ? `<h2>Especificaciones técnicas:</h2>\n<table id="especificaciones-tecnicas" class="tabla-especificaciones" aria-label="Especificaciones técnicas">\n<tbody>\n${r.map(([a, b]) => `  <tr><th scope="row">${escT(a)}</th><td>${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
+const DIS_AMBER = [[/\bcl[ií]nicamente (?:validad|probad|comprobad)\w*/i, 'clínicamente validado'], [/\bprecisi[oó]n cl[ií]nica\b/i, 'precisión clínica'], [/\b100\s?%\s*(?:exact|precis)\w*/i, '100% exacto'], [/\bdiagn[oó]stic\w*/i, 'diagnóstico'], [/\b(?:grado|nivel) m[eé]dic[oa]\b/i, 'grado médico']];
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
 /* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
@@ -444,49 +474,66 @@ const CATS = {
   },
 
   dis: {
-    emoji: '🩺', name: 'Dispositivos médicos', range: [80, 150],
+    emoji: '🩺', name: 'Dispositivos médicos', range: [80, 150], titleSoft: 70,
     fields: [
       F('marca','Marca',{req:1,ph:'Omron'}),
-      F('modelo','Modelo',{req:1,ph:'HEM-7121'}),
+      F('modelo','Modelo',{req:1,model:1,ph:'HEM-7121',hint:'Tal como aparece en el empaque. Se conserva exactamente como lo escribes.'}),
       F('tipo','Tipo de dispositivo',{req:1,ph:'Baumanómetro digital'}),
-      F('tecnologia','Tecnología o zona de medición',{req:1,ph:'Automático de brazo'}),
+      F('tecnologia','Tecnología o zona de medición',{ph:'Automático de brazo',hint:'Opcional. Basta con la tecnología, el uso previsto o las características. Si repite palabras del tipo, no se repiten.'}),
       F('fabricante','Fabricante',{req:1,ph:'Omron'}),
       F('uso','Uso previsto',{g:'d',hint:'Solo si está validado en la ficha.'}),
-      F('caracteristicas','Características técnicas verificables',{g:'d',type:'area'}),
-      F('paquete','Contenido del paquete',{g:'d'}),
-      F('presentacion','Presentación',{g:'d',pres:1}),
+      F('contenido','Contenido o piezas',{g:'d',pres:1,ph:'50 piezas',hint:'Opcional. Para insumos (tiras, lancetas). Entra al título.'}),
+      F('presentacion','Presentación',{g:'d',pres:1,ph:'Caja',hint:'Opcional. Caja, frasco, estuche… Si escribes «Caja con 50 piezas» se separa sola.'}),
+      F('publico','Dirigido a',{g:'d',ph:'Adultos',hint:'Opcional. Tal como aparece en el empaque.'}),
+      F('registro','Registro sanitario',{g:'d',raw:1,ph:'Reg. No. 0000X2026 SSA',hint:'Opcional. Tal como aparece en el empaque. Si falta, la revisión avisa; no bloquea.'}),
+      F('caracteristicas','Características técnicas verificables',{g:'d',type:'area',lines:1,rows:4,hint:'Una por línea o separadas por comas. Salen como lista.'}),
+      F('especificaciones','Especificaciones técnicas',{g:'d',type:'area',raw:1,lines:1,rows:5,ph:'Rango de presión | 0 a 299 mmHg',hint:'Opcional. Una línea por dato, «Nombre | Valor», tal cual del empaque: rango, memoria, alimentación, medida del brazalete. Sale como tabla.'}),
+      F('paquete','Contenido del paquete',{g:'d',hint:'Separado por comas. Sale como lista.'}),
+      F('compatibilidad','Compatibilidad',{g:'d',type:'area',sentence:1,hint:'Opcional. Con qué es compatible, por ejemplo «Tiras reactivas Marca GT-50».'}),
+      F('modo','Instrucciones de uso',{g:'d',type:'area',sentence:1,hint:'Opcional. Resumen tal cual del instructivo.'}),
+      F('advertencias','Advertencias',{g:'d',type:'area',sentence:1,hint:'Opcional. Leyendas del empaque, tal cual.'}),
+      F('declarada','Declarado en el empaque',{g:'d',type:'area',raw:1,hint:'Opcional. Validaciones o certificaciones tal como las dice el empaque, por ejemplo «Clínicamente validado». Se publican como declaradas y requieren sustento.'}),
       F('extra','Especificaciones adicionales',{g:'d',type:'area',hint:'Conectividad, memoria, muestra, etc.'}),
+      F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Baumanómetro',hint:'Opcional. Versión corta del tipo para las metas. No sale en la ficha.'}),
       F('compat','Insumos compatibles (SKU)',{g:'d',raw:1,hint:'SKU de los insumos o accesorios que van con este producto, separados por coma. Salen en crosssell_skus. No cambian ningún texto.'})
     ],
     title: [
       seg('Marca + modelo + tipo', ['marca','modelo','tipo']),
-      seg('Tecnología o zona de medición', ['tecnologia']),
-      seg('Fabricante', ['fabricante'])
+      Object.assign(seg('Tecnología o zona de medición', ['tecnologia'], v => cap(disTec(v))), { soft: true }),
+      seg('Contenido', ['contenido'])
     ],
-    vital: ['tecnologia'],
-    mcUses: ['marca','modelo','tipo','tecnologia','fabricante','uso','caracteristicas','paquete'],
+    vital: [],
+    vitalAny: ['tecnologia','uso','caracteristicas'],
+    mcUses: ['marca','modelo','tipo','tecnologia','uso','caracteristicas'],
     mgUses: ['marca','modelo','tipo','tecnologia','fabricante','uso','caracteristicas','paquete','presentacion'],
     mc: v => [
-      join(' - ', join(' ', v.marca, v.modelo, v.tipo, v.tecnologia), v.fabricante),
-      v.tipo && `Dispositivo médico ${lc(v.tipo)}${v.uso ? ' para ' + lc(v.uso) : ''}`,
-      v.caracteristicas && `Cuenta con ${lc(v.caracteristicas)}`,
-      v.paquete && `Incluye ${lc(v.paquete)}`,
-      v.extra,
+      disIntro(v),
+      optMc('Uso previsto', v.uso && (disPlural(v) ? `Para ${lc(v.uso)}` : `Uso previsto: ${lc(v.uso)}`)),
+      optMc('Características', disList(v.caracteristicas).length && cap(disList(v.caracteristicas).map(lc).join(', '))),
+      optMc('Contenido del paquete', v.paquete && `Incluye ${disList(v.paquete).map(lc).join(', ')}`),
+      optMc('Compatibilidad', v.compatibilidad && `Compatible con ${lc(v.compatibilidad)}`),
+      optMc('Presentación', disPresent(v) && `Se presenta ${disPresent(v)}`),
       LEGEND.disMc
     ],
     mg: v => {
-      let p = `${S(join(' ', v.marca, v.modelo, v.tipo))} es un equipo de medición técnica` + (v.fabricante ? ` fabricado por ${S(v.fabricante)}` : '') + '.';
-      if (v.tecnologia || v.uso || v.caracteristicas) {
-        p += ' Este dispositivo médico' + (v.tecnologia ? ` de tecnología ${S(v.tecnologia)}` : '')
-          + (v.uso ? ` está diseñado para el uso previsto de ${S(v.uso)}` : '')
-          + (v.caracteristicas ? (v.uso ? ', integrando' : ' integra') + ` componentes de ${S(v.caracteristicas)}` : '') + '.';
-      }
-      if (v.paquete) p += ` Su empaque original incluye ${S(v.paquete)}` + (v.presentacion ? ` en su presentación de ${S(v.presentacion)}` : '') + ' para ser utilizado conforme al instructivo del fabricante.';
-      else p += (v.presentacion ? ` Se presenta en ${S(v.presentacion)}.` : '') + ' Debe utilizarse conforme al instructivo del fabricante.';
-      return assemble(p, 'Especificaciones técnicas:', [
-        ['Marca', v.marca], ['Modelo', v.modelo], ['Tipo de Dispositivo', v.tipo],
-        ['Tecnología / Zona de medición', v.tecnologia], ['Contenido del Paquete', v.paquete], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], secs([['Especificaciones adicionales:', v.extra]]));
+      let p = disIntro(v, S, true) + '.';
+      if (v.uso) p += ` Su uso previsto es ${S(lc(v.uso))}.`;
+      if (disPresent(v, S)) p += ` Se presenta ${disPresent(v, S)}.`;
+      const car = disList(v.caracteristicas), pk = disList(v.paquete), extras = [];
+      const lst = (h, a) => `<h2>${h}</h2>\n<ul>\n${a.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`;
+      if (specRows(v.especificaciones).length) extras.push(specHtml(v.especificaciones));
+      if (pk.length) extras.push(lst('Contenido del paquete:', pk));
+      if (v.compatibilidad) extras.push(`<h2>Compatibilidad:</h2>\n<p>${escT(v.compatibilidad)}</p>`);
+      if (v.modo) extras.push(`<h2>Instrucciones de uso:</h2>\n<p>${escT(v.modo)}</p>`);
+      if (v.extra) extras.push(`<h2>Especificaciones adicionales:</h2>\n<p>${escT(v.extra)}</p>`);
+      if (v.declarada) extras.push(`<h2>Declarado en el empaque:</h2>\n<p>${escT(v.declarada)}</p>`);
+      if (v.advertencias) extras.push(`<h2>Advertencias:</h2>\n<p>${escT(v.advertencias)}</p>`);
+      extras.push(`<p>${LEGEND.disMc}${disMedidor(v) ? ' ' + LEGEND.disMedico : ''}</p>`);
+      const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
+        ['Marca', v.marca], ['Modelo', v.modelo], ['Tipo de dispositivo', v.tipo], ['Tecnología o zona de medición', v.tecnologia], ['Dirigido a', v.publico], ['Registro sanitario', v.registro],
+        ['Contenido', v.contenido], ['Presentación', v.presentacion], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+      ])}\n</ul>`;
+      return [`<p>${p}</p>`, car.length ? lst('Características principales:', car) : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
     }
   },
 
@@ -802,7 +849,7 @@ Object.keys(CATS).forEach(id => { CATS[id].id = id; });
 {
   const opt = {
     med: [['leyenda', 'volumen'], ['volumen', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'categoria', 'leyenda']],
-    dis: [['extra'], ['extra', 'categoria']],
+    dis: [['uso', 'publico', 'contenido', 'presentacion', 'paquete', 'compatibilidad', 'extra'], ['publico', 'contenido', 'registro', 'especificaciones', 'compatibilidad', 'modo', 'advertencias', 'declarada', 'extra', 'categoria']],
     cos: [['atributo', 'variante', 'fps', 'nivel', 'espectro', 'envase', 'zona', 'modo', 'comercial'], ['atributo', 'ingredientes', 'beneficios', 'atributos', 'zona', 'variante', 'envase', 'fps', 'nivel', 'espectro', 'resistencia', 'pao', 'origen', 'modo', 'inci', 'precauciones', 'comercial', 'categoria']],
     sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'publico'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'categoria']],
     beb: [['producto', 'beneficio', 'atributo', 'etapa', 'publico', 'envase', 'descripcion', 'caracteristicas', 'modo', 'porcion', 'porciones'], ['producto', 'beneficio', 'atributo', 'etapa', 'publico', 'envase', 'descripcion', 'caracteristicas', 'beneficios', 'atributos', 'leyenda', 'ingredientes', 'alergenos', 'modo', 'porcion', 'porciones', 'nutrimental', 'categoria']],
@@ -838,6 +885,12 @@ const PACK_QTY = String.raw`(?:(?:frasco|caja|botella|bolsa|sobre|lata|tubo|bote
 const PACK_END = new RegExp(`\\s*[-–,(]?\\s*(${PACK_QTY})\\s*\\)?\\s*$`, 'i'), PACK_ALL = new RegExp(`^\\s*${PACK_QTY}\\s*$`, 'i');
 const noQty = n => !/\d/.test(n) && !/\b(?:[uú]nic[oa]|par|kit|pieza|unidad)\b/i.test(n);
 function placeFields(c, raw) {
+  if (c.id === 'dis') {
+    const cont = String(raw.contenido ?? '').trim(), pres = String(raw.presentacion ?? '').replace(/\s+/g, ' ').trim(), m = !cont && pres ? pres.match(COS_PACK) : null;
+    if (!m) return { raw, changes: [] };
+    const lbl = k => (c.fields.find(f => f.key === k) || {}).label || k;
+    return { raw: { ...raw, presentacion: m[1].trim(), contenido: m[2].trim() }, changes: [{ label: lbl('presentacion'), from: pres, to: m[1].trim() }, { label: lbl('contenido'), from: pres, to: m[2].trim() }] };
+  }
   const tk = c.id === 'hig' && raw.tipo ? 'tipo' : TIPO_KEY[c.id], out = { raw, changes: [] };
   if (!tk) return out;
   let t = String(raw[tk] ?? '').replace(/\s+/g, ' ').trim(), n = String(raw.contenido ?? '').replace(/\s+/g, ' ').trim();
@@ -872,7 +925,8 @@ function values(c, raw, style, keep) {
     const orig = String(r).replace(/\s+/g, ' ').trim();
     let t = orig;
     if (t) {
-      if (fd.upper) t = t.toUpperCase().replace(/\s+/g, '');
+      if (fd.model) { /* el modelo se conserva exactamente como se escribió */ }
+      else if (fd.upper) t = t.toUpperCase().replace(/\s+/g, '');
       else if (fd.raw) { /* lista de ingredientes: se conserva tal cual */ }
       else if (fd.sentence) t = normUnits(sentenceCase(t, keep), style);
       else {
@@ -1058,14 +1112,23 @@ const FAQ_RULES = {
     [[`¿${n} es un medicamento?`, `¿Se considera ${n} un medicamento?`], `No. ${LEGEND.supResp}`],
     [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.supConservacion]
   ],
-  dis: (v, n) => [
-    v.uso && [[`¿Para qué se usa ${n}?`, `¿Cuál es el uso previsto de ${n}?`], [`Está diseñado para el uso previsto de ${lc(v.uso)}.`, `Su uso previsto es ${lc(v.uso)}.`]],
-    v.tecnologia && [[`¿Qué tecnología tiene ${n}?`, `¿Cómo mide ${n}?`], [`Es de tecnología ${lc(v.tecnologia)}.`, `Su tecnología es ${lc(v.tecnologia)}.`]],
-    v.paquete && [[`¿Qué incluye el empaque de ${n}?`, `¿Qué trae ${n} en la caja?`], [`Incluye ${lc(v.paquete)}.`, `El empaque contiene ${lc(v.paquete)}.`]],
-    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
-    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
-    [[`¿Cómo se debe utilizar ${n}?`, `¿Cómo se usa ${n}?`], LEGEND.disMc]
-  ]
+  dis: (v, n) => {
+    const plural = disPlural(v), rango = specRows(v.especificaciones).filter(r => /rango/i.test(r[0]));
+    return [
+      v.tipo && [[`¿Qué es ${n}?`, `¿Qué tipo de producto es ${n}?`], [`${plural ? 'Son' : 'Es'} ${plural ? 'unas' : (DIS_ART[firstWord(v.tipo)] || 'un')} ${lc(v.tipo)}${v.fabricante ? ` de ${v.fabricante}` : ''}${disTec(v) ? `, ${lc(disTec(v))}` : ''}.`]],
+      v.uso && [[`¿Para qué sirve ${n}?`, `¿Cuál es el uso previsto de ${n}?`], [`Su uso previsto es ${lc(v.uso)}.`, `Está diseñado para ${lc(v.uso)}.`]],
+      v.registro && [[`¿${n} tiene registro sanitario?`, `¿Cuál es el registro sanitario de ${n}?`], `Según su empaque, su registro sanitario es ${String(v.registro).replace(/^(?:registro sanitario|reg(?:istro)?\.?(?:\s*(?:no|n[uú]m)\.?)?)\s*:?\s*/i, '').trim()}.`],
+      ...rango.map(r => [[`¿Cuál es el ${lc(r[0])} de ${n}?`, `¿Qué ${lc(r[0])} tiene ${n}?`], `${r[1]}.`]),
+      disList(v.paquete).length && [[`¿Qué incluye el empaque de ${n}?`, `¿Qué trae ${n} en la caja?`], [`Incluye ${disList(v.paquete).map(lc).join(', ')}.`, `El empaque contiene ${disList(v.paquete).map(lc).join(', ')}.`]],
+      v.compatibilidad && [[`¿Con qué es compatible ${n}?`, `¿${n} es compatible con otros productos?`], `Es compatible con ${lc(v.compatibilidad)}.`],
+      v.contenido && [[/pieza|unidad|tira|lanceta/i.test(v.contenido) ? `¿Cuántas piezas trae ${n}?` : `¿Cuánto trae ${n}?`, `¿Qué contenido tiene ${n}?`], [`Se presenta ${disPresent(v)}.`]],
+      v.modo && [[`¿Cómo se usa ${n}?`, `¿Cómo se utiliza ${n}?`], v.modo],
+      v.advertencias && [[`¿Qué advertencias tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.advertencias],
+      v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+      v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
+      !v.modo && [[`¿Cómo se debe utilizar ${n}?`, `¿Cómo se usa ${n}?`], LEGEND.disMc]
+    ];
+  }
 };
 const faqGeneric = (v, n) => [
   v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
@@ -1167,10 +1230,17 @@ function lint(c, raw) {
     if (!t) continue;
     RED.forEach(([re, name, kind]) => { if (re.test(t)) out[kind].push({ term: name, field: fd.label }); });
     AMBER.forEach(([re, name]) => { if (re.test(t)) out.amber.push({ term: name, field: fd.label }); });
+    if (c.id === 'dis') DIS_AMBER.forEach(([re, name]) => { if (re.test(t)) out.amber.push({ term: name, field: fd.label }); });
     if (c.id === 'cos') {
       COS_CLAIM.forEach(([re, name]) => { if (re.test(t)) out.claim.push({ term: name, field: fd.label }); });
       COS_MED.forEach(([re, name]) => { if (re.test(t)) out.med.push({ term: name, field: fd.label }); });
     }
+  }
+  if (c.id === 'dis') {
+    if (!String(raw.registro || '').trim()) out.check.push('No capturaste el registro sanitario. Los dispositivos médicos suelen requerirlo (COFEPRIS reclasificó algunos que ya no lo necesitan). La ficha sale igual; confirma con Regulatorio.');
+    const sinBarra = String(raw.especificaciones || '').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.includes('|'));
+    if (sinBarra.length) out.check.push(`En «Especificaciones técnicas» estas líneas no llevan «|» y no salen en la tabla: ${sinBarra.slice(0, 2).map(x => '«' + x + '»').join(', ')}. Escríbelas como «Nombre | Valor».`);
+    if (disMedidor(raw) && !specRows(raw.especificaciones).some(r => /rango/i.test(r[0]))) out.check.push('Es un dispositivo de medición y las especificaciones no incluyen el rango de medición. Es lo que más se compara.');
   }
   if (c.id === 'hig') {
     cosAttrs(raw).bad.forEach(b => out.check.push(`«${b.attr}», pero la lista de ingredientes (INCI) incluye ${ATTR_WHY[b.why]}. Una de las dos está mal: esa característica no se publica hasta que lo resuelvas.`));
@@ -1374,6 +1444,11 @@ const META_BEB = {
   mt: { tpl: '{marca} {nombre_seo}\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
   md: { tpl: '{marca} {nombre}\n{beneficio_pub}\n{presentacion}\n[Compra en {tienda}]', sep: '. ', max: 155 }
 };
+/* Dispositivos: marca, modelo y tipo primero; la tecnología y la cantidad distinguen a cada producto. */
+const META_DIS = {
+  mt: { tpl: '{marca} {modelo} {nombre_seo}\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
+  md: { tpl: '{marca} {modelo} {nombre_seo}\n{uso_pub}\n[Compra en {tienda}]', sep: '. ', max: 155 }
+};
 const ALT_DEF = {
   med: '{marca} {concentracion}\n{principio}\n{contenido:lc}',
   dis: '{marca} {modelo} {tipo:lc}\n{tecnologia:lc}',
@@ -1385,8 +1460,8 @@ const ALT_DEF = {
 };
 const defMetaCat = id => ({
   confirmed: id === 'med',
-  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : id === 'hig' ? META_HIG.mt : id === 'beb' ? META_BEB.mt : META_GEN.mt) },
-  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : id === 'hig' ? META_HIG.md : id === 'beb' ? META_BEB.md : META_GEN.md) },
+  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : id === 'hig' ? META_HIG.mt : id === 'beb' ? META_BEB.mt : id === 'dis' ? META_DIS.mt : META_GEN.mt) },
+  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : id === 'hig' ? META_HIG.md : id === 'beb' ? META_BEB.md : id === 'dis' ? META_DIS.md : META_GEN.md) },
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
 /* Lo guardado con la plantilla genérica de antes pasa a la nueva de suplementos, salvo que la persona ya haya confirmado esa estructura. */
@@ -1410,6 +1485,11 @@ function migrateMeta(m) {
   if (beb && !beb.confirmed) {
     if (beb.mt && beb.mt.tpl === META_GEN.mt.tpl) beb.mt = { ...beb.mt, tpl: META_BEB.mt.tpl };
     if (beb.md && beb.md.tpl === META_GEN.md.tpl) beb.md = { ...beb.md, tpl: META_BEB.md.tpl };
+  }
+  const dis = m && m.cats && m.cats.dis;
+  if (dis && !dis.confirmed) {
+    if (dis.mt && dis.mt.tpl === META_GEN.mt.tpl) dis.mt = { ...dis.mt, tpl: META_DIS.mt.tpl };
+    if (dis.md && dis.md.tpl === META_GEN.md.tpl) dis.md = { ...dis.md, tpl: META_DIS.md.tpl };
   }
   return m;
 }
@@ -1502,6 +1582,11 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
   tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';
   tokens.variante_seo = [dv.sabor || dv.variante, dv.talla, dv.contenido].filter(Boolean).join(', ');
+  if (c.id === 'dis') {
+    tokens.nombre_seo = dv.tipoCorto || dv.tipo || '';
+    tokens.variante_seo = [cap(disTec(dv)), dv.contenido].filter(Boolean).join(', ');
+    tokens.uso_pub = cap(dv.uso || '');
+  }
   if (c.id === 'beb') {
     const nm = tipo => mergeTipo(dv.producto, tipo), ben = bebBeneficio(dv);
     tokens.nombre = nm(dv.tipo);
@@ -2067,6 +2152,8 @@ const api = {
   META_COS,
   META_HIG,
   META_BEB,
+  META_DIS,
+  specRows,
   RUTINAS,
   rutinaDe,
   mergeTipo,

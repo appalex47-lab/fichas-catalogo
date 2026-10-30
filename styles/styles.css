@@ -541,3 +541,5 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 .bell-pop li{padding:8px 0;border-top:1px solid var(--line,#e4e7ec);font-size:13px}
 .bell-pop li label{display:flex;gap:8px;align-items:flex-start}
 .bell-pop .bell-d{display:block;color:var(--muted,#555)}
+
+.tabla-especificaciones{width:100%;border-collapse:collapse;margin:8px 0}.tabla-especificaciones th,.tabla-especificaciones td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.tabla-especificaciones th{font-weight:600;width:40%;text-transform:none;letter-spacing:0;font-size:inherit}
