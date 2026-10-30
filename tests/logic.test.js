@@ -128,8 +128,8 @@ test('cosméticos: las secciones nuevas son opcionales y no alteran el texto apr
   const base = sinFaq(F.computeFor('cos', cos, keep, meta).mg.html);
   assert.ok(!/Ingredientes:|Modo de uso:|Precauciones:|Protección solar:/.test(base));
   const conExtras = F.computeFor('cos', { ...cos, inci: 'AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891', modo: 'APLICAR SOBRE LA PIEL LIMPIA. USAR DOS VECES AL DÍA.', precauciones: 'Evitar el contacto con los ojos.', fps: '50+', nivel: 'Muy alta' }, keep, meta).mg.html;
-  assert.ok(sinFaq(conExtras).startsWith(base), 'el párrafo y la lista aprobados quedan igual');
-  assert.match(conExtras, /<h2>Ingredientes:<\/h2>\n<p>AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891<\/p>/);
+  assert.ok(/<h2>Ficha técnica del producto:<\/h2>/.test(conExtras) && /Este producto no es un medicamento\./.test(conExtras), 'la ficha y el aviso siguen');
+  assert.match(conExtras, /<h2>Ingredientes:<\/h2>\n<p id="lista-ingredientes">AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891<\/p>/);
   assert.match(conExtras, /<h2>Modo de uso:<\/h2>\n<p>Aplicar sobre la piel limpia\. Usar dos veces al día\.<\/p>/);
   assert.match(conExtras, /<li><strong>Nivel de protección:<\/strong> Muy alta<\/li>/);
 });
@@ -174,7 +174,7 @@ test('extracción de cosméticos: FPS como campo propio', () => {
   const r = F.extractRaw('PROTECTOR SOLAR FACIAL SPF 50+ FCO 50ML', {});
   assert.equal(r.cat, 'cos');
   assert.equal(r.fields.fps, '50+');
-  assert.equal(r.fields.atributo, 'FPS 50+');
+  assert.equal(r.fields.atributo, undefined, 'el FPS ya no se copia al activo principal');
   assert.equal(r.fields.tipo, 'Protector solar');
 });
 
@@ -190,7 +190,7 @@ const cerave = { marca: 'CeraVe', producto: 'Crema Hidratante', tipo: 'Crema', a
 
 test('nombre y tipo iguales: el título no repite el tipo', () => {
   const r = F.computeFor('cos', cerave, keep, meta);
-  assert.equal(r.title.title, "CeraVe Crema Hidratante | Ceramidas | 454 g | L'Oréal");
+  assert.equal(r.title.title, 'CeraVe Crema Hidratante | Con ceramidas | 454 g');
   assert.deepEqual(r.title.missing, []);
   assert.deepEqual(r.title.segs[0].omitted, ['Tipo de producto']);
 });
@@ -198,12 +198,12 @@ test('nombre y tipo iguales: el título no repite el tipo', () => {
 test('nombre y tipo: basta con capturar uno de los dos', () => {
   const soloNombre = F.computeFor('cos', { ...cerave, tipo: '' }, keep, meta);
   const soloTipo = F.computeFor('cos', { ...cerave, producto: '', tipo: 'Crema hidratante' }, keep, meta);
-  assert.equal(soloNombre.title.title, "CeraVe Crema Hidratante | Ceramidas | 454 g | L'Oréal");
-  assert.equal(soloTipo.title.title, "CeraVe Crema hidratante | Ceramidas | 454 g | L'Oréal");
+  assert.equal(soloNombre.title.title, 'CeraVe Crema Hidratante | Con ceramidas | 454 g');
+  assert.equal(soloTipo.title.title, 'CeraVe Crema hidratante | Con ceramidas | 454 g');
   assert.deepEqual(soloNombre.title.missing, []);
   assert.deepEqual(soloTipo.title.missing, []);
   const ninguno = F.computeFor('cos', { ...cerave, producto: '', tipo: '' }, keep, meta);
-  assert.deepEqual(ninguno.title.missing, ['Nombre del producto o tipo de producto']);
+  assert.deepEqual(ninguno.title.missing, ['Línea o nombre del producto o tipo de producto']);
 });
 
 test('nombre y tipo distintos se conservan, y la marca al inicio del nombre no se duplica', () => {
@@ -213,11 +213,11 @@ test('nombre y tipo distintos se conservan, y la marca al inicio del nombre no s
 
 test('nombre y tipo iguales: descripción de Merchant Center, metas y alt tampoco lo repiten', () => {
   const r = F.computeFor('cos', cerave, keep, meta);
-  assert.match(r.mc.text, /^CeraVe Crema Hidratante Ceramidas 454 g - L'Oréal\./);
-  assert.equal(r.meta.mt.text, 'CeraVe Crema Hidratante | Ceramidas');
+  assert.match(r.mc.text, /^CeraVe Crema Hidratante es una crema, formulada con ceramidas\./);
+  assert.equal(r.meta.mt.text, 'CeraVe Crema Hidratante con ceramidas | 454 g');
   assert.equal(r.meta.alt.text, 'CeraVe Crema Hidratante, 454 g');
-  assert.match(r.mg.html, /Nombre del Producto:<\/strong> Crema Hidratante/, 'Magento conserva ambas filas aprobadas');
-  assert.match(r.mg.html, /Tipo de Producto:<\/strong> Crema</);
+  assert.match(r.mg.html, /Línea o nombre:<\/strong> Crema Hidratante/, 'Magento conserva ambas filas');
+  assert.match(r.mg.html, /Tipo de producto:<\/strong> Crema</);
 });
 
 test('extracción de cosméticos: tipos compuestos', () => {
@@ -776,7 +776,7 @@ test('Merchant Center: medicamentos y dermocosméticos tampoco repiten «Present
   assert.match(med, /Forma farmacéutica: Solución inyectable\. Vía de administración: Subcutánea\./);
   const cos = F.computeFor('cos', { marca: 'La Roche-Posay', producto: 'Hyalu B5', atributo: 'Ácido hialurónico', contenido: 'Frasco 30 mL', fabricante: "L'Oréal", piel: 'Piel sensible' }, keep, meta).mc.text;
   assert.ok(!/Presentación/.test(cos));
-  assert.match(cos, /Frasco 30 mL - L'Oréal/);
+  assert.match(cos, /Se presenta en un frasco de 30 mL\./);
 });
 
 /* ---------- Ficha de Fresubin: frase de presentación, preguntas, alérgenos y composición resumida ---------- */
@@ -855,4 +855,126 @@ test('tipo y contenido: lo mezclado se acomoda solo y deja constancia', () => {
   assert.deepEqual(g({ contenido: 'Fórmula hipercalórica' }).slice(0, 2), ['Fórmula hipercalórica', ''], 'un contenido sin cantidad pasa a tipo si el tipo está vacío');
   assert.deepEqual(g({ componente: 'Colágeno', contenido: 'Frasco con 30 cápsulas' }).slice(2), [0]);
   assert.match(run({ componente: '200 mL', contenido: 'Fórmula hipercalórica' }).title.title, /^X Fórmula hipercalórica \| /);
+});
+
+/* ---------- Cosméticos: ficha homologada ---------- */
+const COSX = {
+  serum: { marca: 'La Roche-Posay', producto: 'Hyalu B5', tipo: 'Sérum facial', zona: 'Rostro y cuello', beneficio: 'Hidratación', atributo: 'Ácido hialurónico', ingredientes: 'Ácido hialurónico, vitamina B5 y madecasósido', piel: 'Todo tipo de piel', textura: 'Ligera y de rápida absorción', contenido: '30 mL', envase: 'Frasco con gotero', fabricante: "L'Oréal", beneficios: 'Hidratación para todo tipo de piel\nTextura ligera' },
+  locion: { marca: 'CeraVe', producto: 'Loción hidratante', tipo: 'Loción corporal', atributo: 'Ceramidas', piel: 'Piel normal a seca', contenido: '473 mL', envase: 'Botella', fabricante: "L'Oréal" },
+  solar: { marca: 'Marca Ejemplo', producto: 'Fluido Facial', tipo: 'Protector solar facial', beneficio: 'Protección muy alta', fps: '50+', nivel: 'Muy alta', espectro: 'Amplio espectro (UVA y UVB)', modo: 'Aplicar generosamente 15 minutos antes de la exposición al sol. Reaplicar cada 2 horas.', precauciones: 'Uso externo.', piel: 'Piel mixta a grasa', contenido: '50 mL', envase: 'Tubo', fabricante: 'Laboratorios Ejemplo' },
+  base: { marca: 'Marca Ejemplo', producto: 'Satín', tipo: 'Base de maquillaje fluida', tipoCorto: 'Base fluida', beneficio: 'Cobertura media', variante: 'Tono 120 Beige', contenido: '30 mL', envase: 'Frasco con bomba', fabricante: 'Laboratorios Ejemplo', piel: 'Todo tipo de piel' }
+};
+const mt = () => { const m = F.defMeta(); m.tienda = 'Farmacias Especializadas'; return m; };
+
+test('cosméticos: el título no repite el tipo, lleva FPS y variante, y no lleva laboratorio', () => {
+  const t = k => F.computeFor('cos', COSX[k], keep, mt()).title;
+  assert.equal(t('serum').title, 'La Roche-Posay Hyalu B5 Sérum facial | Con ácido hialurónico | 30 mL');
+  assert.equal(t('locion').title, 'CeraVe Loción hidratante corporal | Con ceramidas | 473 mL');
+  assert.equal(t('solar').title, 'Marca Ejemplo Fluido Facial Protector solar | FPS 50+ | 50 mL');
+  assert.equal(t('base').title, 'Marca Ejemplo Satín Base de maquillaje fluida | Tono 120 Beige | 30 mL');
+  assert.deepEqual(t('base').softDropped, ['Cobertura media'], 'lo opcional se omite si el título pasa de 70 caracteres y se avisa');
+  assert.ok(t('serum').title.length <= 70 && !/L'Oréal/.test(t('serum').title));
+});
+
+test('cosméticos: basta con el beneficio, el activo o el FPS, y sin ninguno falta el dato', () => {
+  const base = { marca: 'X', producto: 'Y', tipo: 'Crema', contenido: '50 g', fabricante: 'Z' };
+  assert.deepEqual(F.computeFor('cos', base, keep, mt()).title.missing, ['Activo principal o beneficio principal o factor de protección solar (FPS)']);
+  assert.deepEqual(F.computeFor('cos', { ...base, beneficio: 'Hidratación' }, keep, mt()).title.missing, []);
+  assert.deepEqual(F.computeFor('cos', { ...base, fps: '30' }, keep, mt()).title.missing, []);
+  assert.ok(F.computeFor('cos', base, keep, mt()).mg.blocked, 'Magento no sale sin beneficio, activo ni FPS');
+  assert.equal(F.computeFor('cos', { ...base, beneficio: 'Hidratación' }, keep, mt()).mg.blocked, null);
+});
+
+test('cosméticos: la presentación se separa de la cantidad y deja constancia', () => {
+  const r = F.computeFor('cos', { ...COSX.serum, contenido: 'Frasco con gotero de 30 mL', envase: '' }, keep, mt());
+  assert.equal(r.vt.v.contenido, '30 mL');
+  assert.equal(r.vt.v.envase, 'Frasco con gotero');
+  assert.ok(r.vt.changes.some(c => c.label === 'Contenido neto' && c.to === '30 mL'));
+  for (const [raw, env, cont] of [['Botella con 473 mL', 'Botella', '473 mL'], ['Tubo de 50 mL', 'Tubo', '50 mL'], ['Frasco 454 g', 'Frasco', '454 g']]) {
+    const x = F.computeFor('cos', { ...COSX.locion, contenido: raw, envase: '' }, keep, mt()).vt.v;
+    assert.deepEqual([x.envase, x.contenido], [env, cont], raw);
+  }
+  assert.equal(F.computeFor('cos', { ...COSX.locion, contenido: 'Botella con 473 mL', envase: 'Pump' }, keep, mt()).vt.v.envase, 'Pump', 'si ya hay presentación no se pisa');
+  assert.equal(F.computeFor('cos', { ...COSX.locion, contenido: '2 x 473 mL', envase: '' }, keep, mt()).vt.v.contenido, '2 x 473 mL');
+});
+
+test('cosméticos: meta title con la variante primero y meta description con frases completas', () => {
+  const m = k => F.computeFor('cos', COSX[k], keep, mt()).meta;
+  assert.equal(m('serum').mt.text, 'La Roche-Posay Hyalu B5 Sérum facial | 30 mL');
+  assert.match(m('serum').notes.join(' '), /Meta title: se omitió «Farmacias Especializadas», «con ácido hialurónico»/);
+  assert.equal(m('solar').mt.text, 'Marca Ejemplo Fluido Facial Protector solar FPS 50+ | 50 mL');
+  assert.equal(m('base').mt.text, 'Marca Ejemplo Satín Base fluida | Tono 120 Beige, 30 mL', 'el tipo corto deja lugar a la variante');
+  assert.equal(m('locion').md.text, 'CeraVe Loción hidratante corporal con ceramidas. Hidratación sin definir. Botella de 473 mL. Compra en Farmacias Especializadas.'.replace('Hidratación sin definir', 'Para piel normal a seca'));
+  assert.ok(m('serum').md.text.length <= 155);
+  const sinBen = F.computeFor('cos', { ...COSX.serum, beneficio: '', piel: '' }, keep, mt()).meta.md.text;
+  assert.ok(!/\. \./.test(sinBen) && !/\. para /.test(sinBen), 'sin beneficio ni piel no queda una frase suelta');
+});
+
+test('cosméticos: la descripción de Merchant Center tiene género, no repite el título y cierra con el aviso', () => {
+  const mc = k => F.computeFor('cos', COSX[k], keep, mt()).mc.text;
+  assert.match(mc('serum'), /^La Roche-Posay Hyalu B5 es un sérum facial, formulado con ácido hialurónico, vitamina B5 y madecasósido, para todo tipo de piel\./);
+  assert.match(mc('locion'), /^CeraVe Loción hidratante es una loción corporal, formulada con ceramidas, para piel normal a seca\./);
+  assert.match(mc('solar'), /es un protector solar facial, con FPS 50\+ \(protección muy alta\) y amplio espectro \(UVA y UVB\), para piel mixta a grasa\./);
+  assert.match(mc('solar'), /Reaplicar cada 2 horas\. Se presenta en un tubo de 50 mL\. Este producto no es un medicamento\.$/);
+  assert.ok(!/30 mL - |L'Oréal/.test(mc('serum')), 'sin la cabecera repetida del título ni el laboratorio');
+  assert.match(mc('base'), /^Marca Ejemplo Satín es una base de maquillaje fluida en tono 120 Beige, para todo tipo de piel\./);
+  assert.match(F.computeFor('cos', { ...COSX.serum, tipo: 'Cosa rara' }, keep, mt()).mc.text, /es un cosa rara|es un producto/, 'un tipo fuera de la lista no rompe la redacción');
+});
+
+test('cosméticos: la ficha de Magento ordena beneficios, ficha técnica, uso, ingredientes y aviso', () => {
+  const h = F.computeFor('cos', { ...COSX.serum, modo: 'Aplicar por la mañana y por la noche.', inci: 'Aqua, Glycerin', precauciones: 'Uso externo.', atributos: 'Sin aceites', pao: '12 meses', origen: 'Francia' }, keep, mt()).mg.html;
+  const pos = re => h.search(re);
+  const orden = [/<p><strong>La Roche-Posay Hyalu B5<\/strong> es un sérum facial de <strong>L'Oréal<\/strong>/, /<h2>Beneficios principales:/, /<h2>Ficha técnica del producto:/, /<h2>Modo de uso:/, /<h2>Ingredientes:/, /<h2>Características:/, /<h2>Precauciones:/, /<p>Este producto no es un medicamento\.<\/p>/, /<h2>Preguntas frecuentes:/].map(pos);
+  assert.ok(orden.every(n => n >= 0) && orden.every((n, i) => !i || n > orden[i - 1]), 'orden: ' + orden.join(','));
+  assert.match(h, /<li>Hidratación para todo tipo de piel<\/li>/);
+  assert.match(h, /Zona de aplicación:<\/strong> Rostro y cuello/);
+  assert.match(h, /Presentación:<\/strong> Frasco con gotero/);
+  assert.match(h, /Duración después de abierto \(PAO\):<\/strong> 12 meses/);
+  assert.match(h, /Se presenta en un frasco con gotero de <strong>30 ml<\/strong>\./);
+  assert.ok(!/dermatológico|Esta fórmula en tipo/.test(h));
+  const sol = F.computeFor('cos', COSX.solar, keep, mt()).mg.html;
+  assert.match(sol, /<h2>Protección solar:<\/h2>[\s\S]*Espectro:<\/strong> Amplio espectro \(UVA y UVB\)/);
+});
+
+test('cosméticos: preguntas frecuentes de lo capturado, con variante y sin inventar', () => {
+  const faq = k => F.computeFor('cos', COSX[k], keep, mt()).mg.faq.map(([q, a]) => q + ' ' + a).join('\n');
+  assert.match(faq('serum'), /¿Para qué sirve La Roche-Posay Hyalu B5\?[^\n]*Ofrece hidratación|¿Qué beneficio ofrece[^\n]*Ofrece hidratación/);
+  assert.match(faq('serum'), /¿Dónde se aplica|¿En qué zona se usa/);
+  assert.match(faq('solar'), /Factor de protección solar \(FPS\) 50\+\. Nivel de protección: muy alta\. Amplio espectro \(UVA y UVB\)\./);
+  assert.match(faq('base'), /¿Qué tono es[^\n]*Es el tono 120 Beige\./);
+  assert.match(faq('locion'), /No\. Este producto no es un medicamento\./);
+  assert.ok(!/¿Dónde se aplica/.test(faq('locion')), 'sin zona capturada no hay pregunta');
+  const todas = F.computeFor('cos', { ...COSX.serum, atributos: 'Sin aceites, No comedogénico' }, keep, mt()).mg.faq.map(([q, a]) => q + ' ' + a).join('\n');
+  assert.match(todas, /Sin aceites, No comedogénico\./);
+});
+
+test('cosméticos: las características declaradas se revisan contra el INCI y no salen si se contradicen', () => {
+  const v = { ...COSX.serum, atributos: 'Sin fragancia, Sin aceites', inci: 'Aqua / Water, Glycerin, Parfum' };
+  const r = F.computeFor('cos', v, keep, mt());
+  assert.ok(!/Sin fragancia/.test(r.mg.html), 'el atributo en conflicto no se publica');
+  assert.match(r.mg.html, /<li>Sin aceites<\/li>/);
+  assert.ok(!/Sin fragancia/.test(r.mg.faq.map(x => x.join(' ')).join(' ')));
+  assert.match(F.lint(F.CATS.cos, v).check.join(' '), /«Sin fragancia», pero la lista de ingredientes \(INCI\) incluye fragancia/);
+  assert.equal(F.lint(F.CATS.cos, { ...v, inci: 'Aqua, Glycerin' }).check.filter(x => /fragancia/.test(x)).length, 0);
+  assert.equal(F.cosAttrs({ atributos: 'Sin fragancia' }).ok.length, 1, 'sin INCI no se verifica');
+  assert.match(F.lint(F.CATS.cos, { ...v, inci: 'Aqua, Linalool' }).check.join(' '), /linalool o limonene/);
+  assert.match(F.lint(F.CATS.cos, { ...COSX.serum, atributos: 'Sin alcohol', inci: 'Aqua, Alcohol Denat.' }).check.join(' '), /alcohol/);
+  assert.equal(F.lint(F.CATS.cos, { ...COSX.serum, atributos: 'Sin alcohol', inci: 'Aqua, Cetearyl Alcohol' }).check.filter(x => /alcohol/.test(x)).length, 0, 'un alcohol graso no es alcohol denat.');
+});
+
+test('cosméticos: lenguaje terapéutico en beneficios y zona que no coincide con el tipo', () => {
+  const L = F.lint(F.CATS.cos, { ...COSX.serum, beneficios: 'Ayuda a tratar el acné\nHidrata' });
+  assert.ok(L.med.some(x => x.term === 'trata' && x.field === 'Beneficios'));
+  assert.match(F.lint(F.CATS.cos, { ...COSX.serum, zona: 'Cuerpo' }).check.join(' '), /tipo «Sérum facial» y la zona de aplicación «Cuerpo» no coinciden/);
+  assert.equal(F.lint(F.CATS.cos, COSX.serum).check.length, 0);
+  assert.equal(F.lint(F.CATS.cos, { ...COSX.locion, zona: 'Rostro y cuerpo' }).check.length, 0);
+});
+
+test('cosméticos: la plantilla de meta genérica guardada pasa a la nueva si no está confirmada', () => {
+  const m = F.defMeta(); m.cats.cos.mt = { ...F.META_GEN.mt }; m.cats.cos.md = { ...F.META_GEN.md };
+  F.migrateMeta(m);
+  assert.equal(m.cats.cos.mt.tpl, F.META_COS.mt.tpl);
+  const c = F.defMeta(); c.cats.cos.confirmed = true; c.cats.cos.mt = { ...F.META_GEN.mt };
+  F.migrateMeta(c);
+  assert.equal(c.cats.cos.mt.tpl, F.META_GEN.mt.tpl, 'confirmada: no se toca');
 });

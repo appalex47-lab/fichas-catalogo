@@ -63,7 +63,7 @@ function expandPres(t) {
     [/\bSUSP\.?(?![\p{L}])/giu, 'Suspensión'],
     [/\bJBE\.?(?![\p{L}])/giu, 'Jarabe'],
     [/\bC\/\s*(\d+)/gi, 'con $1'],
-    [/\bX\s*(\d+)/gi, 'con $1']
+    [/(?<!\d\s*)\bX\s*(\d+)/gi, 'con $1']
   ];
   rules.forEach(([re, to]) => { s = s.replace(re, to); });
   s = s.replace(/\bcon (\d+)\s*$/i, 'con $1 piezas');
@@ -214,6 +214,7 @@ const LEGEND = {
   disMc: 'Utilice el dispositivo conforme al instructivo del fabricante.',
   cosMc: 'Aplicar conforme a las indicaciones del fabricante.',
   higMc: 'Utilizar conforme a las indicaciones del fabricante.',
+  cosResp: 'Este producto no es un medicamento.',
   supResp: 'El consumo de este producto es responsabilidad de quien lo recomienda y de quien lo usa. Este producto no es un medicamento.',
   supConservacion: 'Consérvese bien cerrado en un lugar fresco y seco. No se deje al alcance de los niños.'
 };
@@ -247,6 +248,63 @@ function compSec(t) {
 const secs = pairs => pairs.filter(([, t]) => t).map(([h, t]) => `<h2>${h}</h2>\n<p>${escT(t)}</p>`);
 /* Lista con viñetas a partir de un texto separado por comas, punto y coma o saltos de línea. */
 const listSec = (h, text) => { const items = String(text || '').split(/\s*[,;\n]+\s*/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean).map(cap); return items.length ? [`<h2>${h}</h2>\n<ul>\n${items.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>`] : []; };
+/* ---------- Cosméticos: nombre sin repetir, género del tipo, presentación y atributos verificados ---------- */
+/* Artículo del tipo de producto por su primera palabra. Si no está en la lista se redacta sin género («con …» en vez de «formulado con …»). */
+const COS_ART = { serum: 'un', locion: 'una', crema: 'una', gel: 'un', protector: 'un', bloqueador: 'un', base: 'una', shampoo: 'un', champu: 'un', acondicionador: 'un', mascarilla: 'una', limpiador: 'un', tonico: 'un', agua: 'una', aceite: 'un', balsamo: 'un', exfoliante: 'un', contorno: 'un', labial: 'un', rubor: 'un', sombra: 'una', delineador: 'un', corrector: 'un', polvo: 'un', spray: 'un', emulsion: 'una', espuma: 'una', jabon: 'un', desodorante: 'un', fluido: 'un', leche: 'una', bruma: 'una', esencia: 'una', ampolleta: 'una', parche: 'un', maquillaje: 'un', tratamiento: 'un', repelente: 'un', perfume: 'un', colonia: 'una', tinte: 'un', pomada: 'una', unguento: 'un', mascara: 'una', brillo: 'un', iluminador: 'un', primer: 'un', prebase: 'una', esmalte: 'un', enjuague: 'un', concentrado: 'un', gotero: 'un' };
+const foldTok = s => fold(String(s || '')).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+/* «Loción hidratante» + «Loción corporal» = «Loción hidratante corporal»: del tipo se quitan las palabras que el nombre ya trae. */
+const mergeTipo = (producto, tipo) => {
+  const have = new Set(foldTok(producto));
+  return join(' ', producto, String(tipo || '').split(/\s+/).filter(w => w && !foldTok(w).every(t => have.has(t))).join(' '));
+};
+const isFpsText = t => /^\s*(?:fps|spf)\b/i.test(t || '');
+/* Activos: lo destacado, y el activo principal solo si lo destacado no lo dice ya. */
+const cosActivos = v => {
+  const a = isFpsText(v.atributo) ? '' : v.atributo, i = v.ingredientes;
+  if (a && i) { const have = new Set(foldTok(i)); return foldTok(a).every(t => have.has(t)) ? i : `${a}, ${i}`; }
+  return a || i || '';
+};
+/* «Se presenta en un frasco con gotero de 30 mL». El envase es la presentación, el contenido es la cantidad. */
+function cosPresent(v, w = x => x) {
+  const env = String(v.envase || '').trim();
+  if (v.contenido) {
+    if (env) { const art = ENVASE_ART[firstWord(env)]; return `en ${art ? art + ' ' : ''}${lc(env)} de ${w(v.contenido)}`; }
+    return `con contenido neto de ${w(v.contenido)}`;
+  }
+  return env ? `en ${lc(env)}` : '';
+}
+/* Atributos declarados contra la lista INCI. Solo una lista fija y corta; sin INCI no se verifica nada. */
+const COS_ATTR = [
+  ['fragancia', /\bsin (?:fragancia|perfume|aroma)s?\b|\blibre de (?:fragancia|perfume)s?\b|\bfragrance[- ]free\b/i, /\b(parfum|fragrance|aroma|perfume)\b/i, /\b(linalool|limonene|citronellol|geraniol|citral|eugenol|coumarin|hexyl cinnamal|benzyl salicylate|benzyl alcohol)\b/i],
+  ['alcohol', /\bsin alcohol\b|\blibre de alcohol\b|\balcohol[- ]free\b/i, /\b(alcohol denat\.?|denatured alcohol|sd alcohol|ethanol)\b/i, null],
+  ['parabenos', /\bsin parabenos?\b|\blibre de parabenos?\b|\bparaben[- ]free\b/i, /\b(?:methyl|ethyl|propyl|butyl|isobutyl|isopropyl)paraben\b/i, null],
+  ['sulfatos', /\bsin sulfatos?\b|\blibre de sulfatos?\b|\bsulfate[- ]free\b/i, /\b(?:sodium|ammonium) (?:lauryl|laureth) sulfate\b|\bsl?es\b/i, null]
+];
+function cosAttrs(v) {
+  const items = String(v.atributos || '').split(/\s*[,;\n]+\s*/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean);
+  const ok = [], bad = [], warn = [];
+  items.forEach(a => {
+    const rule = v.inci ? COS_ATTR.find(([, say]) => say.test(a)) : null;
+    if (rule && rule[2].test(v.inci)) bad.push({ attr: a, why: rule[0] });
+    else { ok.push(a); if (rule && rule[3] && rule[3].test(v.inci)) warn.push({ attr: a, why: rule[0] }); }
+  });
+  return { ok, bad, warn };
+}
+const COS_ZONA = [[/\bfacial\b|\brostro\b/i, /\b(cuerpo|pies|manos|cabello|cuero cabelludo)\b/i, /\b(rostro|cara|cuello|facial)\b/i], [/\bcorporal\b/i, /\b(rostro|ojos|labios)\b/i, /\b(cuerpo|corporal|piernas|brazos|manos|pies)\b/i]];
+/* Primera mitad de la introducción de un cosmético. `w` envuelve los datos (negritas en Magento); `withLab` agrega el laboratorio. */
+function cosIntro(v, w = x => x, withLab = false) {
+  const d = dedupeFields(v), name = join(' ', v.marca, d.producto);
+  const art = COS_ART[firstWord(v.tipo)], un = v.tipo ? (art || 'un') : 'un', tipo = v.tipo ? lc(v.tipo) : 'producto cosmético';
+  let p = `${w(name)} es ${un} ${tipo}`;
+  if (withLab && v.fabricante) p += ` de ${w(v.fabricante)}`;
+  if (v.variante) p += /^(?:tono|color)\b/i.test(v.variante) ? ` en ${w(lc(v.variante))}` : ` (${w(v.variante)})`;
+  const withs = [], act = cosActivos(v);
+  if (v.fps) withs.push(`con ${w('FPS ' + v.fps)}${v.nivel ? ` (protección ${lc(v.nivel)})` : ''}${v.espectro ? ` y ${lc(v.espectro)}` : ''}`);
+  if (act) withs.push(`${art ? (art === 'una' ? 'formulada' : 'formulado') + ' ' : ''}con ${lc(act)}`);
+  if (withs.length) p += ', ' + withs.join(', ');
+  if (v.piel) p += `, para ${lc(v.piel)}`;
+  return p;
+}
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
 /* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
@@ -370,60 +428,78 @@ const CATS = {
   },
 
   cos: {
-    emoji: '🧴', name: 'Dermacosméticos / Cosméticos', range: [80, 150],
+    emoji: '🧴', name: 'Dermacosméticos / Cosméticos', range: [80, 150], titleSoft: 70,
     fields: [
       F('marca','Marca',{req:1,ph:'La Roche-Posay'}),
-      F('producto','Nombre del producto',{ph:'Hyalu B5',hint:'Nombre comercial o línea. Captura al menos el nombre o el tipo.'}),
-      F('tipo','Tipo de producto',{ph:'Sérum',hint:'Forma o denominación. Si el nombre ya lo dice, por ejemplo «Crema Hidratante», no se repite en el título.'}),
-      F('atributo','Atributo o activo principal',{req:1,ph:'Ácido hialurónico'}),
-      F('contenido','Contenido',{req:1,pres:1,ph:'Frasco 30 mL'}),
+      F('producto','Línea o nombre del producto',{ph:'Hyalu B5',hint:'La línea o el nombre comercial, sin repetir el tipo. Captura al menos el nombre o el tipo.'}),
+      F('tipo','Tipo de producto',{ph:'Sérum facial',hint:'Qué es: Sérum facial, Loción corporal, Protector solar. Si el nombre ya lo dice, por ejemplo «Crema Hidratante», no se repite en el título.'}),
+      F('beneficio','Beneficio principal',{ph:'Hidratación',hint:'Para qué sirve, como lo dice el empaque: Hidratación, Protección solar, Limpieza facial. Sin promesas médicas. Captura al menos el beneficio, el activo o el FPS.'}),
+      F('atributo','Activo principal',{ph:'Ácido hialurónico',hint:'Opcional. El ingrediente destacado, si el empaque lo dice. Entra al título como «Con ácido hialurónico».'}),
+      F('contenido','Contenido neto',{req:1,pres:1,ph:'30 mL',hint:'Solo la cantidad: 30 mL, 454 g, 2 x 473 mL. La presentación va en «Presentación»; si escribes «Frasco con gotero de 30 mL» se separa sola.'}),
       F('fabricante','Laboratorio',{req:1,ph:"L'Oréal"}),
+      F('envase','Presentación (envase)',{g:'d',pres:1,ph:'Frasco con gotero',hint:'Opcional. Frasco con gotero, tubo, botella con bomba… Separado de la cantidad.'}),
+      F('zona','Zona de aplicación',{g:'d',ph:'Rostro y cuello',hint:'Opcional. Dónde se aplica, como lo dice el empaque.'}),
+      F('variante','Tono, aroma o variante',{g:'d',ph:'Tono 120 Beige',hint:'Opcional. Entra al título y al meta title para que cada variante tenga su propio título.'}),
       F('piel','Tipo de piel o necesidad declarada',{g:'d',hint:'Solo si está validado en el empaque.'}),
-      F('ingredientes','Ingredientes o activos destacados',{g:'d',type:'area'}),
+      F('ingredientes','Activos destacados',{g:'d',type:'area',hint:'Opcional. Los activos que destaca el empaque, por ejemplo «Ácido hialurónico, vitamina B5 y madecasósido». Salen en la introducción.'}),
       F('textura','Textura u objetivo cosmético',{g:'d'}),
+      F('beneficios','Beneficios',{g:'d',type:'area',lines:1,rows:4,hint:'Opcional. Uno por línea, como aparecen en el empaque. Sin promesas médicas. Salen como lista al inicio de la ficha.'}),
+      F('atributos','Características declaradas',{g:'d',type:'area',sentence:1,hint:'Opcional. Solo lo que dice el empaque, separado por comas: Sin fragancia, Sin aceites, No comedogénico. Se revisa contra la lista de ingredientes.'}),
+      F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Base fluida',hint:'Opcional. Versión corta del tipo para el meta title y la meta description. Si no lo capturas se usa el tipo completo. No sale en la ficha.'}),
       F('comercial','Frase comercial objetiva',{g:'d',type:'area',hint:'Sin adjetivos vacíos. Va al final de la descripción.'}),
       F('inci','Lista de ingredientes (INCI)',{g:'d',type:'area',raw:1,hint:'Cópiala tal cual del empaque, en el mismo orden. Aparece en una sección aparte.'}),
       F('modo','Modo de uso',{g:'d',type:'area',sentence:1,hint:'Tal como aparece en el empaque. Aparece en una sección aparte.'}),
       F('precauciones','Precauciones',{g:'d',type:'area',sentence:1,hint:'Leyendas del empaque, tal cual. Aparece en una sección aparte.'}),
-      F('fps','Factor de protección solar (FPS)',{g:'d',hint:'Solo protectores solares. Ejemplo: 50+'}),
-      F('nivel','Nivel de protección',{g:'d',type:'select',opts:[['','Sin declarar'],['Baja','Baja'],['Media','Media'],['Alta','Alta'],['Muy alta','Muy alta']],hint:'Solo protectores solares. Debe coincidir con el empaque.'})
+      F('fps','Factor de protección solar (FPS)',{g:'d',hint:'Solo protectores solares. Ejemplo: 50+. Entra al título.'}),
+      F('nivel','Nivel de protección',{g:'d',type:'select',opts:[['','Sin declarar'],['Baja','Baja'],['Media','Media'],['Alta','Alta'],['Muy alta','Muy alta']],hint:'Solo protectores solares. Debe coincidir con el empaque.'}),
+      F('espectro','Espectro',{g:'d',ph:'Amplio espectro (UVA y UVB)',hint:'Solo protectores solares y solo si el empaque lo declara.'}),
+      F('resistencia','Resistencia al agua',{g:'d',ph:'Resistente al agua',hint:'Solo protectores solares y solo si el empaque lo declara.'}),
+      F('pao','Duración después de abierto (PAO)',{g:'d',ph:'12 meses',hint:'Opcional. Tal como aparece en el empaque.'}),
+      F('origen','País de origen',{g:'d',ph:'Francia',hint:'Opcional. Tal como aparece en el empaque.'})
     ],
     title: [
-      seg('Marca + producto + tipo', ['marca','producto','tipo'], null, ['producto','tipo']),
-      seg('Atributo o activo principal', ['atributo']),
-      seg('Contenido', ['contenido']),
-      seg('Laboratorio', ['fabricante'])
+      seg('Marca + línea + tipo', ['marca','producto','tipo'], v => join(' ', v.marca, mergeTipo(v.producto, v.tipo)), ['producto','tipo']),
+      seg('FPS', ['fps'], v => v.fps && `FPS ${v.fps}`),
+      Object.assign(seg('Activo o beneficio', ['atributo','beneficio'], v => v.fps ? '' : v.atributo && !isFpsText(v.atributo) ? `Con ${lc(v.atributo)}` : v.beneficio, ['atributo','beneficio','fps']), { soft: true }),
+      seg('Variante', ['variante']),
+      seg('Contenido', ['contenido'])
     ],
-    vital: ['atributo'],
-    mcUses: ['marca','producto','tipo','atributo','contenido','fabricante','piel','ingredientes','textura'],
-    mgUses: ['marca','producto','tipo','atributo','contenido','fabricante','piel','textura'],
+    vitalAny: ['atributo','beneficio','fps'],
+    mcUses: ['marca','producto','tipo','beneficio','contenido','piel','textura','ingredientes'],
+    mgUses: ['marca','producto','tipo','beneficio','contenido','fabricante','piel','textura'],
     mc: v => [
-      join(' - ', join(' ', v.marca, dedupeFields(v).producto, dedupeFields(v).tipo, v.atributo, v.contenido), v.fabricante),
-      v.piel && `${v.tipo ? cap(v.tipo) : 'Producto'} formulado para ${lc(v.piel)}`,
-      v.ingredientes && `Contiene ${lc(v.ingredientes)}`,
-      v.textura,
-      LEGEND.cosMc,
-      v.comercial
+      cosIntro(v),
+      optMc('Beneficio', v.beneficio && `Ofrece ${lc(v.beneficio)}`),
+      optMc('Textura', v.textura && `Su textura es ${lc(v.textura)}`),
+      optMc('Modo de uso', v.modo),
+      optMc('Zona de aplicación', v.zona && `Se aplica en ${lc(v.zona)}`),
+      optMc('Presentación', cosPresent(v) && `Se presenta ${cosPresent(v)}`),
+      optMc('Frase comercial', v.comercial),
+      LEGEND.cosResp
     ],
     mg: v => {
-      let p = `${S(join(' ', v.marca, v.producto))} es un producto de cuidado dermatológico` + (v.fabricante ? ` desarrollado por ${S(v.fabricante)}` : '') + '.';
-      if (v.tipo || v.piel || v.atributo) {
-        p += ' Esta fórmula' + (v.tipo ? ` en tipo de producto ${S(v.tipo)}` : '')
-          + (v.piel ? ` está desarrollada específicamente para las necesidades de ${S(v.piel)}` : '')
-          + (v.atributo ? (v.piel ? ', incorporando ' : ' incorpora ') + `${S(v.atributo)} como activo destacado` : '') + '.';
-      }
-      if (v.textura) p += ` Su aplicación proporciona una textura de ${S(v.textura)}` + (v.contenido ? ` en una presentación de ${S(v.contenido)}` : '') + ' conforme a las indicaciones de uso del fabricante.';
-      else p += (v.contenido ? ` Se presenta en ${S(v.contenido)}, para aplicarse` : ' Debe aplicarse') + ' conforme a las indicaciones de uso del fabricante.';
+      const d = dedupeFields(v);
+      let p = cosIntro(v, S, true) + '.';
+      if (v.textura) p += ` Su textura es ${lc(v.textura)}.`;
+      if (v.zona) p += ` Se aplica en ${lc(v.zona)}.`;
+      if (cosPresent(v, S)) p += ` Se presenta ${cosPresent(v, S)}.`;
+      const ben = String(v.beneficios || '').split(/\n+/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean).map(cap);
+      if (!ben.length && v.beneficio) ben.push(cap(v.beneficio));
+      const attrs = cosAttrs(v).ok;
       const extras = [];
-      if (v.inci) extras.push(`<h2>Ingredientes:</h2>\n<p>${escT(v.inci)}</p>`);
+      if (v.fps || v.nivel || v.espectro || v.resistencia) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel], ['Espectro', v.espectro], ['Resistencia al agua', v.resistencia]])}\n</ul>`);
       if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
+      if (v.inci) extras.push(`<h2>Ingredientes:</h2>\n<p id="lista-ingredientes">${escT(v.inci)}</p>`);
+      if (attrs.length) extras.push(`<h2>Características:</h2>\n<ul>\n${attrs.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>`);
       if (v.precauciones) extras.push(`<h2>Precauciones:</h2>\n<p>${escT(v.precauciones)}</p>`);
-      if (v.ingredientes) extras.push(...secs([['Ingredientes o activos destacados:', v.ingredientes]]));
-      if (v.fps || v.nivel) extras.push(`<h2>Protección solar:</h2>\n<ul>\n${liRows([['Factor de protección solar (FPS)', v.fps], ['Nivel de protección', v.nivel]])}\n</ul>`);
-      return assemble(p, 'Detalles del producto:', [
-        ['Marca', v.marca], ['Nombre del Producto', v.producto], ['Tipo de Producto', v.tipo],
-        ['Atributo o Activo Principal', v.atributo], ['Contenido', v.contenido], ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
-      ], [...extras, ...(v.comercial ? [`<p>${escT(v.comercial)}</p>`] : [])]);
+      if (v.comercial) extras.push(`<p>${escT(v.comercial)}</p>`);
+      extras.push(`<p>${LEGEND.cosResp}</p>`);
+      const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
+        ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de producto', v.tipo], ['Zona de aplicación', v.zona], ['Tipo de piel', v.piel],
+        ['Activo principal', isFpsText(v.atributo) ? '' : v.atributo], ['Variante', v.variante], ['Textura', v.textura], ['Contenido neto', v.contenido], ['Presentación', v.envase],
+        ['Laboratorio', v.fabricante], ['Duración después de abierto (PAO)', v.pao], ['País de origen', v.origen], ['Categoría', v.categoria]
+      ])}\n</ul>`;
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(x)}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
     }
   },
 
@@ -620,7 +696,7 @@ Object.keys(CATS).forEach(id => { CATS[id].id = id; });
   const opt = {
     med: [['leyenda', 'volumen'], ['volumen', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'categoria', 'leyenda']],
     dis: [['extra'], ['extra', 'categoria']],
-    cos: [['comercial'], ['ingredientes', 'comercial', 'inci', 'modo', 'precauciones', 'fps', 'nivel', 'categoria']],
+    cos: [['atributo', 'variante', 'fps', 'nivel', 'espectro', 'envase', 'zona', 'modo', 'comercial'], ['atributo', 'ingredientes', 'beneficios', 'atributos', 'zona', 'variante', 'envase', 'fps', 'nivel', 'espectro', 'resistencia', 'pao', 'origen', 'modo', 'inci', 'precauciones', 'comercial', 'categoria']],
     sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'publico'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'categoria']],
     beb: [['descripcion', 'caracteristicas', 'leyenda'], ['descripcion', 'caracteristicas', 'leyenda', 'categoria']],
     hig: [['ingredientes', 'caracteristicas'], ['ingredientes', 'caracteristicas', 'categoria']],
@@ -633,13 +709,23 @@ Object.keys(CATS).forEach(id => {
   const f = CATS[id].fields, last = f.map(x => !x.g).lastIndexOf(true);
   f.splice(last + 1, 0, F('categoria', 'Categoría', { ph: 'Nutrición clínica', hint: 'Categoría del árbol de la tienda, por ejemplo Nutrición clínica. Opcional. Aparece en la ficha técnica de Magento.' }));
 });
+CATS.cos.fields.push(F('rutina', 'Paso de rutina', { g: 'i', type: 'select', opts: [['', 'Sin declarar'], ...['Limpieza', 'Tratamiento', 'Hidratación', 'Protección solar', 'Maquillaje', 'Cabello'].map(x => [x, x])], hint: 'Dato interno. Si lo dejas sin declarar se deduce del tipo (sérum: tratamiento, protector solar: protección solar). Sirve para proponer complementos entre cosméticos; no sale en la ficha, en el CSV ni en Magento.' }));
 Object.keys(CATS).forEach(id => { if (id !== 'med') CATS[id].fields.push(F('area', 'Área de uso o necesidad', { g: 'i', type: 'select', opts: areaOpts(), hint: 'Dato interno, por ejemplo Hidratación o Nutrición y vitaminas. No sale en la ficha, en el CSV ni en Magento.' })); });
+/* Paso de la rutina de cuidado. Dato interno: no sale en ninguna ficha ni se exporta. Sirve para proponer complementos entre cosméticos. */
+const RUTINAS = ['Limpieza', 'Tratamiento', 'Hidratación', 'Protección solar', 'Maquillaje', 'Cabello'];
+const RUTINA_RE = [
+  ['Protección solar', /\bprotector(?:es)? solar|\bbloqueador|\bfps\b|\bspf\b/i], ['Cabello', /\bshampoo|\bchamp[uú]|\bacondicionador|\bcabello|\bcapilar/i],
+  ['Limpieza', /\blimpiador|\blimpieza|\bagua micelar|\bdesmaquillante|\bespuma limpiadora|\bjab[oó]n facial/i], ['Maquillaje', /\bbase de maquillaje|\bmaquillaje|\blabial|\brubor|\bsombra|\bcorrector|\bdelineador|\bm[aá]scara de pesta[nñ]as|\biluminador|\bprebase|\bprimer\b/i],
+  ['Tratamiento', /\bs[eé]rum|\bampolleta|\bexfoliante|\bmascarilla|\bcontorno de ojos|\btratamiento|\bconcentrado|\bretinol|\bniacinamida/i], ['Hidratación', /\bcrema|\bloci[oó]n|\bhidratante|\bemulsi[oó]n|\bb[aá]lsamo|\bgel hidratante|\baceite/i]
+];
+const rutinaDe = v => { const t = join(' ', v && v.tipo, v && v.producto); const hit = RUTINA_RE.find(([, re]) => re.test(t)); return hit ? hit[0] : ''; };
 const labelOf = (c, k) => (c.fields.find(x => x.key === k) || {}).label || k;
 
 /* ---------- Cálculo ---------- */
 /* El tipo dice qué es el producto y el contenido cuánto trae. Si llegan mezclados se acomodan: una cantidad escrita en el tipo pasa a
    «Contenido», un contenido sin cantidad pasa a ser el tipo, y si están al revés se intercambian. Las concentraciones (mg, mcg, UI)
    no son contenido y se dejan donde están. No cambia nada que ya esté bien puesto. */
+const COS_PACK = /^((?:frasco|botella|tubo|bote|caja|sobre|bolsa|lata|tarro|estuche|pomo|dispensador|ampolleta|atomizador|spray|stick|pump)s?(?:\s+(?:con|de)\s+(?:gotero|bomba|dosificador|atomizador|aplicador|spray|pistola|v[aá]lvula|pump))?)\s*(?:de|con)?\s*(\d.*)$/i;
 const TIPO_KEY = { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' };
 const PACK_QTY = String.raw`(?:(?:frasco|caja|botella|bolsa|sobre|lata|tubo|bote|paquete)s?\s+(?:con|de)?\s*)?\d+(?:[.,]\d+)?\s*(?:ml|l|g|kg|piezas?|pzas?|pz|tabletas?|c[aá]psulas?|sobres?|unidades?|gomitas?|ampolletas?|tiras?)\b`;
 const PACK_END = new RegExp(`\\s*[-–,(]?\\s*(${PACK_QTY})\\s*\\)?\\s*$`, 'i'), PACK_ALL = new RegExp(`^\\s*${PACK_QTY}\\s*$`, 'i');
@@ -654,9 +740,13 @@ function placeFields(c, raw) {
     const m = t.match(PACK_END), rest = t.slice(0, m.index).trim();
     if (rest) { if (!n) n = m[1].trim(); t = rest; }
   } else if (!t && n && noQty(n)) { t = n; n = ''; }
-  if (t === t0 && n === n0) return out;
+  /* Cosméticos: «Frasco con gotero de 30 mL» se separa en presentación y cantidad. */
+  let env = String(raw.envase ?? '').trim();
+  if (c.id === 'cos' && n && !env) { const m = n.match(COS_PACK); if (m) { env = m[1].replace(/\s+/g, ' ').trim(); n = m[2].trim(); } }
+  if (t === t0 && n === n0 && env === String(raw.envase ?? '').trim()) return out;
   const lbl = k => (c.fields.find(f => f.key === k) || {}).label || k;
-  out.raw = { ...raw, [tk]: t, contenido: n };
+  out.raw = { ...raw, [tk]: t, contenido: n, ...(c.id === 'cos' ? { envase: env } : {}) };
+  if (c.id === 'cos' && env !== String(raw.envase ?? '').trim()) out.changes.push({ label: lbl('envase'), from: n0, to: env });
   if (t !== t0) out.changes.push({ label: lbl(tk), from: t0, to: t || '(vacío)' });
   if (n !== n0) out.changes.push({ label: lbl('contenido'), from: n0 || t0, to: n || '(vacío)' });
   return out;
@@ -711,10 +801,13 @@ function buildTitle(c, v) {
     const missing = parts.filter(p => p.req && !p.value).map(p => p.label);
     if (s.anyOf && !s.anyOf.some(k => v[k])) missing.push(s.anyOf.map((k, i) => i ? lc(labelOf(c, k)) : labelOf(c, k)).join(' o '));
     const omitted = s.parts.filter(k => v[k] && !d[k]).map(k => labelOf(c, k));
-    return { label: s.label, text, parts, missing, omitted, state: !text ? 'missing' : (missing.length ? 'partial' : 'ok') };
+    return { label: s.label, text, parts, missing, omitted, soft: !!s.soft, state: !text ? 'missing' : (missing.length ? 'partial' : 'ok') };
   });
-  const title = segs.map(s => s.text).filter(Boolean).join(' | ');
-  return { segs, title, missing: segs.flatMap(s => s.missing) };
+  const build = () => segs.filter(s => s.text && !s.softDropped).map(s => s.text).join(' | ');
+  let title = build();
+  /* Lo marcado como opcional se omite, de derecha a izquierda, si el título pasa de lo que se ve en los resultados. */
+  if (c.titleSoft) for (let i = segs.length - 1; i >= 0 && title.length > c.titleSoft; i--) if (segs[i].soft && segs[i].text) { segs[i].softDropped = true; title = build(); }
+  return { segs, title, missing: segs.flatMap(s => s.missing), softDropped: segs.filter(s => s.softDropped).map(s => s.text) };
 }
 
 /* La marca no debe repetirse en el título (se ignoran los segmentos del fabricante o laboratorio). */
@@ -774,17 +867,26 @@ const FAQ_RULES = {
     v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
     [[`¿Cómo se conserva ${n}?`, `¿Cómo se debe almacenar ${n}?`], LEGEND.medConservacion]
   ],
-  cos: (v, n) => [
-    (v.ingredientes || v.atributo) && [[`¿Qué contiene ${n}?`, `¿Qué activos tiene ${n}?`], [`Contiene ${lc(v.ingredientes || v.atributo)}.`, `Su fórmula incluye ${lc(v.ingredientes || v.atributo)}.`]],
-    v.inci && [[`¿Cuál es la lista completa de ingredientes de ${n}?`, `¿Qué ingredientes (INCI) tiene ${n}?`], v.inci],
-    v.piel && [[`¿Para qué tipo de piel o necesidad es ${n}?`, `¿Quién puede usar ${n}?`], [`Está formulado para ${lc(v.piel)}.`, `Está desarrollado para ${lc(v.piel)}.`]],
-    v.modo && [[`¿Cómo se usa ${n}?`, `¿Cómo se aplica ${n}?`], v.modo],
-    v.precauciones && [[`¿Qué precauciones tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.precauciones],
-    (v.fps || v.nivel) && [[`¿Qué protección solar ofrece ${n}?`, `¿Qué FPS tiene ${n}?`], join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`)],
-    v.contenido && [[`¿Qué contenido tiene ${n}?`, `¿Cuánto producto trae ${n}?`], [`Se presenta en ${lc(v.contenido)}.`, `Su contenido es ${lc(v.contenido)}.`]],
-    v.fabricante && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${v.fabricante}.`, `Lo desarrolla ${v.fabricante}.`]],
-    v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
-  ],
+  cos: (v, n) => {
+    const act = cosActivos(v), art = COS_ART[firstWord(v.tipo)], lab = v.fabricante, attrs = cosAttrs(v).ok, tono = /^(?:tono|color)\b/i.test(v.variante || '');
+    return [
+      v.tipo && [[`¿Qué es ${n}?`, `¿Qué tipo de producto es ${n}?`], [`Es ${art || 'un'} ${lc(v.tipo)}${lab ? ` de ${lab}` : ''}${act ? `, ${art ? (art === 'una' ? 'formulada' : 'formulado') + ' ' : ''}con ${lc(act)}` : ''}.`]],
+      v.beneficio && [[`¿Para qué sirve ${n}?`, `¿Qué beneficio ofrece ${n}?`], [`Ofrece ${lc(v.beneficio)}.`, `Su beneficio principal es ${lc(v.beneficio)}.`]],
+      act && [[`¿Qué contiene ${n}?`, `¿Qué activos tiene ${n}?`], [`Contiene ${lc(act)}.`, `Su fórmula incluye ${lc(act)}.`]],
+      v.inci && [[`¿Cuál es la lista completa de ingredientes de ${n}?`, `¿Qué ingredientes (INCI) tiene ${n}?`], v.inci],
+      v.piel && [[`¿Para qué tipo de piel o necesidad es ${n}?`, `¿Quién puede usar ${n}?`], [`Está formulado para ${lc(v.piel)}.`, `Está desarrollado para ${lc(v.piel)}.`]],
+      v.variante && [[tono ? `¿Qué tono es ${n}?` : `¿Qué variante es ${n}?`, tono ? `¿Cuál es el tono de ${n}?` : `¿Cuál es la variante de ${n}?`], [tono ? `Es el ${lc(v.variante)}.` : `Es la variante ${v.variante}.`]],
+      v.modo && [[`¿Cómo se usa ${n}?`, `¿Cómo se aplica ${n}?`], v.modo],
+      v.zona && [[`¿Dónde se aplica ${n}?`, `¿En qué zona se usa ${n}?`], [`Se aplica en ${lc(v.zona)}.`, `Su zona de aplicación es ${lc(v.zona)}.`]],
+      attrs.length && [[`¿Qué características declara el empaque de ${n}?`, `¿Qué características tiene ${n}?`], attrs.map(cap).join(', ') + '.'],
+      v.precauciones && [[`¿Qué precauciones tiene ${n}?`, `¿Qué debo tener en cuenta al usar ${n}?`], v.precauciones],
+      (v.fps || v.nivel) && [[`¿Qué protección solar ofrece ${n}?`, `¿Qué FPS tiene ${n}?`], join('. ', v.fps && `Factor de protección solar (FPS) ${v.fps}`, v.nivel && `Nivel de protección: ${lc(v.nivel)}`, v.espectro, v.resistencia) + '.'],
+      v.contenido && [[`¿Cuánto producto trae ${n}?`, `¿Qué contenido tiene ${n}?`], [`Se presenta ${cosPresent(v)}.`, `Su contenido es ${v.contenido}${v.envase ? `, en ${lc(v.envase)}` : ''}.`]],
+      lab && [[`¿Quién fabrica ${n}?`, `¿Qué empresa produce ${n}?`], [`Es desarrollado por ${lab}.`, `Lo desarrolla ${lab}.`]],
+      v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]],
+      [[`¿${n} es un medicamento?`, `¿Se considera ${n} un medicamento?`], `No. ${LEGEND.cosResp}`]
+    ];
+  },
   sup: (v, n) => [
     v.composicion && [[`¿Qué contiene ${n}?`, `¿Cuál es la composición de ${n}?`], [`Contiene ${lc(flatBullets(v.composicion))}.`, `Su composición incluye ${lc(flatBullets(v.composicion))}.`]],
     v.modo && [[`¿Cómo se consume ${n}?`, `¿Cómo se debe tomar ${n}?`], v.modo],
@@ -833,6 +935,7 @@ function buildMg(c, v) {
   const blocked = [];
   if (c.id === 'med' && !v.receta) blocked.push('Indica si el producto requiere receta médica. Es un dato regulatorio obligatorio.');
   (c.vital || []).forEach(k => { if (!v[k]) blocked.push(`${labelOf(c, k)}. No se infiere ni se inventa.`); });
+  if (c.vitalAny && !c.vitalAny.some(k => v[k])) blocked.push(`${c.vitalAny.map(k => labelOf(c, k)).join(', ')}: captura al menos uno. No se infiere ni se inventa.`);
   const omitted = c.mgUses.filter(k => !v[k]).map(k => labelOf(c, k));
   const meta = { categoria: c.name, receta: recetaMeta(c, v) };
   if (blocked.length) return { blocked, omitted, html: '', meta };
@@ -873,7 +976,7 @@ const COS_CLAIM = [
   [/\bsin (?:necesidad de )?reaplicar\b|\bno (?:necesitas|requiere) reaplicar\b/i, 'sin reaplicar']
 ];
 const COS_MED = [
-  [/\bmedicinal(?:es)?\b/i, 'medicinal'], [/\bterap[eé]utic[oa]s?\b/i, 'terapéutico'],
+  [/\btrat(?:a|an|ar)\b/i, 'trata'], [/\bmedicinal(?:es)?\b/i, 'medicinal'], [/\bterap[eé]utic[oa]s?\b/i, 'terapéutico'],
   [/\bantiinflamatori[oa]s?\b|\bdesinflam\w+/i, 'antiinflamatorio'], [/\bcicatriz\w*/i, 'cicatrizante'],
   [/\bantibi[oó]tic[oa]s?\b|\bantimic[oó]tic[oa]s?\b/i, 'antibiótico o antimicótico'],
   [/\b(?:dermatitis|psoriasis|rosacea|rosácea|eczema|eccema)\b/i, 'enfermedad de la piel']
@@ -918,6 +1021,11 @@ function lint(c, raw) {
     }
   }
   if (c.id === 'cos') {
+    const ca = cosAttrs(raw);
+    ca.bad.forEach(b => out.check.push(`«${b.attr}», pero la lista de ingredientes (INCI) incluye ${b.why === 'fragancia' ? 'fragancia (Parfum, Fragrance o Aroma)' : b.why === 'alcohol' ? 'alcohol (Alcohol Denat. o Ethanol)' : b.why === 'parabenos' ? 'parabenos' : 'sulfatos'}. Una de las dos está mal: esa característica no se publica hasta que lo resuelvas.`));
+    ca.warn.forEach(b => out.check.push(`«${b.attr}», pero el INCI trae componentes que suelen venir de fragancias (por ejemplo linalool o limonene). Revisa el empaque.`));
+    const zt = COS_ZONA.find(([tipoRe, zonaMal, zonaBien]) => tipoRe.test(raw.tipo || '') && zonaMal.test(raw.zona || '') && !zonaBien.test(raw.zona || ''));
+    if (zt) out.check.push(`El tipo «${raw.tipo}» y la zona de aplicación «${raw.zona}» no coinciden. Revisa cuál está mal.`);
     const fps = String(raw.fps || '').trim(), nivel = raw.nivel || '';
     if (fps) {
       const { n, nivel: esperado } = nivelPorFps(fps);
@@ -1085,6 +1193,11 @@ const META_SUP = {
   mt: { tpl: '{marca}[ {tipo_seo}]\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
   md: { tpl: '{marca} {tipo_seo}, {variante_seo}\n{fabricante}\n[{caracteristica1}]', sep: '. ', max: 155 }
 };
+/* Cosméticos: la variante (tono, aroma, tamaño) va antes que el activo, que se omite si no cabe. */
+const META_COS = {
+  mt: { tpl: '{marca} {nombre_seo}[ {con_activo}]\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
+  md: { tpl: '{marca} {nombre}[ {con_activo}]\n{beneficio_piel}\n{presentacion}\n[Compra en {tienda}]', sep: '. ', max: 155 }
+};
 const ALT_DEF = {
   med: '{marca} {concentracion}\n{principio}\n{contenido:lc}',
   dis: '{marca} {modelo} {tipo:lc}\n{tecnologia:lc}',
@@ -1096,8 +1209,8 @@ const ALT_DEF = {
 };
 const defMetaCat = id => ({
   confirmed: id === 'med',
-  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : META_GEN.mt) },
-  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : META_GEN.md) },
+  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : META_GEN.mt) },
+  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : META_GEN.md) },
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
 /* Lo guardado con la plantilla genérica de antes pasa a la nueva de suplementos, salvo que la persona ya haya confirmado esa estructura. */
@@ -1106,6 +1219,11 @@ function migrateMeta(m) {
   if (sup && !sup.confirmed) {
     if (sup.mt && sup.mt.tpl === META_GEN.mt.tpl) sup.mt = { ...sup.mt, tpl: META_SUP.mt.tpl };
     if (sup.md && sup.md.tpl === META_GEN.md.tpl) sup.md = { ...sup.md, tpl: META_SUP.md.tpl };
+  }
+  const cos = m && m.cats && m.cats.cos;
+  if (cos && !cos.confirmed) {
+    if (cos.mt && cos.mt.tpl === META_GEN.mt.tpl) cos.mt = { ...cos.mt, tpl: META_COS.mt.tpl };
+    if (cos.md && cos.md.tpl === META_GEN.md.tpl) cos.md = { ...cos.md, tpl: META_COS.md.tpl };
   }
   return m;
 }
@@ -1197,7 +1315,16 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   for (let i = 1; i <= 4; i++) tokens['seg' + i] = segTexts[i - 1] || '';
   /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
   tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';
-  tokens.variante_seo = [dv.sabor, dv.contenido].filter(Boolean).join(', ');
+  tokens.variante_seo = [dv.sabor || dv.variante, dv.contenido].filter(Boolean).join(', ');
+  if (c.id === 'cos') {
+    const nm = tipo => mergeTipo(dv.producto, tipo);
+    tokens.nombre = nm(dv.tipo);
+    tokens.nombre_seo = nm(dv.tipoCorto || dv.tipo);
+    tokens.con_activo = dv.fps ? `FPS ${dv.fps}` : (dv.atributo && !isFpsText(dv.atributo) ? `con ${lc(dv.atributo)}` : '');
+    tokens.piel_lc = lc(dv.piel || '');
+    tokens.beneficio_piel = dv.beneficio ? (dv.piel ? `${dv.beneficio} para ${lc(dv.piel)}` : dv.beneficio) : (dv.piel ? `Para ${lc(dv.piel)}` : '');
+    tokens.presentacion = dv.contenido ? (dv.envase ? `${dv.envase} de ${dv.contenido}` : dv.contenido) : '';
+  }
   tokens.caracteristica1 = String(dv.caracteristicas || '').split(/(?<=[.!?])\s+/)[0].trim().replace(/\.$/, '');
   const out = {}, warns = [], notes = [];
   [['mt', 'Meta title'], ['md', 'Meta description'], ['alt', 'Alt de imagen']].forEach(([k, label]) => {
@@ -1636,7 +1763,7 @@ function extractRaw(text, opts) {
   if (cat === 'cos') {
     for (const [re, canon] of COS_ACT) { if (sc.find(new RegExp(re.source, 'gi'))) { F.atributo = canon; break; } }
     const sp = sc.find(/\b(?:fps|spf) ?\d+\+?/gi);
-    if (sp) { const n = sp.text.replace(/^\D+/, '').replace(/\s+/g, ''); F.fps = n; if (!F.atributo) F.atributo = 'FPS ' + n; }
+    if (sp) { const n = sp.text.replace(/^\D+/, '').replace(/\s+/g, ''); F.fps = n; }
   }
   if (cat === 'sup') {
     sc.find(/\bsabor(?: a)?\b/gi);
@@ -1735,6 +1862,11 @@ const api = {
   shortenMeta,
   migrateMeta,
   META_SUP,
+  META_COS,
+  RUTINAS,
+  rutinaDe,
+  mergeTipo,
+  cosAttrs,
   expandMetaBrackets,
   parseNutrition,
   nutriConsistency,
