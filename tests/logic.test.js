@@ -601,13 +601,13 @@ const supBase = { marca: 'GNC', componente: 'Proteína whey', forma: 'Polvo', co
 const TABLA = '# Nutriente | Por porción (30 g) | Por 100 g | % VD\nEnergía | 120 kcal | 400 kcal | 6 %\nProteína | 24 g | 80 g | 48 %\nCarbohidratos | 3 g | 10 g | 1 %\n- Azúcares | 1.5 g | 5 g\nGrasa total | 1.5 g | 5 g | 2 %\nSodio | 90 mg | 300 mg | 4 %';
 
 test('tabla nutrimental: se arma una tabla HTML con id, encabezados y subfilas a partir de líneas', () => {
-  const h = F.computeFor('sup', { ...supBase, porcion: '1 scoop (30 g)', porciones: '30', nutrimental: TABLA }, keep, meta).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('sup', { ...supBase, porcion: '1 scoop (30 g)', porciones: '30', nutrimental: TABLA }, keep, meta).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   assert.match(h, /<h2>Información nutrimental:<\/h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental">/);
   assert.ok(!/<caption>/.test(h), 'el título de la tabla no repite el encabezado ni los datos de la ficha');
   assert.match(h, /<thead><tr><th scope="col">Nutriente<\/th><th scope="col">Por porción \(30 g\)<\/th><th scope="col">Por 100 g<\/th><th scope="col">% VD<\/th><\/tr><\/thead>/);
   assert.match(h, /<tr><th scope="row">Proteína<\/th><td>24 g<\/td><td>80 g<\/td><td>48 %<\/td><\/tr>/);
   assert.match(h, /<tr class="sub"><th scope="row">Azúcares<\/th><td>1.5 g<\/td><td>5 g<\/td><td>—<\/td><\/tr>/);
-  assert.ok(h.indexOf('Información nutrimental:') > h.indexOf('Ficha técnica') && h.indexOf('Información nutrimental:') < h.indexOf('Condiciones de conservación'));
+  assert.ok(h.indexOf('Información nutrimental:') > h.indexOf('Condiciones de conservación') && h.indexOf('Información nutrimental:') < h.indexOf('Preguntas frecuentes'));
   assert.equal((h.match(/id="tabla-nutrimental"/g) || []).length, 1);
 });
 
@@ -616,7 +616,7 @@ test('tabla nutrimental: limpia unidades y mayúsculas, respeta los decimales co
   assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Proteína', '20,0 g', '40 %'], ['Calorías', '120 kcal'], ['Sodio', '<1 mg'], ['Vitamina C', '90 mg'], ['Hierro', 'No significativo & otros']]);
   assert.deepEqual(p.head, ['Nutriente', 'Valor 1', 'Valor 2'], 'sin encabezados con varias columnas usa nombres genéricos');
   assert.ok(p.problems.some(x => /encabezados/.test(x)), 'y lo avisa');
-  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Hierro | No significativo & <b>' }, keep, meta).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Hierro | No significativo & <b>' }, keep, meta).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   assert.match(h, /<td>No significativo &amp; &lt;b&gt;<\/td>/);
   assert.match(h, /<th scope="col">Cantidad<\/th>/, 'una sola columna se llama Cantidad');
   assert.equal(F.parseNutrition('Proteína | 20,5 g').rows[0].cells[0], '20,5 g', 'la coma decimal se respeta');
@@ -629,7 +629,7 @@ test('tabla nutrimental: una línea sin barra es texto (título, nota o título 
   assert.deepEqual(p.items.map(i => [i.kind, i.name || i.text]), [['row', 'Proteínas'], ['nota', 'de los cuales'], ['row', 'Azúcar'], ['titulo', 'Vitaminas'], ['row', 'Vitamina A'], ['row', 'de la cual β-Caroteno'], ['titulo', 'Minerales'], ['row', 'Sodio']]);
   assert.deepEqual(p.problems, [], 'nada de esto es un problema');
   assert.deepEqual(F.parseNutrition('Proteína 20 g 40 %').rows, [], 'sin barra no es una fila');
-  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Información nutrimental: por porción (200 mL)\nProteínas | 20,0 g\nde los cuales\n- Azúcar | 11,6 g\nVitaminas\n- Vitamina A | 425 µg RE\n- Sodio | 120 mg / 5,2 mmol\n- Lactosa | ≤ 0,6 g' }, keep, meta).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('sup', { ...supBase, nutrimental: 'Información nutrimental: por porción (200 mL)\nProteínas | 20,0 g\nde los cuales\n- Azúcar | 11,6 g\nVitaminas\n- Vitamina A | 425 µg RE\n- Sodio | 120 mg / 5,2 mmol\n- Lactosa | ≤ 0,6 g' }, keep, meta).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   assert.match(h, /<caption>Por porción \(200 mL\)<\/caption>/);
   assert.match(h, /<tr class="nota"><td colspan="2">de los cuales<\/td><\/tr>/);
   assert.match(h, /<tr class="titulo"><th scope="colgroup" colspan="2">Vitaminas<\/th><\/tr>/);
@@ -656,7 +656,7 @@ test('tabla nutrimental: avisa si las calorías no cuadran con 4-4-9, por column
   const avisos = F.lint(F.CATS.sup, { nutrimental: mal }).check;
   assert.equal(avisos.length, 1);
   assert.match(avisos[0], /columna «Por porción»: declara 300 kcal, pero .* cerca de 122 kcal/);
-  const h = F.computeFor('sup', { ...supBase, nutrimental: mal }, keep, meta).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('sup', { ...supBase, nutrimental: mal }, keep, meta).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   assert.match(h, /<td>300 kcal<\/td>/, 'se muestra lo capturado');
   const sinDatos = '# Nutriente | Por porción\nEnergía | 300 kcal\nProteína | 24 g';
   assert.deepEqual(F.lint(F.CATS.sup, { nutrimental: sinDatos }).check, [], 'sin carbohidratos y grasa no puede comparar');
@@ -759,7 +759,7 @@ test('tabla nutrimental: la fila de porción se omite con aviso y se aceptan osm
   const p = F.parseNutrition('Por porción de | 200 mL\nContenido energético | 300 kcal\nOsmolaridad | 435 mOsmol/L\nOsmolalidad | 575 mOsmol/kg H2O\nde los cuales\nCarbohidratos | 23,2 g');
   assert.deepEqual(p.rows.map(r => [r.name, ...r.cells]), [['Contenido energético', '300 kcal'], ['Osmolaridad', '435 mOsmol/L'], ['Osmolalidad', '575 mOsmol/kg H2O'], ['Carbohidratos', '23,2 g']]);
   assert.ok(p.problems.some(x => /«Por porción de: 200 mL» es la porción, no un nutriente\. Captúrala en «Tamaño de porción»/.test(x)));
-  const h = F.computeFor('sup', { ...hiper, nutrimental: 'Por porción de | 200 mL\nProteína | 20 g' }, keep, meta).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('sup', { ...hiper, nutrimental: 'Por porción de | 200 mL\nProteína | 20 g' }, keep, meta).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   assert.ok(!/Por porción de/.test(h) && /<th scope="row">Proteína<\/th>/.test(h));
 });
 test('suplementos: avisa si el tipo es genérico o el tamaño de porción no tiene unidad', () => {
@@ -1190,12 +1190,12 @@ test('dispositivos: metas con marca, modelo y tipo, y tecnología y cantidad des
 });
 
 test('dispositivos: la ficha de Magento ordena características, ficha técnica, especificaciones y cierre', () => {
-  const h = F.computeFor('dis', DISX.bauma, keep, mt()).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('dis', DISX.bauma, keep, mt()).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   const orden = [/es un baumanómetro digital de <strong>Marca Ejemplo<\/strong>, <strong>automático de brazo<\/strong>, para adultos\./, /<h2>Características principales:/, /<h2>Ficha técnica del producto:/, /id="especificaciones-tecnicas"/, /<h2>Contenido del paquete:/, /<h2>Instrucciones de uso:/, /Utilice el dispositivo conforme al instructivo del fabricante\. Consulte a su médico ante cualquier duda sobre sus mediciones\./, /<h2>Preguntas frecuentes:/].map(re => h.search(re));
   assert.ok(orden.every((n, i) => n >= 0 && (!i || n > orden[i - 1])), orden.join(','));
   assert.match(h, /<th scope="row">Rango de presión<\/th><td>0 a 299 mmHg<\/td>/);
   assert.match(h, /Registro sanitario:<\/strong> Reg\. No\. 0000X2026 SSA/);
-  const neb = F.computeFor('dis', DISX.nebu, keep, mt()).mg.html.replace(/ style=\"[^\"]*\"/g, '');
+  const neb = F.computeFor('dis', DISX.nebu, keep, mt()).mg.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   assert.ok(!/Consulte a su médico ante cualquier duda/.test(neb) && /Utilice el dispositivo conforme al instructivo/.test(neb), 'el cierre de mediciones no va en un nebulizador');
   assert.ok(!/Consulte a su médico ante cualquier duda/.test(F.computeFor('dis', DISX.tiras, keep, mt()).mg.html));
   assert.match(F.computeFor('dis', DISX.termo, keep, mt()).mg.html, /<h2>Declarado en el empaque:<\/h2>\n<p>Clínicamente validado<\/p>/);
@@ -1273,7 +1273,7 @@ test('accesorios: metas con la variante primero', () => {
 });
 
 test('accesorios: Magento con guía de tallas, cuidado y preguntas por talla y lado', () => {
-  const h = F.computeFor('acc', ACCX.muneca, keep, mt()).mg; h.html = h.html.replace(/ style=\"[^\"]*\"/g, '');
+  const h = F.computeFor('acc', ACCX.muneca, keep, mt()).mg; h.html = h.html.replace(/ (?:style|align|valign|width|border|cellspacing|cellpadding)=\"[^\"]*\"/g, '');
   const orden = [/<p><strong>Marca Ejemplo Soporte Plus<\/strong> es una muñequera de <strong>Laboratorios Ejemplo<\/strong>/, /<h2>Beneficios principales:/, /<h2>Ficha técnica del producto:/, /id="guia-de-tallas"/, /<h2>Cuidado y limpieza:/, /<h2>Preguntas frecuentes:/].map(re => h.html.search(re));
   assert.ok(orden.every((n, i) => n >= 0 && (!i || n > orden[i - 1])), orden.join(','));
   assert.match(h.html, /<th scope="row">Mediana<\/th><td>Muñeca de 15 a 18 cm<\/td>/);
@@ -1337,7 +1337,20 @@ test('título de suplementos: sabor antes de la presentación, «Líquido 200 mL
 test('tablas de Magento: llevan estilos en línea para verse como tabla aunque la plantilla de la tienda no los dé', () => {
   const h = F.computeFor('sup', { marca: 'Fresubin', componente: 'Fórmula', forma: 'Líquido', contenido: '200 mL', fabricante: 'Fresenius', nutrimental: 'Proteínas | 20,0 g\n- Azúcar | 11,6 g' }, keep, meta).mg.html;
   assert.match(h, /<table id="tabla-nutrimental"[^>]*style="display:table;width:100%;border-collapse:collapse/);
-  assert.match(h, /<th scope="row" style="[^"]*display:table-cell/);
-  assert.match(h, /<td style="[^"]*border-bottom:1px solid/);
+  assert.match(h, /<th scope="row"[^>]*style="[^"]*display:table-cell/);
+  assert.match(h, /<td[^>]*style="[^"]*border-bottom:1px solid/);
   assert.ok(!/<style/.test(h), 'sin bloque <style> que el editor pueda quitar');
+});
+
+test('tablas de Magento: llevan también atributos clásicos (borde, espacio y alineación) por si el editor quita el style', () => {
+  const h = F.computeFor('sup', { marca: 'Fresubin', componente: 'Fórmula', forma: 'Líquido', contenido: '200 mL', fabricante: 'Fresenius', nutrimental: 'Proteínas | 20,0 g' }, keep, meta).mg.html;
+  assert.match(h, /<table id="tabla-nutrimental"[^>]*width="100%" border="1" cellspacing="0" cellpadding="6"/);
+  assert.match(h, /<th scope="row" align="left" valign="top"/);
+});
+
+test('suplementos: la información nutrimental va al final, antes de las preguntas frecuentes', () => {
+  const h = F.computeFor('sup', { marca: 'Fresubin', componente: 'Fórmula', forma: 'Líquido', contenido: '200 mL', fabricante: 'Fresenius', nutrimental: 'Proteínas | 20,0 g', modo: 'Tomar 1 botella', advertencias: 'Consulte a su médico' }, keep, meta).mg.html;
+  const pos = re => h.search(re);
+  assert.ok(pos(/Modo de consumo/) < pos(/Advertencias:/) && pos(/Advertencias:/) < pos(/Condiciones de conservación|Información nutrimental/));
+  assert.ok(pos(/<h2>Información nutrimental/) > pos(/Advertencias:/) && pos(/<h2>Información nutrimental/) < pos(/<h2>Preguntas frecuentes/));
 });

@@ -202,6 +202,8 @@ const portionLine = v => {
   return v.porcion ? join(', ', `Tamaño de porción: ${lc(v.porcion)}`, por) : `Porciones por envase: ${n}`;
 };
 /* Estilos en línea de las tablas: la plantilla de la tienda no les da forma de tabla, y un <style> aparte puede quitarlo el editor de Magento. */
+/* Atributos clásicos de tabla: si el editor de la tienda quita el style, bordes y espacios se conservan. */
+const TA = 'width="100%" border="1" cellspacing="0" cellpadding="6"';
 const TS = (() => {
   const b = 'padding:6px 8px;border-bottom:1px solid #d9d9d9;text-align:left;vertical-align:top;display:table-cell';
   return {
@@ -219,11 +221,11 @@ function nutriTableHtml(v) {
   const p = parseNutrition(text);
   if (!p.rows.length) return '';
   const span = p.cols + 1;
-  const th = p.head.slice(0, span).map(h => `<th scope="col" style="${TS.head}">${escT(h)}</th>`).join('');
-  const body = p.items.map(it => it.kind === 'titulo' ? `    <tr class="titulo" style="${TS.tr}"><th scope="colgroup" colspan="${span}" style="${TS.titulo}">${escT(it.text)}</th></tr>`
-    : it.kind === 'nota' ? `    <tr class="nota" style="${TS.tr}"><td colspan="${span}" style="${TS.nota}">${escT(it.text)}</td></tr>`
-    : `    <tr${it.sub ? ' class="sub"' : ''} style="${TS.tr}"><th scope="row" style="${it.sub ? TS.rowSub : TS.row}">${escT(it.name)}</th>${Array.from({ length: p.cols }, (_, j) => `<td style="${it.sub ? TS.cellSub : TS.cell}">${escT(it.cells[j] || '—')}</td>`).join('')}</tr>`).join('\n');
-  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental" style="${TS.table}">\n${p.caption ? `  <caption style="${TS.caption}">${escT(p.caption)}</caption>\n` : ''}  <thead style="${TS.thead}"><tr style="${TS.tr}">${th}</tr></thead>\n  <tbody style="${TS.group}">\n${body}\n  </tbody>\n</table>`;
+  const th = p.head.slice(0, span).map(h => `<th scope="col" align="left" valign="top" style="${TS.head}">${escT(h)}</th>`).join('');
+  const body = p.items.map(it => it.kind === 'titulo' ? `    <tr class="titulo" style="${TS.tr}"><th scope="colgroup" colspan="${span}" align="left" valign="top" style="${TS.titulo}">${escT(it.text)}</th></tr>`
+    : it.kind === 'nota' ? `    <tr class="nota" style="${TS.tr}"><td colspan="${span}" align="left" valign="top" style="${TS.nota}">${escT(it.text)}</td></tr>`
+    : `    <tr${it.sub ? ' class="sub"' : ''} style="${TS.tr}"><th scope="row" align="left" valign="top" style="${it.sub ? TS.rowSub : TS.row}">${escT(it.name)}</th>${Array.from({ length: p.cols }, (_, j) => `<td align="left" valign="top" style="${it.sub ? TS.cellSub : TS.cell}">${escT(it.cells[j] || '—')}</td>`).join('')}</tr>`).join('\n');
+  return `<h2>Información nutrimental:</h2>\n<table id="tabla-nutrimental" class="tabla-nutrimental" aria-label="Información nutrimental" ${TA} style="${TS.table}">\n${p.caption ? `  <caption style="${TS.caption}">${escT(p.caption)}</caption>\n` : ''}  <thead style="${TS.thead}"><tr style="${TS.tr}">${th}</tr></thead>\n  <tbody style="${TS.group}">\n${body}\n  </tbody>\n</table>`;
 }
 /* Dato de la primera columna de valores, para las preguntas frecuentes. */
 function nutriFact(v, re) {
@@ -431,7 +433,7 @@ function disPresent(v, w = x => x) {
 }
 /* Especificaciones: una línea «Nombre | Valor». Las líneas sin barra se ignoran en la tabla y la revisión avisa. */
 const specRows = t => String(t || '').split(/\r?\n/).map(l => l.trim()).filter(l => l.includes('|')).map(l => { const i = l.indexOf('|'); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }).filter(r => r[0] && r[1]);
-const specHtml = t => { const r = specRows(t); return r.length ? `<h2>Especificaciones técnicas:</h2>\n<table id="especificaciones-tecnicas" class="tabla-especificaciones" aria-label="Especificaciones técnicas" style="${TS.table}">\n<tbody style="${TS.group}">\n${r.map(([a, b]) => `  <tr style="${TS.tr}"><th scope="row" style="${TS.spec}">${escT(a)}</th><td style="${TS.cell}">${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
+const specHtml = t => { const r = specRows(t); return r.length ? `<h2>Especificaciones técnicas:</h2>\n<table id="especificaciones-tecnicas" class="tabla-especificaciones" aria-label="Especificaciones técnicas" ${TA} style="${TS.table}">\n<tbody style="${TS.group}">\n${r.map(([a, b]) => `  <tr style="${TS.tr}"><th scope="row" align="left" valign="top" style="${TS.spec}">${escT(a)}</th><td align="left" valign="top" style="${TS.cell}">${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
 const DIS_AMBER = [[/\bcl[ií]nicamente (?:validad|probad|comprobad)\w*/i, 'clínicamente validado'], [/\bprecisi[oó]n cl[ií]nica\b/i, 'precisión clínica'], [/\b100\s?%\s*(?:exact|precis)\w*/i, '100% exacto'], [/\bdiagn[oó]stic\w*/i, 'diagnóstico'], [/\b(?:grado|nivel) m[eé]dic[oa]\b/i, 'grado médico']];
 /* ---------- Accesorios: género y número del tipo, material sin repetir, guía de tallas y tipos que suelen ser dispositivos médicos ---------- */
 const ACC_ART = { muneca: 'una', munequera: 'una', rodillera: 'una', tobillera: 'una', faja: 'una', baston: 'un', venda: 'una', pastillero: 'un', bolsa: 'una', collarin: 'un', cabestrillo: 'un', andadera: 'una', almohadilla: 'una', cojin: 'un', parches: 'unos', muletas: 'unas', medias: 'unas', vendas: 'unas', guantes: 'unos', cubrebocas: '', calcetines: 'unos' };
@@ -459,7 +461,7 @@ function accPresent(v, w = x => x) {
   return env ? `en ${lc(env)}` : '';
 }
 const accBeneficios = v => { const l = String(v.beneficios || '').split(/\n+/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean); const u = v.uso ? [v.uso] : []; return [...u, ...l.filter(x => !u.some(y => foldTok(y).join(' ') === foldTok(x).join(' ')))]; };
-const tallasHtml = t => { const r = specRows(t); return r.length ? `<h2>Guía de tallas y medidas:</h2>\n<table id="guia-de-tallas" class="tabla-especificaciones" aria-label="Guía de tallas y medidas" style="${TS.table}">\n<tbody style="${TS.group}">\n${r.map(([a, b]) => `  <tr style="${TS.tr}"><th scope="row" style="${TS.spec}">${escT(a)}</th><td style="${TS.cell}">${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
+const tallasHtml = t => { const r = specRows(t); return r.length ? `<h2>Guía de tallas y medidas:</h2>\n<table id="guia-de-tallas" class="tabla-especificaciones" aria-label="Guía de tallas y medidas" ${TA} style="${TS.table}">\n<tbody style="${TS.group}">\n${r.map(([a, b]) => `  <tr style="${TS.tr}"><th scope="row" align="left" valign="top" style="${TS.spec}">${escT(a)}</th><td align="left" valign="top" style="${TS.cell}">${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
 const ACC_MED = [[/\bv[aá]rices\b|\bflebitis\b|\btrombosis\b|\bartritis\b|\bartrosis\b|\bhernia\b|\blumbalgia\b/i, 'enfermedad']];
 const ACC_AMBER = [[/\baliv(?:ia|io|ian|iar|ios)\b/i, 'alivia'], [/\bcorrig\w+/i, 'corrige'], [/\bterap[eé]utic\w*/i, 'terapéutico'], [/\bortop[eé]dic[oa]s? profesional/i, 'ortopédico profesional']];
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
@@ -727,7 +729,7 @@ const CATS = {
       return assemble(p, 'Ficha técnica del suplemento:', [
         ['Marca', v.marca], ['Tipo o Componente Principal', v.componente], ['Forma', v.forma], ['Sabor', v.sabor],
         ['Contenido Neto/Piezas', v.contenido], ['Tipo de Envase', v.envase], ...portionRows(v), ...(v.publico && v.publico.length <= 60 ? [['Dirigido a', v.publico]] : []), ['Laboratorio', v.fabricante], ['Categoría', v.categoria]
-      ], [...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : []), ...secs([['Dirigido a:', v.publico && v.publico.length > 60 ? v.publico : '']]), ...compSec(v.composicion), ...secs([['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP]);
+      ], [...secs([['Dirigido a:', v.publico && v.publico.length > 60 ? v.publico : '']]), ...compSec(v.composicion), ...secs([['Ingredientes:', v.ingredientes], ['Alérgenos:', v.alergenos]]), ...listSec('Atributos:', v.atributos), ...secs([['Características:', v.caracteristicas], ['Modo de consumo:', v.modo], ['Advertencias:', v.advertencias]]), NOTA_SUP, ...(v.nutrimental ? [nutriTableHtml(v)].filter(Boolean) : [])]);
     }
   },
 
