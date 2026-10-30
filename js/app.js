@@ -1815,7 +1815,7 @@ $('#logo-clear').addEventListener('click', () => {
   toast('Logotipo quitado.');
 });
 
-const VERBATIM_KEYS = ['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'nutrimental'];
+const VERBATIM_KEYS = ['inci', 'modo', 'precauciones', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'nutrimental', 'beneficios'];
 function renderImgReview() {
   const box = $('#img-review'), r = state.imgResult;
   if (!r) { box.innerHTML = ''; return; }
@@ -2673,9 +2673,11 @@ async function proposeLinks(mode, subject, candidates) {
     return { ai: false, matches: new Map() };
   }
 }
-const linkOptions = (cands, matches) => {
-  const hit = cands.filter(c => matches.has(c.sku)), rest = cands.filter(c => !matches.has(c.sku)).sort((a, b) => a.nombre.localeCompare(b.nombre)).slice(0, 25);
-  return [...hit.map(c => ({ sku: c.sku, label: c.nombre, motivo: 'Propuesto por IA: ' + (matches.get(c.sku) || 'sin motivo'), checked: true })), ...rest.map(c => ({ sku: c.sku, label: c.nombre, motivo: '', checked: false }))];
+const linkOptions = (cands, matches, subject) => {
+  const mates = new Set(subject ? Catalog.routineMates(state.catalog, subject).map(x => x.sku) : []);
+  const hit = cands.filter(c => matches.has(c.sku)), rest = cands.filter(c => !matches.has(c.sku)).sort((a, b) => (mates.has(b.sku) - mates.has(a.sku)) || a.nombre.localeCompare(b.nombre)).slice(0, 25);
+  const why = c => mates.has(c.sku) ? `Completa la rutina: ${c.rutina} con ${subject.rutina}` : '';
+  return [...hit.map(c => ({ sku: c.sku, label: c.nombre, motivo: 'Propuesto por IA: ' + (matches.get(c.sku) || 'sin motivo'), checked: true })), ...rest.map(c => ({ sku: c.sku, label: c.nombre, motivo: why(c), checked: false }))];
 };
 function applyLinks(parentSku, childSku, by, why) {
   const r = Catalog.link(state.catalog, parentSku, childSku, { by, at: catalogNow(), why });
@@ -2702,7 +2704,7 @@ async function offerParents(e) {
   const r = await linkDialog({
     title: ai ? 'Este producto puede ser complemento' : 'Asignar como complemento',
     intro: ai ? `«${e.nombre}» podría ser complemento de estos productos. Marca los que sí.` : `«${e.nombre}»: elige de qué productos principales es complemento. La IA no está disponible, así que la lista es manual.`,
-    options: linkOptions(cands, matches),
+    options: linkOptions(cands, matches, e),
     buttons: [{ id: 'link', label: 'Vincular seleccionados', primary: true }, { id: 'wait', label: 'Dejar en espera' }, { id: 'indep', label: 'No es complemento' }, { id: 'later', label: 'Ahora no' }]
   });
   if (r.action === 'link' && r.skus.length) {
@@ -2720,7 +2722,7 @@ async function offerChildren(p, force) {
   const { ai, matches } = await proposeLinks('parent', p, cands);
   if (ai && !matches.size) { if (force) toast('La IA no encontró complementos para este producto.'); return; }
   if (!ai && !waiting.length && !force) return;
-  const options = linkOptions(waiting.concat(others), matches);
+  const options = linkOptions(waiting.concat(others), matches, p);
   const r = await linkDialog({
     title: ai ? 'Hay complementos para este producto' : 'Asignar complementos',
     intro: ai ? `«${p.nombre}» podría tener estos complementos del catálogo. Marca los que sí.` : `Hay ${waiting.length} producto(s) esperando un producto principal. Elige cuáles son complemento de «${p.nombre}».`,

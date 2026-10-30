@@ -53,7 +53,7 @@ const round2 = n => Math.round(n * 100) / 100;
 const INFO = {
   med: { identidad: ['marca', 'principio'], tecnica: ['concentracion', 'forma', 'via'], origen: ['laboratorio'] },
   dis: { identidad: ['marca', 'modelo', 'tipo'], tecnica: ['tecnologia', 'uso'], origen: ['fabricante'] },
-  cos: { identidad: ['marca', 'producto|tipo'], tecnica: ['atributo'], origen: ['fabricante'] },
+  cos: { identidad: ['marca', 'producto|tipo'], tecnica: ['atributo|beneficio|fps'], origen: ['fabricante'] },
   sup: { identidad: ['marca', 'componente'], tecnica: ['forma'], origen: ['fabricante'] },
   beb: { identidad: ['marca', 'tipo'], tecnica: ['sabor|atributo'], origen: ['fabricante'] },
   hig: { identidad: ['marca', 'producto'], tecnica: ['variante|uso'], origen: ['fabricante'] },

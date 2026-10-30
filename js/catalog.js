@@ -62,7 +62,7 @@ function upsert(cat, item, title, at) {
   const elegible = eligibleOf(item.cat, v);
   let e = find(cat, sku), isNew = !e, removed = [];
   if (!e) { e = { sku, addedAt: at, comp: 'sin_evaluar' }; cat.entries.push(e); }
-  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at, rv: relData(v) });
+  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at, rv: relData(v), rutina: item.cat === 'cos' ? (v.rutina || F.rutinaDe(v)) : '', zona: v.zona || '' });
   if (!elegible) {
     /* Si dejó de ser elegible (por ejemplo, se declaró que requiere receta), pierde sus vínculos como complemento. */
     removed = cat.links.filter(l => lk(l.c) === lk(sku));
@@ -72,6 +72,13 @@ function upsert(cat, item, title, at) {
   return { entry: e, isNew, removed };
 }
 
+/* Cosméticos que completan la rutina de este: otro paso de la rutina y, si los dos dicen la zona, que comparta alguna palabra (rostro, cuerpo…). */
+const zonaWords = z => String(z || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z]+/).filter(w => w.length > 3);
+function routineMates(cat, e) {
+  if (!e || !e.rutina) return [];
+  return cat.entries.filter(o => lk(o.sku) !== lk(e.sku) && o.cat === 'cos' && o.rutina && o.rutina !== e.rutina
+    && (!e.zona || !o.zona || zonaWords(e.zona).some(w => zonaWords(o.zona).includes(w))));
+}
 /* Productos principales a los que este producto podría complementar. */
 const candidateParents = (cat, child) => cat.entries.filter(p => lk(p.sku) !== lk(child.sku) && isParent(p) && !linked(cat, p.sku, child.sku));
 /* Complementos que esperan a un principal y todavía no están vinculados a este. */
@@ -191,7 +198,7 @@ function relUpdateCsv(cat, skus) {
   return { header: H, rows };
 }
 
-const api = { REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
+const api = { routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasCatalog = api;
 })(typeof self !== 'undefined' ? self : this);

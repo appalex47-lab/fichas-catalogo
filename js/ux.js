@@ -222,7 +222,7 @@ function titleKeysOf(res) { return uniq(asArr(res && res.title && res.title.segs
 function metaKeysOf(metaCfg, cat) {
   const m = metaCfg && metaCfg.cats && metaCfg.cats[cat];
   if (!m) return [];
-  const alias = { tipo_seo: ['componente', 'tipo', 'producto', 'modelo', 'tipoCorto'], variante_seo: ['sabor', 'contenido'], caracteristica1: ['caracteristicas'] };
+  const alias = { tipo_seo: ['componente', 'tipo', 'producto', 'modelo', 'tipoCorto'], variante_seo: ['sabor', 'variante', 'contenido'], caracteristica1: ['caracteristicas'], nombre: ['producto', 'tipo'], nombre_seo: ['producto', 'tipo', 'tipoCorto'], con_activo: ['atributo', 'fps'], piel_lc: ['piel'], beneficio_piel: ['beneficio', 'piel'], presentacion: ['envase', 'contenido'] };
   return uniq(['mt', 'md', 'alt'].flatMap(k => [...str(m[k] && m[k].tpl).matchAll(/\{(\w+)(?::\w+)?\}/g)].flatMap(x => [x[1], ...(alias[x[1]] || [])])));
 }
 function usageOf(key, ctx) {

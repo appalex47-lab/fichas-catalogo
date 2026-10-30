@@ -180,3 +180,18 @@ test('campana: lo exportado antes de existir la campana toma su estado como punt
   assert.deepEqual(C.alerts(c), []);
   assert.equal(C.baseline(c), 0);
 });
+
+test('rutina: el paso se deduce del tipo y los cosméticos de otro paso completan la rutina', () => {
+  assert.deepEqual(['Sérum facial', 'Gel limpiador facial', 'Loción corporal', 'Protector solar facial', 'Base de maquillaje fluida', 'Shampoo anticaspa'].map(t => F.rutinaDe({ tipo: t })), ['Tratamiento', 'Limpieza', 'Hidratación', 'Protección solar', 'Maquillaje', 'Cabello']);
+  const c = C.empty();
+  const cos = (sku, tipo, zona) => item(sku, 'cos', { marca: 'M', tipo, zona });
+  const a = C.upsert(c, cos('LIM', 'Gel limpiador facial', 'Rostro'), 'L', AT).entry;
+  C.upsert(c, cos('HID', 'Crema hidratante facial', 'Rostro y cuello'), 'H', AT);
+  C.upsert(c, cos('LOC', 'Loción corporal', 'Cuerpo'), 'C', AT);
+  C.upsert(c, cos('LIM2', 'Agua micelar', 'Rostro'), 'A', AT);
+  assert.equal(a.rutina, 'Limpieza');
+  assert.deepEqual(C.routineMates(c, a).map(x => x.sku), ['HID'], 'otro paso y misma zona; ni el mismo paso ni otra zona');
+  assert.deepEqual(C.routineMates(c, C.upsert(c, nutri('B', 'X'), 'x', AT).entry), []);
+  const manual = C.upsert(c, item('SOL', 'cos', { marca: 'M', tipo: 'Crema', rutina: 'Protección solar' }), 'S', AT).entry;
+  assert.equal(manual.rutina, 'Protección solar', 'lo declarado manda sobre lo deducido');
+});
