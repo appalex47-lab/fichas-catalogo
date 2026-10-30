@@ -203,6 +203,8 @@ Los productos con SKU que guardas quedan también en un **catálogo interno**, a
 
 Título de medicamentos: si la forma es de pieza (cápsulas, tabletas, comprimidos, grageas, parches, supositorios…) y la presentación trae solo el conteo («Caja con 28 piezas» o «28»), el título dice «28 cápsulas». Líquidos, inyectables y presentaciones con varios blísteres siguen como «Forma, Presentación».
 
+HTML de Magento: las secciones ya no se separan con `<br />` (el margen del `<h2>` del tema las separa) y los textos de varias líneas conservan cada línea con `<br />` dentro del párrafo.
+
 Mejoras del catálogo:
 - **Lote**: un complemento sin producto principal muestra la etiqueta «Espera producto principal» en su fila.
 - **Alternativas y relacionados a mano**: en la tabla del catálogo, cada producto muestra sus alternativas y relacionados (los de las reglas y los tuyos, marcados «a mano»). «×» quita uno (si lo proponía la regla queda como «Quitado» con «Deshacer»); «Agregar» pide el SKU de otro producto del catálogo. Vale para los dos productos y también se aplica en el CSV de Magento y en la campana. Igual que antes, solo salen los SKU que van en el archivo o que ya se cargaron.

@@ -124,7 +124,7 @@ test('revisión de lenguaje marca claims prohibidos', () => {
 const cos = { marca: 'La Roche-Posay', producto: 'Hyalu B5', tipo: 'Sérum', atributo: 'Ácido hialurónico', contenido: 'FCO 30ML', fabricante: "L'Oréal", piel: 'Piel sensible' };
 
 test('cosméticos: las secciones nuevas son opcionales y no alteran el texto aprobado', () => {
-  const sinFaq = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const sinFaq = h => h.split('\n<h2>Preguntas frecuentes:</h2>')[0];
   const base = sinFaq(F.computeFor('cos', cos, keep, meta).mg.html);
   assert.ok(!/Ingredientes:|Modo de uso:|Precauciones:|Protección solar:/.test(base));
   const conExtras = F.computeFor('cos', { ...cos, inci: 'AQUA, GLYCERIN, PEG-100 STEARATE, CI 77891', modo: 'APLICAR SOBRE LA PIEL LIMPIA. USAR DOS VECES AL DÍA.', precauciones: 'Evitar el contacto con los ojos.', fps: '50+', nivel: 'Muy alta' }, keep, meta).mg.html;
@@ -245,7 +245,7 @@ test('exportación: los datos sugeridos por IA sin confirmar no llegan a Magento
 const medFaq = { marca: 'Mounjaro', concentracion: '2.5 mg', volumen: '0.6 mL', principio: 'Tirzepatida', forma: 'Solución inyectable', contenido: 'Caja con 4 plumas', laboratorio: 'Eli Lilly', via: 'Subcutánea', receta: 'si' };
 
 test('medicamentos: indicaciones, posología, población y contraindicaciones son opcionales y van antes de la conservación', () => {
-  const sinFaq = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const sinFaq = h => h.split('\n<h2>Preguntas frecuentes:</h2>')[0];
   const base = F.computeFor('med', medFaq, keep, meta).mg.html;
   assert.ok(!/Indicaciones:|Cómo se usa:|Contraindicaciones/.test(sinFaq(base)));
   const html = F.computeFor('med', { ...medFaq, indicaciones: 'Control glucémico en adultos con diabetes tipo 2', posologia: 'Una vez por semana', contraindicaciones: 'No usar en caso de hipersensibilidad' }, keep, meta).mg.html;
@@ -557,7 +557,7 @@ test('meta: un grupo opcional vacío desaparece y migrateMeta cambia solo la pla
 
 /* ---------- Todo dato capturado llega a donde dice llegar ---------- */
 test('Magento: todos los datos de texto capturados aparecen en la ficha (no solo en la descripción de Merchant Center)', () => {
-  const strip = h => h.split('\n<br />\n<h2>Preguntas frecuentes:</h2>')[0];
+  const strip = h => h.split('\n<h2>Preguntas frecuentes:</h2>')[0];
   const base = {
     med: { marca: 'M', concentracion: '5 mg', principio: 'P', forma: 'Tableta', contenido: 'Caja con 10 tabletas', laboratorio: 'L', via: 'Oral', receta: 'no' },
     dis: { marca: 'M', modelo: 'X1', tipo: 'Tensiómetro', tecnologia: 'Automático', fabricante: 'F' },
@@ -712,7 +712,7 @@ test('porción única: no se repite el contenido en la ficha técnica ni en Merc
   const r = F.computeFor('sup', hiper, keep, meta);
   assert.ok(!/Tamaño de Porción/.test(r.mg.html), 'sin fila de tamaño de porción');
   assert.match(r.mg.html, /<li><strong>Porciones por Envase:<\/strong> 1 \(porción única\)<\/li>/);
-  assert.equal((r.mg.html.split('\n<br />\n<h2>Preguntas frecuentes')[0].match(/200 ml/g) || []).length, 2, '200 ml solo en la introducción (plantilla aprobada) y en la fila de contenido');
+  assert.equal((r.mg.html.split('\n<h2>Preguntas frecuentes')[0].match(/200 ml/g) || []).length, 2, '200 ml solo en la introducción (plantilla aprobada) y en la fila de contenido');
   assert.ok(!/Tamaño de porción|Porciones por envase/.test(r.mc.text));
   assert.ok(!r.mg.faq.some(([q]) => /Cuántas porciones/.test(q)), 'tampoco la pregunta de porciones');
   const sinPorciones = F.computeFor('sup', { ...hiper, porciones: '' }, keep, meta);
@@ -1316,4 +1316,11 @@ test('título de medicamentos: forma de pieza + presentación se leen «28 cáps
   assert.equal(t('Cápsulas de liberación prolongada', 'Frasco con 60 piezas'), '60 cápsulas de liberación prolongada');
   assert.equal(t('Jarabe', 'Frasco 120 mL'), 'Jarabe, Frasco 120 mL', 'líquidos e inyectables no se combinan');
   assert.equal(t('Comprimidos', 'Caja con 2 blísteres de 10 piezas'), 'Comprimidos, Caja con 2 blísteres de 10 piezas', 'si el conteo no es claro, no se calcula');
+});
+
+test('HTML de Magento: sin <br /> entre secciones y las líneas capturadas conservan su salto', () => {
+  const v = { marca: 'Enterokan', concentracion: '90 mg', principio: 'X', forma: 'Cápsulas', contenido: '28', laboratorio: 'S', via: 'Oral', receta: 'no', contraindicaciones: 'Consulte a su médico\nLea el instructivo' };
+  const h = F.buildMg(F.CATS.med, v).html;
+  assert.ok(!/\n<br \/>\n<h2>/.test(h), 'las secciones no se separan con <br />');
+  assert.match(h, /<p>Consulte a su médico<br \/>\nLea el instructivo<\/p>/);
 });
