@@ -1467,7 +1467,7 @@ function panelMeta(r) {
     + metaBlock('Alt de la imagen principal', m.alt, 'alt', true, 'Va en base_image_label.');
 }
 
-function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog) }; }
+function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog), relOver: Catalog.relOver(state.catalog) }; }
 function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta, expOpts()); }
 function renderExport(assessed) {
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
@@ -2749,11 +2749,20 @@ function renderCatalog() {
   if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en el lote se agregan aquí solos. Vaciar el lote no los borra.</p></div>'; return; }
   const waiting = c.entries.filter(e => Catalog.status(c, e) === 'esperando').length;
   const pend = c.entries.filter(e => e.elegible && Catalog.status(c, e) === 'sin_evaluar').length;
+  const eff = Catalog.effectiveRels(c), nameOf = sku => { const x = Catalog.find(c, sku); return x ? x.nombre : sku; };
+  const manual = (a, b, kind) => (c.relMan || []).find(r => r.kind === kind && ((Catalog.lk(r.a) === Catalog.lk(a) && Catalog.lk(r.b) === Catalog.lk(b)) || (Catalog.lk(r.a) === Catalog.lk(b) && Catalog.lk(r.b) === Catalog.lk(a))));
+  const relBlock = (e, kind, label) => {
+    const list = (eff.get(Catalog.lk(e.sku)) || {})[kind] || [];
+    const gone = (c.relMan || []).filter(r => r.kind === kind && !r.on && (Catalog.lk(r.a) === Catalog.lk(e.sku) || Catalog.lk(r.b) === Catalog.lk(e.sku))).map(r => Catalog.lk(r.a) === Catalog.lk(e.sku) ? r.b : r.a);
+    return `<div><b>${label}:</b> ${list.map(k => `<span class="tag tag--info">${esc(nameOf(k))}${manual(e.sku, k, kind) ? ' (a mano)' : ''} <button type="button" class="linkbtn" data-cat-relx="${esc(e.sku)}|${esc(k)}|${kind}" aria-label="Quitar ${esc(nameOf(k))} de ${label.toLowerCase()}">×</button></span>`).join(' ')}`
+      + `${gone.map(k => `<span class="tag tag--quiet">Quitado: ${esc(nameOf(k))} <button type="button" class="linkbtn" data-cat-relundo="${esc(e.sku)}|${esc(k)}|${kind}">Deshacer</button></span>`).join(' ')}`
+      + ` <button type="button" class="linkbtn" data-cat-reladd="${esc(e.sku)}|${kind}">Agregar</button></div>`;
+  };
   const rows = c.entries.slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))).map(e => {
     const st = Catalog.status(c, e), kids = Catalog.childrenOf(c, e.sku), pars = Catalog.parentsOf(c, e.sku);
     const role = !e.elegible ? 'Principal' : e.padre ? 'Complemento y principal' : 'Complemento posible';
     const chip = (p, ch, name) => `<span class="tag tag--info">${esc(name)} <button type="button" class="linkbtn" data-cat-unlink="${esc(p)}|${esc(ch)}" aria-label="Quitar vínculo con ${esc(name)}">×</button></span>`;
-    const rel = [kids.length ? `<div><b>Complementos:</b> ${kids.map(k => chip(e.sku, k.sku, k.nombre)).join(' ')}</div>` : '', pars.length ? `<div><b>Complemento de:</b> ${pars.map(k => chip(k.sku, e.sku, k.nombre)).join(' ')}</div>` : ''].join('');
+    const rel = [kids.length ? `<div><b>Complementos:</b> ${kids.map(k => chip(e.sku, k.sku, k.nombre)).join(' ')}</div>` : '', pars.length ? `<div><b>Complemento de:</b> ${pars.map(k => chip(k.sku, e.sku, k.nombre)).join(' ')}</div>` : '', relBlock(e, 'upsell', 'Alternativas'), relBlock(e, 'related', 'Relacionados')].join('');
     return `<tr data-sku="${esc(e.sku)}"><td data-label="SKU">${esc(e.sku)}</td><td class="t" data-label="Producto">${esc(e.nombre)}${[e.area, e.area2].filter(Boolean).length ? `<span class="ld-why">${esc([e.area, e.area2].filter(Boolean).join(' · '))}${e.atc ? ' · ATC ' + esc(e.atc) : ''}</span>` : ''}</td><td data-label="Rol">${esc(role)}</td><td data-label="Estado"><span class="status status--${st === 'esperando' ? 'warn' : st === 'vinculado' ? 'ok' : 'info'}">${esc(L[st])}</span></td><td data-label="Vínculos">${rel}</td>`
       + `<td class="ops"><button type="button" class="btn btn--quiet" data-cat-find="${esc(e.sku)}">Buscar</button>${e.elegible ? `<button type="button" class="btn btn--quiet" data-cat-parent="${esc(e.sku)}" aria-pressed="${!!e.padre}">${e.padre ? 'Quitar de principales' : 'Marcar como principal'}</button>` : ''}<button type="button" class="btn btn--quiet" data-cat-del="${esc(e.sku)}">Quitar</button></td></tr>`;
   }).join('');
@@ -2800,12 +2809,28 @@ $('#bell-pop').addEventListener('click', e => {
 });
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest && e.target.closest('[data-cat-find],[data-cat-parent],[data-cat-del],[data-cat-unlink],#cat-review'); if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-cat-find],[data-cat-parent],[data-cat-del],[data-cat-unlink],[data-cat-relx],[data-cat-relundo],[data-cat-reladd],#cat-review'); if (!t) return;
   const c = state.catalog;
   if (t.id === 'cat-review') { queueLinking(pendingLinks(c)); return; }
   if (t.dataset.catFind) { queueLinking([t.dataset.catFind], true); return; }
   if (t.dataset.catParent) { const x = Catalog.find(c, t.dataset.catParent); if (x) { Catalog.setParent(c, x.sku, !x.padre); saveCatalog(); renderCatalog(); } return; }
   if (t.dataset.catUnlink) { const [p, ch] = t.dataset.catUnlink.split('|'); if (Catalog.unlink(c, p, ch)) { state.audit.push(Anomalies.event('complemento_desvinculado', null, { parent: p, child: ch, por: 'manual' })); persist('fichas.audit.v1', state.audit); saveCatalog(); renderCatalog(); toast('Vínculo quitado.'); } return; }
+  if (t.dataset.catRelx || t.dataset.catRelundo) {
+    const manual = (x, y, k) => (c.relMan || []).find(r => r.kind === k && ((Catalog.lk(r.a) === Catalog.lk(x) && Catalog.lk(r.b) === Catalog.lk(y)) || (Catalog.lk(r.a) === Catalog.lk(y) && Catalog.lk(r.b) === Catalog.lk(x))));
+    const [a, b, kind] = (t.dataset.catRelx || t.dataset.catRelundo).split('|');
+    if (t.dataset.catRelx) { if (manual(a, b, kind) && manual(a, b, kind).on) Catalog.clearRel(c, a, b, kind); else Catalog.setRel(c, a, b, kind, false, new Date().toISOString()); }
+    else Catalog.clearRel(c, a, b, kind);
+    saveCatalog(); renderCatalog(); renderBell();
+    return;
+  }
+  if (t.dataset.catReladd) {
+    const [a, kind] = t.dataset.catReladd.split('|'), x = Catalog.find(c, a); if (!x) return;
+    const lab = kind === 'upsell' ? 'alternativa' : 'producto relacionado';
+    const v = await inputDialog({ title: `Agregar ${lab} a «${x.nombre}»`, message: `Escribe el SKU de un producto del catálogo. Queda en los dos productos y se exporta a Magento si el SKU va en el archivo o ya se cargó.`, confirmLabel: 'Agregar', fields: [{ key: 'sku', label: 'SKU', ph: 'SKU del catálogo' }],
+      validate: vals => { const y = Catalog.find(c, vals.sku); return !vals.sku ? 'Escribe un SKU.' : !y ? 'Ese SKU no está en el catálogo.' : Catalog.lk(y.sku) === Catalog.lk(a) ? 'Elige otro producto.' : ''; } });
+    if (v) { const y = Catalog.find(c, v.sku); Catalog.setRel(c, a, y.sku, kind, true, new Date().toISOString()); saveCatalog(); renderCatalog(); renderBell(); toast(`«${y.nombre}» agregado.`); }
+    return;
+  }
   if (t.dataset.catDel) {
     const x = Catalog.find(c, t.dataset.catDel); if (!x) return;
     const ok = await confirmDialog({ title: '¿Quitar del catálogo?', message: `Se quitará «${x.nombre}» del catálogo interno y sus vínculos. El producto del lote no se borra.`, confirmLabel: 'Quitar', danger: true });

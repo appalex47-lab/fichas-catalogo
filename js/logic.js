@@ -1877,12 +1877,14 @@ function magentoBatch(items, keep, metaCfg, opts) {
   if (opts.relations) {
     const map = relations([...entries.values()]);
     for (const [key, row] of bySku) {
-      const r = map.get(key);
+      const r = map.get(key) || ((opts.relOver && opts.relOver.has(key)) ? { upsell: [], related: [], crosssell: [] } : null);
       if (!r) continue;
       /* Complementos confirmados en el catálogo interno: solo si el SKU va en este archivo o ya se exportó antes. */
       const extra = ((opts.catalogCross && opts.catalogCross.get(key)) || []).filter(c => bySku.has(c.toLowerCase()) || (opts.knownSkus && opts.knownSkus.has(c.toLowerCase())));
       const cross = [...new Set([...r.crosssell, ...extra])];
-      const vals = { upsell: r.upsell, related: r.related, crosssell: cross };
+      const ov = (opts.relOver && opts.relOver.get(key)) || {};
+      const man = (list, o) => { const del = new Set(((o && o.del) || []).map(x => x.toLowerCase())); const add = ((o && o.add) || []).filter(c => bySku.has(c.toLowerCase()) || (opts.knownSkus && opts.knownSkus.has(c.toLowerCase()))); return [...new Set([...list.filter(x => !del.has(x.toLowerCase())), ...add])]; };
+      const vals = { upsell: man(r.upsell, ov.upsell), related: man(r.related, ov.related), crosssell: cross };
       [['upsell_skus', 'upsell'], ['related_skus', 'related'], ['crosssell_skus', 'crosssell']].forEach(([col, k]) => {
         if (vals[k].length) { row[MAG_IDX[col]] = sanitizeMagentoCell(vals[k].join(','), col); rel[k]++; }
       });

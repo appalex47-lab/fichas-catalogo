@@ -195,3 +195,47 @@ test('rutina: el paso se deduce del tipo y los cosméticos de otro paso completa
   const manual = C.upsert(c, item('SOL', 'cos', { marca: 'M', tipo: 'Crema', rutina: 'Protección solar' }), 'S', AT).entry;
   assert.equal(manual.rutina, 'Protección solar', 'lo declarado manda sobre lo deducido');
 });
+
+/* ---------- alternativas y relacionados a mano ---------- */
+test('a mano: agregar una alternativa vale para los dos productos y quitar una de la regla la oculta', () => {
+  const C = require('../js/catalog.js');
+  const c = C.empty();
+  C.upsert(c, { sku: 'A1', nombre: 'Uno', cat: 'beb', marca: 'X', rv: { marca: 'X' } });
+  C.upsert(c, { sku: 'B2', nombre: 'Dos', cat: 'beb', marca: 'Y', rv: { marca: 'Y' } });
+  assert.ok(C.setRel(c, 'a1', 'B2', 'upsell', true, 't'));
+  let eff = C.effectiveRels(c);
+  assert.deepEqual(eff.get('a1').upsell, ['B2']);
+  assert.deepEqual(eff.get('b2').upsell, ['A1']);
+  assert.ok(C.setRel(c, 'A1', 'B2', 'upsell', false, 't'));
+  assert.equal(c.relMan.length, 1);
+  assert.deepEqual(C.effectiveRels(c).get('a1').upsell, []);
+  assert.ok(C.clearRel(c, 'B2', 'A1', 'upsell'));
+  assert.equal(c.relMan.length, 0);
+  assert.equal(C.setRel(c, 'A1', 'A1', 'upsell', true), false);
+  assert.equal(C.setRel(c, 'A1', 'ZZ', 'upsell', true), false);
+});
+
+test('a mano: se conserva al normalizar y se borra con el producto', () => {
+  const C = require('../js/catalog.js');
+  const c = C.empty();
+  C.upsert(c, { sku: 'A1', nombre: 'Uno', cat: 'beb', marca: 'X' });
+  C.upsert(c, { sku: 'B2', nombre: 'Dos', cat: 'beb', marca: 'Y' });
+  C.setRel(c, 'A1', 'B2', 'related', true, 't');
+  const n = C.normalize(JSON.parse(JSON.stringify(c)));
+  assert.equal(n.relMan.length, 1);
+  C.remove(c, 'B2');
+  assert.equal(c.relMan.length, 0);
+});
+
+test('CSV: alternativas a mano se agregan, y las quitadas no salen, siempre que el SKU vaya en el archivo', () => {
+  const meta = F.defMeta();
+  const beb = (sku, marca) => ({ sku, cat: 'beb', v: { marca, tipo: 'Suero oral', sabor: 'Coco', atributo: 'Sin azúcar', contenido: '625 mL' } });
+  const col = (ex, sku, name) => ex.rows.find(r => r[0] === sku)[ex.header.indexOf(name)];
+  const items = [beb('A-1', 'Alfa'), beb('B-2', 'Beta')];
+  const base = F.magentoBatch(items, new Set(), meta, { relations: true });
+  assert.equal(col(base, 'A-1', 'upsell_skus'), '');
+  const over = new Map([['a-1', { upsell: { add: ['B-2', 'Z-9'], del: [] } }], ['b-2', { upsell: { add: ['A-1'], del: [] } }]]);
+  const man = F.magentoBatch(items, new Set(), meta, { relations: true, relOver: over });
+  assert.equal(col(man, 'A-1', 'upsell_skus'), 'B-2', 'Z-9 no está en el archivo ni se cargó antes');
+  assert.equal(col(man, 'B-2', 'upsell_skus'), 'A-1');
+});
