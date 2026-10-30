@@ -239,3 +239,35 @@ test('CSV: alternativas a mano se agregan, y las quitadas no salen, siempre que 
   assert.equal(col(man, 'A-1', 'upsell_skus'), 'B-2', 'Z-9 no está en el archivo ni se cargó antes');
   assert.equal(col(man, 'B-2', 'upsell_skus'), 'A-1');
 });
+
+/* ---------- compartir: unir catálogos ---------- */
+test('unir: suma productos, vínculos y alternativas; en un producto repetido gana el más reciente', () => {
+  const mk = (rows, at) => { const c = C.empty(); rows.forEach(([sku, cat, v]) => C.upsert(c, item(sku, cat, v), sku, at)); return c; };
+  const a = mk([['MOU-1', 'med', { marca: 'Mounjaro', receta: 'si', especialidad: 'no' }], ['FRE-1', 'beb', { marca: 'Fresubin' }]], '2026-01-01T00:00:00Z');
+  const b = mk([['MOU-1', 'med', { marca: 'Mounjaro KwikPen', receta: 'si', especialidad: 'no' }], ['SUE-1', 'beb', { marca: 'Electrolit' }], ['FRE-1', 'beb', { marca: 'Fresubin' }]], '2026-02-01T00:00:00Z');
+  C.link(b, 'MOU-1', 'SUE-1', { by: 'manual', at: '2026-02-01' });
+  C.setRel(b, 'FRE-1', 'SUE-1', 'upsell', true, '2026-02-02');
+  C.markExported(b, ['MOU-1'], '2026-02-03');
+  const r = C.merge(a, JSON.parse(JSON.stringify(b)));
+  assert.equal(r.added, 1);
+  assert.equal(r.updated, 2);
+  assert.equal(a.entries.length, 3);
+  assert.equal(C.find(a, 'MOU-1').marca, 'Mounjaro KwikPen');
+  assert.equal(C.find(a, 'MOU-1').exportedAt, '2026-02-03');
+  assert.equal(a.links.length, 1);
+  assert.equal(a.relMan.length, 1);
+  const again = C.merge(a, JSON.parse(JSON.stringify(b)));
+  assert.deepEqual([again.added, again.updated, again.links, again.rels], [0, 0, 0, 0]);
+  assert.equal(a.links.length, 1);
+});
+
+test('unir: lo más viejo no pisa lo nuevo y los vínculos huérfanos se omiten', () => {
+  const a = C.empty(), b = C.empty();
+  C.upsert(a, item('X-1', 'beb', { marca: 'Nueva' }), 'x', '2026-05-01T00:00:00Z');
+  C.upsert(b, item('X-1', 'beb', { marca: 'Vieja' }), 'x', '2026-01-01T00:00:00Z');
+  b.links.push({ p: 'NOPE', c: 'X-1' });
+  const r = C.merge(a, b);
+  assert.equal(C.find(a, 'X-1').marca, 'Nueva');
+  assert.equal(r.same, 1);
+  assert.equal(a.links.length, 0);
+});

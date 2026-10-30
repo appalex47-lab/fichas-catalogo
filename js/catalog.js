@@ -120,6 +120,43 @@ function remove(cat, sku) {
   return cat.entries.length < n;
 }
 
+
+/* ---------- Compartir: unir el catálogo de otra persona con el propio ----------
+ * - Producto en los dos: gana el dato más reciente (updatedAt); lo cargado a Magento (exportedAt y relSnap) toma lo más reciente.
+ * - Vínculos y relaciones a mano: se suman. Para el mismo par, gana el más reciente.
+ * - Lo que alguien quitó no se propaga: no se guarda qué se borró. Para quitarlo en todos, que cada persona lo quite.
+ * Devuelve cuántos productos se agregaron, se actualizaron o quedaron igual. */
+const later = (a, b) => String(a || '') >= String(b || '');
+function merge(local, incoming) {
+  const inc = normalize(incoming), sum = { added: 0, updated: 0, same: 0, links: 0, rels: 0, invalid: 0 };
+  inc.entries.forEach(n => {
+    const e = find(local, n.sku);
+    if (!e) { local.entries.push(JSON.parse(JSON.stringify(n))); sum.added++; return; }
+    const exp = later(n.exportedAt, e.exportedAt) && n.exportedAt && n.exportedAt !== e.exportedAt;
+    const newer = String(n.updatedAt || '') > String(e.updatedAt || '');
+    if (!newer && !exp) { sum.same++; return; }
+    const keep = { bellSeen: e.bellSeen, exportedAt: e.exportedAt, relSnap: e.relSnap };
+    if (newer) Object.assign(e, JSON.parse(JSON.stringify(n)));
+    Object.assign(e, keep);
+    if (exp) { e.exportedAt = n.exportedAt; e.relSnap = n.relSnap ? JSON.parse(JSON.stringify(n.relSnap)) : e.relSnap; delete e.bellSeen; }
+    sum.updated++;
+  });
+  inc.links.forEach(l => {
+    if (!find(local, l.p) || !find(local, l.c)) { sum.invalid++; return; }
+    const c = find(local, l.c);
+    if (!c.elegible || local.links.some(x => lk(x.p) === lk(l.p) && lk(x.c) === lk(l.c))) return;
+    local.links.push({ ...l }); sum.links++;
+  });
+  local.relMan = local.relMan || [];
+  inc.relMan.forEach(r => {
+    if (!find(local, r.a) || !find(local, r.b)) { sum.invalid++; return; }
+    const mine = local.relMan.find(x => sameRel(x, r));
+    if (!mine) { local.relMan.push({ ...r }); sum.rels++; }
+    else if (String(r.at || '') > String(mine.at || '') && (mine.on !== r.on)) { Object.assign(mine, { on: r.on, at: r.at }); sum.rels++; }
+  });
+  return sum;
+}
+
 /* Para el CSV: principal (minúsculas) → SKU de sus complementos. Vuelve a comprobar que el complemento siga siendo elegible. */
 function crosssellMap(cat) {
   const out = new Map();
@@ -241,7 +278,7 @@ function relUpdateCsv(cat, skus) {
   return { header: H, rows };
 }
 
-const api = { setRel, clearRel, relOver, effectiveRels, REL_MAN, routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
+const api = { merge, setRel, clearRel, relOver, effectiveRels, REL_MAN, routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasCatalog = api;
 })(typeof self !== 'undefined' ? self : this);

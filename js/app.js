@@ -2770,6 +2770,26 @@ function renderCatalog() {
     + `<div class="actions"><button type="button" class="btn" id="cat-review"${pend || waiting ? '' : ' disabled'}>Revisar pendientes</button></div>`
     + `<div class="lote-wrap"><table class="lote-table"><thead><tr><th>SKU</th><th>Producto</th><th>Rol</th><th>Estado</th><th>Vínculos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* Compartir el catálogo: se descarga como archivo y se une con el de otra persona. */
+const catShare = (msg, bad) => { const el = $('#cat-share-status'); if (el) { el.textContent = msg; el.className = 'hint' + (bad ? ' status bad' : ''); } };
+$('#cat-export').addEventListener('click', e => withBusy(e.currentTarget, async () => {
+  if (!state.catalog.entries.length) { catShare('El catálogo está vacío; no hay nada que compartir.', true); return; }
+  const at = catalogNow();
+  await saveFile(`catalogo-${at.slice(0, 10)}.json`, JSON.stringify({ kind: 'fichas.catalog.share', v: 1, at, catalog: state.catalog }, null, 1), 'application/json');
+  catShare(`Catálogo descargado: ${state.catalog.entries.length} producto(s) y ${state.catalog.links.length} vínculo(s).`);
+}, 'descargar el catálogo'));
+$('#cat-import-btn').addEventListener('click', () => $('#cat-import').click());
+$('#cat-import').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text()), inc = data && data.kind === 'fichas.catalog.share' ? data.catalog : data;
+    if (!inc || !Array.isArray(inc.entries)) { catShare('Ese archivo no es un catálogo compartido de esta herramienta.', true); return; }
+    const r = Catalog.merge(state.catalog, inc);
+    saveCatalog(); renderCatalog(); renderBell();
+    state.audit.push(Anomalies.event('catalogo_unido', null, { agregados: r.added, actualizados: r.updated })); persist('fichas.audit.v1', state.audit);
+    catShare(`Unido: ${r.added} producto(s) nuevos, ${r.updated} actualizados, ${r.same} sin cambio, ${r.links} vínculo(s) y ${r.rels} alternativa(s) o relacionado(s) a mano.${r.invalid ? ` ${r.invalid} omitidos por apuntar a productos que no están.` : ''}`);
+  } catch (err) { catShare('No se pudo leer el archivo. ¿Es un .json descargado desde «Descargar catálogo para compartir»?', true); }
+});
 /* ---------- Campana: productos ya cargados cuyos vínculos cambiaron y productos nuevos sin cargar ---------- */
 const pendingLinks = c => c.entries.filter(x => (x.elegible && Catalog.status(c, x) === 'sin_evaluar') || (Catalog.isParent(x) && Catalog.waitingChildren(c, x).length)).map(x => x.sku);
 const bellList = (o, sign) => Catalog.REL_KINDS.filter(k => o[k].length).map(k => `${sign}${o[k].length} ${Catalog.REL_LABEL[k]} (${o[k].map(esc).join(', ')})`).join(' · ');

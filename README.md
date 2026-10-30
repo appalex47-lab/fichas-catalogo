@@ -201,6 +201,12 @@ Con la opción «Llenar productos relacionados, alternativas y compatibles» (Ex
 
 Los productos con SKU que guardas quedan también en un **catálogo interno**, aparte del lote: vaciar el lote no lo borra. Se ve en la sección «Catálogo» (botón del riel). Se guarda en este navegador y viaja dentro del respaldo del lote.
 
+Mejoras del catálogo:
+- **Lote**: un complemento sin producto principal muestra la etiqueta «Espera producto principal» en su fila.
+- **Alternativas y relacionados a mano**: en la tabla del catálogo, cada producto muestra sus alternativas y relacionados (los de las reglas y los tuyos, marcados «a mano»). «×» quita uno (si lo proponía la regla queda como «Quitado» con «Deshacer»); «Agregar» pide el SKU de otro producto del catálogo. Vale para los dos productos y también se aplica en el CSV de Magento y en la campana. Igual que antes, solo salen los SKU que van en el archivo o que ya se cargaron.
+- **Compartir el catálogo**: «Descargar catálogo para compartir» genera un `.json`; «Unir el catálogo de otra persona» lo suma al tuyo (productos, vínculos y alternativas a mano; en un producto repetido gana el dato más reciente y lo cargado a Magento toma lo más reciente). Lo que alguien quitó no se propaga a los demás. No hay sincronización en línea: se comparten archivos.
+- **SEO**: el puntaje de contenido ahora considera si hay al menos 3 preguntas frecuentes (CON-030), si se capturó la categoría (CON-031) y si las tablas capturadas salen con su identificador (CON-032). Se rebalancaron los pesos del componente para seguir sumando 15; las tres reglas son provisionales.
+
 - **Quién puede ser complemento:** cualquier producto que no sea medicamento (suplementos, bebidas, dermocosméticos, cuidado personal, accesorios) y los medicamentos que declaras sin receta **y** sin alta especialidad (campo nuevo «¿Es de alta especialidad?»). Un medicamento con receta, de alta especialidad o con alguno de los dos datos sin declarar **nunca** se vincula como complemento, ni a mano ni por IA. Si un producto vinculado pasa a requerir receta, pierde sus vínculos.
 - **Quién es producto principal:** los medicamentos que no pueden ser complemento, y cualquier producto que marques como principal en el catálogo.
 - **Al guardar un complemento:** la IA (si agregaste tu llave de Cohere) propone de qué productos principales del catálogo podría serlo y se abre una ventana con las propuestas marcadas. Tú confirmas, quitas o dejas en espera. Sin llave, la ventana trae la lista para elegir a mano.

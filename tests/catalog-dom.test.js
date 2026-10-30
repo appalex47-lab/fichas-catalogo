@@ -144,3 +144,18 @@ test('campana: muestra los productos nuevos, el contador y se cierra con Escape'
   assert.equal(a.d.getElementById('bell-pop').hidden, true);
   assert.deepEqual(a.errors, []);
 });
+
+test('compartir: unir un catálogo de otra persona suma productos y avisa el resultado', { skip }, async () => {
+  const a = boot();
+  await addBeb(a, 'FRE-200', 'Fresubin');
+  const other = { kind: 'fichas.catalog.share', v: 1, at: 'x', catalog: { v: 1, entries: [{ sku: 'ELE-1', nombre: 'Electrolit', cat: 'beb', elegible: true, comp: 'esperando', updatedAt: '2026-03-01T00:00:00Z' }], links: [] } };
+  const input = a.d.getElementById('cat-import');
+  Object.defineProperty(input, 'files', { value: [{ text: async () => JSON.stringify(other) }], configurable: true });
+  input.dispatchEvent(new a.w.Event('change', { bubbles: true })); await wait(60);
+  assert.match(a.text('#cat-share-status'), /1 producto\(s\) nuevos/);
+  assert.equal(catalog(a).entries.length, 2);
+  Object.defineProperty(input, 'files', { value: [{ text: async () => '{"hola":1}' }], configurable: true });
+  input.dispatchEvent(new a.w.Event('change', { bubbles: true })); await wait(60);
+  assert.match(a.text('#cat-share-status'), /no es un catálogo/);
+  assert.deepEqual(a.errors, []);
+});
