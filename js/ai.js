@@ -166,7 +166,7 @@ async function aiExtract(o) {
 const MAX_IMAGES = 3;
 /* Campos que se pueden leer de un empaque. Nunca la receta. */
 const IMG_FIELDS = ['marca', 'producto', 'tipo', 'principio', 'concentracion', 'volumen', 'forma', 'contenido', 'via', 'laboratorio', 'fabricante', 'modelo', 'sabor', 'atributo', 'componente', 'variante', 'material', 'inci', 'modo', 'precauciones', 'fps',
-  'nutrimental', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'porcion', 'porciones', 'beneficios', 'zona', 'espectro', 'resistencia', 'pao', 'origen', 'talla', 'fluor', 'duracion', 'etapa', 'registro', 'advertencias', 'declarada'];
+  'nutrimental', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'porcion', 'porciones', 'beneficios', 'zona', 'espectro', 'resistencia', 'pao', 'origen', 'talla', 'fluor', 'duracion', 'etapa', 'registro', 'advertencias', 'declarada', 'compresion', 'lado', 'color'];
 /* Campos que solo se leen en una categoría (en dermocosméticos y cuidado personal «ingredientes» es otro dato y no se lee de la foto). */
 const IMG_BY_CAT = { sup: ['ingredientes'] };
 const imgAllowed = cat => new Set([...IMG_FIELDS, ...(IMG_BY_CAT[cat] || [])]);

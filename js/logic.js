@@ -398,6 +398,35 @@ function disPresent(v, w = x => x) {
 const specRows = t => String(t || '').split(/\r?\n/).map(l => l.trim()).filter(l => l.includes('|')).map(l => { const i = l.indexOf('|'); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }).filter(r => r[0] && r[1]);
 const specHtml = t => { const r = specRows(t); return r.length ? `<h2>Especificaciones técnicas:</h2>\n<table id="especificaciones-tecnicas" class="tabla-especificaciones" aria-label="Especificaciones técnicas">\n<tbody>\n${r.map(([a, b]) => `  <tr><th scope="row">${escT(a)}</th><td>${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
 const DIS_AMBER = [[/\bcl[ií]nicamente (?:validad|probad|comprobad)\w*/i, 'clínicamente validado'], [/\bprecisi[oó]n cl[ií]nica\b/i, 'precisión clínica'], [/\b100\s?%\s*(?:exact|precis)\w*/i, '100% exacto'], [/\bdiagn[oó]stic\w*/i, 'diagnóstico'], [/\b(?:grado|nivel) m[eé]dic[oa]\b/i, 'grado médico']];
+/* ---------- Accesorios: género y número del tipo, material sin repetir, guía de tallas y tipos que suelen ser dispositivos médicos ---------- */
+const ACC_ART = { muneca: 'una', munequera: 'una', rodillera: 'una', tobillera: 'una', faja: 'una', baston: 'un', venda: 'una', pastillero: 'un', bolsa: 'una', collarin: 'un', cabestrillo: 'un', andadera: 'una', almohadilla: 'una', cojin: 'un', parches: 'unos', muletas: 'unas', medias: 'unas', vendas: 'unas', guantes: 'unos', cubrebocas: '', calcetines: 'unos' };
+const ACC_PLURAL = new Set(['parches', 'muletas', 'medias', 'vendas', 'guantes', 'cubrebocas', 'calcetines']);
+const ACC_DISP = /cubrebocas|mascarilla quir|muleta|bast[oó]n|andadera|silla de ruedas|media[s]? de compresi[oó]n/i;
+const accTipo = v => v.tipo || v.producto || '';
+const accPlural = v => ACC_PLURAL.has(firstWord(accTipo(v)));
+const accMaterial = v => { const have = new Set(foldTok(accTipo(v))); return String(v.material || '').split(/\s+/).filter(w => w && !foldTok(w).every(t => have.has(t))).join(' '); };
+const accTalla = v => v.talla ? (/^talla\b/i.test(v.talla) ? v.talla : `Talla ${v.talla}`) : '';
+function accIntro(v, w = x => x, withFab = false) {
+  const f = firstWord(accTipo(v)), plural = accPlural(v), art = ACC_ART[f] === undefined ? 'un' : ACC_ART[f], name = join(' ', v.marca, v.tipo ? v.producto : '');
+  let p = `${w(name)} ${plural ? 'son' : 'es'} ${art ? art + ' ' : ''}${accTipo(v) ? lc(accTipo(v)) : 'accesorio'}`;
+  if (withFab && v.fabricante) p += ` de ${w(v.fabricante)}`;
+  if (v.compresion) p += `, ${w(v.compresion)}`;
+  if (accMaterial(v)) p += `, de ${lc(accMaterial(v))}`;
+  if (v.publico) p += `, para ${lc(v.publico)}`;
+  return p;
+}
+function accPresent(v, w = x => x) {
+  const env = String(v.envase || '').trim();
+  if (v.contenido) {
+    if (env) { const art = ENVASE_ART[firstWord(env)]; return `en ${art ? art + ' ' : ''}${lc(env)} con ${w(v.contenido)}`; }
+    return `con contenido de ${w(v.contenido)}`;
+  }
+  return env ? `en ${lc(env)}` : '';
+}
+const accBeneficios = v => { const l = String(v.beneficios || '').split(/\n+/).map(x => x.replace(/\.+$/, '').trim()).filter(Boolean); const u = v.uso ? [v.uso] : []; return [...u, ...l.filter(x => !u.some(y => foldTok(y).join(' ') === foldTok(x).join(' ')))]; };
+const tallasHtml = t => { const r = specRows(t); return r.length ? `<h2>Guía de tallas y medidas:</h2>\n<table id="guia-de-tallas" class="tabla-especificaciones" aria-label="Guía de tallas y medidas">\n<tbody>\n${r.map(([a, b]) => `  <tr><th scope="row">${escT(a)}</th><td>${escT(b)}</td></tr>`).join('\n')}\n</tbody>\n</table>` : ''; };
+const ACC_MED = [[/\bv[aá]rices\b|\bflebitis\b|\btrombosis\b|\bartritis\b|\bartrosis\b|\bhernia\b|\blumbalgia\b/i, 'enfermedad']];
+const ACC_AMBER = [[/\baliv(?:ia|io|ian|iar|ios)\b/i, 'alivia'], [/\bcorrig\w+/i, 'corrige'], [/\bterap[eé]utic\w*/i, 'terapéutico'], [/\bortop[eé]dic[oa]s? profesional/i, 'ortopédico profesional']];
 const NOTA_SUP = `<h2>Condiciones de conservación:</h2>\n<p>${LEGEND.supConservacion}</p>`;
 
 /* Áreas terapéuticas o de uso. Lista cerrada: sirve para clasificar y para que la IA proponga complementos; no sale en ningún texto. */
@@ -801,44 +830,73 @@ const CATS = {
   },
 
   acc: {
-    emoji: '📦', name: 'Accesorios y generales',
+    emoji: '📦', name: 'Accesorios y generales', titleSoft: 70,
     fields: [
       F('marca','Marca',{req:1,ph:'Saba'}),
-      F('producto','Producto o modelo',{req:1,ph:'Parches térmicos'}),
-      F('material','Material o compatibilidad',{req:1,ph:'Alivio de dolores'}),
-      F('contenido','Contenido o piezas',{req:1,pres:1,ph:'Caja con 3 piezas'}),
+      F('producto','Línea o nombre',{ph:'Soporte Plus',hint:'La línea, el modelo o el nombre comercial, sin repetir el tipo. Captura al menos el nombre o el tipo.'}),
+      F('tipo','Tipo de accesorio',{ph:'Muñequera',hint:'Qué es: Muñequera, Parches térmicos, Bastón, Medias de compresión. Si el nombre ya lo dice no se repite en el título.'}),
+      F('uso','Uso o beneficio',{ph:'Soporte de la muñeca',hint:'Opcional. Para qué sirve, como lo dice el empaque. Sin promesas médicas.'}),
+      F('material','Material',{ph:'Neopreno',hint:'Opcional. De qué está hecho. Se omite del título si pasa de 70 caracteres.'}),
+      F('contenido','Contenido neto',{req:1,pres:1,ph:'1 pieza',hint:'Solo la cantidad: 1 pieza, 1 par, 50 piezas. La presentación va en «Presentación»; si escribes «Caja con 3 piezas» se separa sola.'}),
       F('fabricante','Fabricante',{req:1,ph:'Essity'}),
+      F('envase','Presentación',{g:'d',pres:1,ph:'Caja',hint:'Opcional. Caja, bolsa, blíster… Separado de la cantidad.'}),
+      F('talla','Talla',{g:'d',ph:'M',hint:'Opcional. Entra al título como «Talla M».'}),
+      F('lado','Lado',{g:'d',ph:'Derecha',hint:'Opcional. Derecha, izquierda o ambidiestro. Entra al título.'}),
+      F('color','Color',{g:'d',ph:'Negro',hint:'Opcional. Entra al título.'}),
+      F('compresion','Nivel de compresión',{g:'d',ph:'20-30 mmHg',hint:'Opcional. Tal como aparece en el empaque. Entra al título.'}),
+      F('publico','Dirigido a',{g:'d',ph:'Adultos',hint:'Opcional. Tal como aparece en el empaque.'}),
+      F('beneficios','Beneficios',{g:'d',type:'area',lines:1,rows:4,hint:'Opcional. Uno por línea, como aparecen en el empaque. Sin promesas médicas. Salen como lista al inicio de la ficha.'}),
+      F('tallas','Guía de tallas y medidas',{g:'d',type:'area',raw:1,lines:1,rows:4,ph:'Mediana | Muñeca de 15 a 18 cm',hint:'Opcional. Una línea por talla o medida, «Nombre | Valor», tal cual del empaque. Sale como tabla.'}),
+      F('modo','Modo de uso',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal cual del empaque.'}),
+      F('cuidados','Cuidado y limpieza',{g:'d',type:'area',sentence:1,hint:'Opcional. Tal cual del empaque.'}),
+      F('advertencias','Advertencias',{g:'d',type:'area',sentence:1,hint:'Opcional. Leyendas del empaque, tal cual.'}),
+      F('declarada','Declarado en el empaque',{g:'d',type:'area',raw:1,hint:'Opcional. Certificaciones o pruebas tal como las dice el empaque. Se publican como declaradas y requieren sustento.'}),
+      F('registro','Registro sanitario',{g:'d',raw:1,ph:'Reg. No. 0000X2026 SSA',hint:'Opcional. Algunos accesorios (cubrebocas quirúrgicos, muletas, bastones, medias de compresión) suelen ser dispositivos médicos. Tal como aparece en el empaque.'}),
+      F('compatibilidad','Compatibilidad',{g:'d',type:'area',sentence:1,hint:'Opcional. Con qué es compatible.'}),
       F('queEs','¿Qué es? Descripción objetiva',{g:'d',type:'area'}),
       F('caracteristicas','Características principales',{g:'d',type:'area'}),
       F('paquete','Incluye',{g:'d'}),
+      F('tipoCorto','Tipo corto (para el meta title)',{g:'d',ph:'Muñequera',hint:'Opcional. Versión corta del tipo para las metas. No sale en la ficha.'}),
       F('compat','Productos compatibles (SKU)',{g:'d',raw:1,hint:'SKU de los productos que van con este accesorio, separados por coma. Salen en crosssell_skus. No cambian ningún texto.'})
     ],
     title: [
-      seg('Marca + producto o modelo', ['marca','producto']),
-      seg('Material o compatibilidad', ['material']),
-      seg('Contenido o piezas', ['contenido']),
-      seg('Fabricante', ['fabricante'])
+      seg('Marca + línea + tipo', ['marca','producto','tipo'], v => join(' ', v.marca, mergeTipo(v.producto, v.tipo)), ['producto','tipo']),
+      Object.assign(seg('Material', ['material'], v => cap(accMaterial(v))), { soft: true }),
+      seg('Nivel de compresión', ['compresion']),
+      seg('Talla', ['talla'], v => accTalla(v)),
+      seg('Lado', ['lado']),
+      seg('Color', ['color']),
+      seg('Contenido', ['contenido'])
     ],
     vital: [],
-    mcUses: ['marca','producto','material','contenido','fabricante','queEs','paquete'],
-    mgUses: ['marca','producto','material','contenido','fabricante'],
+    mcUses: ['marca','producto','tipo','uso','material','contenido'],
+    mgUses: ['marca','producto','tipo','uso','material','contenido','fabricante'],
     mc: v => [
-      join(' - ', join(' ', v.marca, v.producto, v.material), v.fabricante),
-      v.queEs, v.caracteristicas,
-      v.material && `Material o compatibilidad: ${v.material}`,
-      v.paquete && `Incluye ${lc(v.paquete)}`,
-      v.contenido && `Presentación de ${lc(v.contenido)}`
+      accIntro(v),
+      optMc('Uso', v.uso && (accPlural(v) ? `Para ${lc(v.uso)}` : `Uso: ${lc(v.uso)}`)),
+      optMc('Beneficios', String(v.beneficios || '').trim() && cap(accBeneficios({ beneficios: v.beneficios }).map(lc).join(', '))),
+      optMc('Descripción', v.queEs),
+      optMc('Características', v.caracteristicas),
+      optMc('Modo de uso', v.modo),
+      optMc('Presentación', accPresent(v) && `Se presenta ${accPresent(v)}`)
     ],
     mg: v => {
-      let p = `${S(join(' ', v.marca, v.producto))} es un accesorio para el bienestar y cuidado general` + (v.fabricante ? ` desarrollado por ${S(v.fabricante)}` : '') + '.';
-      if (v.material || v.contenido) {
-        p += ' Este producto' + (v.material ? ` está fabricado con materiales y especificaciones de compatibilidad de ${S(v.material)}` : '')
-          + (v.contenido ? (v.material ? ', suministrándose' : ' se suministra') + ` en una presentación final de ${S(v.contenido)}` : '') + '.';
-      }
-      return assemble(p, 'Especificaciones del accesorio:', [
-        ['Marca', v.marca], ['Producto/Modelo', v.producto], ['Material o Compatibilidad', v.material],
-        ['Contenido/Piezas', v.contenido], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
-      ], secs([['Descripción:', v.queEs], ['Características:', v.caracteristicas], ['Incluye:', v.paquete]]));
+      const d = dedupeFields(v);
+      let p = accIntro(v, S, true) + '.';
+      if (accPresent(v, S)) p += ` Se presenta ${accPresent(v, S)}.`;
+      const ben = accBeneficios(v), extras = [];
+      if (specRows(v.tallas).length) extras.push(tallasHtml(v.tallas));
+      if (v.compatibilidad) extras.push(`<h2>Compatibilidad:</h2>\n<p>${escT(v.compatibilidad)}</p>`);
+      if (v.modo) extras.push(`<h2>Modo de uso:</h2>\n<p>${escT(v.modo)}</p>`);
+      if (v.cuidados) extras.push(`<h2>Cuidado y limpieza:</h2>\n<p>${escT(v.cuidados)}</p>`);
+      extras.push(...secs([['Descripción:', v.queEs], ['Características:', v.caracteristicas], ['Incluye:', v.paquete]]));
+      if (v.declarada) extras.push(`<h2>Declarado en el empaque:</h2>\n<p>${escT(v.declarada)}</p>`);
+      if (v.advertencias) extras.push(`<h2>Advertencias:</h2>\n<p>${escT(v.advertencias)}</p>`);
+      const ficha = `<h2>Ficha técnica del producto:</h2>\n<ul>\n${liRows([
+        ['Marca', v.marca], ['Línea o nombre', d.producto], ['Tipo de accesorio', v.tipo], ['Material', v.material], ['Nivel de compresión', v.compresion], ['Talla', v.talla], ['Lado', v.lado], ['Color', v.color],
+        ['Dirigido a', v.publico], ['Registro sanitario', v.registro], ['Contenido', v.contenido], ['Presentación', v.envase], ['Fabricante', v.fabricante], ['Categoría', v.categoria]
+      ])}\n</ul>`;
+      return [`<p>${p}</p>`, ben.length ? `<h2>Beneficios principales:</h2>\n<ul>\n${ben.map(x => `  <li>${escT(cap(x))}</li>`).join('\n')}\n</ul>` : '', ficha, ...extras].filter(Boolean).join('\n<br />\n');
     }
   }
 };
@@ -854,7 +912,7 @@ Object.keys(CATS).forEach(id => { CATS[id].id = id; });
     sup: [['caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'publico'], ['composicion', 'caracteristicas', 'sabor', 'porcion', 'porciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'atributos', 'publico', 'envase', 'categoria']],
     beb: [['producto', 'beneficio', 'atributo', 'etapa', 'publico', 'envase', 'descripcion', 'caracteristicas', 'modo', 'porcion', 'porciones'], ['producto', 'beneficio', 'atributo', 'etapa', 'publico', 'envase', 'descripcion', 'caracteristicas', 'beneficios', 'atributos', 'leyenda', 'ingredientes', 'alergenos', 'modo', 'porcion', 'porciones', 'nutrimental', 'categoria']],
     hig: [['uso', 'modo', 'caracteristicas', 'duracion', 'envase', 'talla', 'variante', 'fluor'], ['uso', 'ingredientes', 'beneficios', 'caracteristicas', 'atributos', 'talla', 'variante', 'envase', 'fluor', 'duracion', 'modo', 'inci', 'precauciones', 'categoria']],
-    acc: [['queEs', 'caracteristicas', 'paquete'], ['queEs', 'caracteristicas', 'paquete', 'categoria']]
+    acc: [['talla', 'lado', 'color', 'compresion', 'publico', 'beneficios', 'queEs', 'caracteristicas', 'modo', 'envase'], ['talla', 'lado', 'color', 'compresion', 'publico', 'envase', 'beneficios', 'tallas', 'modo', 'cuidados', 'advertencias', 'declarada', 'registro', 'compatibilidad', 'queEs', 'caracteristicas', 'paquete', 'categoria']]
   };
   Object.entries(opt).forEach(([id, [mc, mg]]) => { CATS[id].mcOpt = mc; CATS[id].mgOpt = mg; });
 }
@@ -891,7 +949,7 @@ function placeFields(c, raw) {
     const lbl = k => (c.fields.find(f => f.key === k) || {}).label || k;
     return { raw: { ...raw, presentacion: m[1].trim(), contenido: m[2].trim() }, changes: [{ label: lbl('presentacion'), from: pres, to: m[1].trim() }, { label: lbl('contenido'), from: pres, to: m[2].trim() }] };
   }
-  const tk = c.id === 'hig' && raw.tipo ? 'tipo' : TIPO_KEY[c.id], out = { raw, changes: [] };
+  const tk = (c.id === 'hig' || c.id === 'acc') && raw.tipo ? 'tipo' : TIPO_KEY[c.id], out = { raw, changes: [] };
   if (!tk) return out;
   let t = String(raw[tk] ?? '').replace(/\s+/g, ' ').trim(), n = String(raw.contenido ?? '').replace(/\s+/g, ' ').trim();
   const t0 = t, n0 = n;
@@ -906,11 +964,11 @@ function placeFields(c, raw) {
     const pk = n.match(/^(caja|paquete|pack|fardo|bolsa)s?\s+(?:con|de)\s+(\d+)\s+(latas?|botellas?|botellitas?|piezas|sobres|bricks?|tetrabriks?)\s+de\s+(\d.*)$/i);
     if (pk) { env = `${cap(pk[1].toLowerCase())} con ${pk[2]} ${pk[3].toLowerCase()}`; n = `${pk[2]} x ${pk[4].trim()}`; }
   }
-  if ((c.id === 'cos' || c.id === 'hig' || c.id === 'beb') && n && !env) { const m = n.match(COS_PACK); if (m) { env = m[1].replace(/\s+/g, ' ').trim(); n = m[2].trim(); } }
+  if ((c.id === 'cos' || c.id === 'hig' || c.id === 'beb' || c.id === 'acc') && n && !env) { const m = n.match(COS_PACK); if (m) { env = m[1].replace(/\s+/g, ' ').trim(); n = m[2].trim(); } }
   if (t === t0 && n === n0 && env === String(raw.envase ?? '').trim()) return out;
   const lbl = k => (c.fields.find(f => f.key === k) || {}).label || k;
-  out.raw = { ...raw, [tk]: t, contenido: n, ...(c.id === 'cos' || c.id === 'hig' || c.id === 'beb' ? { envase: env } : {}) };
-  if ((c.id === 'cos' || c.id === 'hig' || c.id === 'beb') && env !== String(raw.envase ?? '').trim()) out.changes.push({ label: lbl('envase'), from: n0, to: env });
+  out.raw = { ...raw, [tk]: t, contenido: n, ...(c.id === 'cos' || c.id === 'hig' || c.id === 'beb' || c.id === 'acc' ? { envase: env } : {}) };
+  if ((c.id === 'cos' || c.id === 'hig' || c.id === 'beb' || c.id === 'acc') && env !== String(raw.envase ?? '').trim()) out.changes.push({ label: lbl('envase'), from: n0, to: env });
   if (t !== t0) out.changes.push({ label: lbl(tk), from: t0, to: t || '(vacío)' });
   if (n !== n0) out.changes.push({ label: lbl('contenido'), from: n0 || t0, to: n || '(vacío)' });
   return out;
@@ -1073,6 +1131,25 @@ const FAQ_RULES = {
       v.categoria && [[`¿A qué categoría pertenece ${n}?`, `¿En qué categoría se encuentra ${n}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
     ];
   },
+  acc: (v, n) => {
+    const plural = accPlural(v), art = ACC_ART[firstWord(accTipo(v))] === undefined ? 'un' : ACC_ART[firstWord(accTipo(v))], nn = v.talla ? `${n} ${lc(accTalla(v))}` : n;
+    return [
+      accTipo(v) && [[`¿Qué es ${nn}?`, `¿Qué tipo de producto es ${nn}?`], [`${plural ? 'Son' : 'Es'} ${art ? art + ' ' : ''}${lc(accTipo(v))}${v.fabricante ? ` de ${v.fabricante}` : ''}${v.compresion ? `, ${v.compresion}` : ''}.`]],
+      v.uso && [[`¿Para qué sirve ${nn}?`, `¿Cuál es el uso de ${nn}?`], [`Es para ${lc(v.uso)}.`, `Su uso es ${lc(v.uso)}.`]],
+      accMaterial(v) && [[`¿De qué material es ${nn}?`, `¿Qué material tiene ${nn}?`], [`Es de ${lc(accMaterial(v))}.`]],
+      specRows(v.tallas).length && [[`¿Cómo elijo la talla de ${n}?`, `¿Qué medidas tiene cada talla de ${n}?`], specRows(v.tallas).map(r => `${r[0]}: ${lc(r[1])}`).join('; ') + '.'],
+      v.lado && [[`¿Para qué lado es ${nn}?`, `¿Qué lado es ${nn}?`], [`Es ${lc(v.lado)}.`]],
+      v.compresion && [[`¿Qué nivel de compresión tiene ${nn}?`, `¿Cuánta compresión ofrece ${nn}?`], [`Según su empaque, ${v.compresion}.`]],
+      v.compatibilidad && [[`¿Con qué es compatible ${nn}?`, `¿${nn} es compatible con otros productos?`], [`Es compatible con ${lc(v.compatibilidad)}.`]],
+      v.registro && [[`¿${nn} tiene registro sanitario?`, `¿Cuál es el registro sanitario de ${nn}?`], [`Según su empaque, su registro sanitario es ${String(v.registro).replace(/^(?:registro sanitario|reg(?:istro)?\.?(?:\s*(?:no|n[uú]m)\.?)?)\s*:?\s*/i, '').trim()}.`]],
+      v.modo && [[`¿Cómo se usa ${nn}?`, `¿Cómo se coloca ${nn}?`], v.modo],
+      v.cuidados && [[`¿Cómo se limpia ${nn}?`, `¿Cómo se cuida ${nn}?`], v.cuidados],
+      v.advertencias && [[`¿Qué advertencias tiene ${nn}?`, `¿Qué debo tener en cuenta al usar ${nn}?`], v.advertencias],
+      v.contenido && [[/pieza|par\b|unidad/i.test(v.contenido) ? `¿Cuántas piezas trae ${nn}?` : `¿Cuánto trae ${nn}?`, `¿Qué contenido tiene ${nn}?`], [`Se presenta ${accPresent(v)}.`, `Su contenido es ${v.contenido}${v.envase ? `, en ${lc(v.envase)}` : ''}.`]],
+      v.fabricante && [[`¿Quién fabrica ${nn}?`, `¿Qué empresa produce ${nn}?`], [`Es fabricado por ${v.fabricante}.`, `Lo fabrica ${v.fabricante}.`]],
+      v.categoria && [[`¿A qué categoría pertenece ${nn}?`, `¿En qué categoría se encuentra ${nn}?`], [`Pertenece a la categoría ${v.categoria}.`, `Se encuentra en la categoría ${v.categoria}.`]]
+    ];
+  },
   hig: (v, n) => {
     const attrs = cosAttrs(v).ok, ben = higBeneficio(v), plural = HIG_PLURAL.has(firstWord(v.tipo)), art = HIG_ART[firstWord(v.tipo)] || 'un';
     return [
@@ -1230,11 +1307,18 @@ function lint(c, raw) {
     if (!t) continue;
     RED.forEach(([re, name, kind]) => { if (re.test(t)) out[kind].push({ term: name, field: fd.label }); });
     AMBER.forEach(([re, name]) => { if (re.test(t)) out.amber.push({ term: name, field: fd.label }); });
+    if (c.id === 'acc') { ACC_MED.forEach(([re, name]) => { if (re.test(t)) out.med.push({ term: name, field: fd.label }); }); ACC_AMBER.forEach(([re, name]) => { if (re.test(t)) out.amber.push({ term: name, field: fd.label }); }); }
     if (c.id === 'dis') DIS_AMBER.forEach(([re, name]) => { if (re.test(t)) out.amber.push({ term: name, field: fd.label }); });
     if (c.id === 'cos') {
       COS_CLAIM.forEach(([re, name]) => { if (re.test(t)) out.claim.push({ term: name, field: fd.label }); });
       COS_MED.forEach(([re, name]) => { if (re.test(t)) out.med.push({ term: name, field: fd.label }); });
     }
+  }
+  if (c.id === 'acc') {
+    if (ACC_DISP.test(String(raw.tipo || raw.producto || '')) && !String(raw.registro || '').trim()) out.check.push('Este tipo de producto suele ser un dispositivo médico en México (COFEPRIS reclasificó algunos que ya no necesitan registro y no pude ver el listado). Captura el registro sanitario si lo tiene o pide a Regulatorio que confirme si debe ir en Dispositivos médicos. La ficha no afirma nada.');
+    const sinBarra = String(raw.tallas || '').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.includes('|'));
+    if (sinBarra.length) out.check.push(`En «Guía de tallas y medidas» estas líneas no llevan «|» y no salen en la tabla: ${sinBarra.slice(0, 2).map(x => '«' + x + '»').join(', ')}. Escríbelas como «Talla | Medida».`);
+    if (raw.talla && !specRows(raw.tallas).length) out.check.push('Capturaste la talla pero no la guía de tallas y medidas. Es lo que más ayuda a elegir bien.');
   }
   if (c.id === 'dis') {
     if (!String(raw.registro || '').trim()) out.check.push('No capturaste el registro sanitario. Los dispositivos médicos suelen requerirlo (COFEPRIS reclasificó algunos que ya no lo necesitan). La ficha sale igual; confirma con Regulatorio.');
@@ -1268,7 +1352,7 @@ function lint(c, raw) {
   }
   if (c.id === 'sup' && /^\s*(suplementos?(\s+alimenticios?)?|productos?|alimentos?)\s*$/i.test(raw.componente || '')) out.check.push(`«${String(raw.componente).trim()}» no describe el producto. Escribe qué es o su ingrediente principal, por ejemplo «Fórmula hipercalórica» o «Vitamina C».`);
   /* El tipo y el contenido no se mezclan: el tipo dice qué es el producto y el contenido cuánto trae. */
-  const tipoKey = c.id === 'hig' && raw.tipo ? 'tipo' : { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' }[c.id];
+  const tipoKey = (c.id === 'hig' || c.id === 'acc') && raw.tipo ? 'tipo' : { sup: 'componente', cos: 'tipo', beb: 'tipo', hig: 'producto', acc: 'producto' }[c.id];
   if (tipoKey && raw[tipoKey]) {
     const t = String(raw[tipoKey]).trim(), lbl = (c.fields.find(f => f.key === tipoKey) || {}).label || tipoKey;
     if (QTY_RE.test(t) && !/\b(?:vitamina|omega|b\d+|d\d|q\d+)\b/i.test(t.replace(QTY_RE, ''))) out.check.push(`«${t}» parece una cantidad o presentación y va en «Contenido». En «${lbl}» escribe qué es el producto.`);
@@ -1449,6 +1533,11 @@ const META_DIS = {
   mt: { tpl: '{marca} {modelo} {nombre_seo}\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
   md: { tpl: '{marca} {modelo} {nombre_seo}\n{uso_pub}\n[Compra en {tienda}]', sep: '. ', max: 155 }
 };
+/* Accesorios: la variante (compresión, talla, lado, color, cantidad) va antes que la tienda. */
+const META_ACC = {
+  mt: { tpl: '{marca} {nombre_seo}\n{variante_seo}\n[{tienda}]', sep: ' | ', max: 60 },
+  md: { tpl: '{marca} {nombre}\n{uso_pub}\n{presentacion}\n[Compra en {tienda}]', sep: '. ', max: 155 }
+};
 const ALT_DEF = {
   med: '{marca} {concentracion}\n{principio}\n{contenido:lc}',
   dis: '{marca} {modelo} {tipo:lc}\n{tecnologia:lc}',
@@ -1460,8 +1549,8 @@ const ALT_DEF = {
 };
 const defMetaCat = id => ({
   confirmed: id === 'med',
-  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : id === 'hig' ? META_HIG.mt : id === 'beb' ? META_BEB.mt : id === 'dis' ? META_DIS.mt : META_GEN.mt) },
-  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : id === 'hig' ? META_HIG.md : id === 'beb' ? META_BEB.md : id === 'dis' ? META_DIS.md : META_GEN.md) },
+  mt: { ...(id === 'med' ? META_MED.mt : id === 'sup' ? META_SUP.mt : id === 'cos' ? META_COS.mt : id === 'hig' ? META_HIG.mt : id === 'beb' ? META_BEB.mt : id === 'dis' ? META_DIS.mt : id === 'acc' ? META_ACC.mt : META_GEN.mt) },
+  md: { ...(id === 'med' ? META_MED.md : id === 'sup' ? META_SUP.md : id === 'cos' ? META_COS.md : id === 'hig' ? META_HIG.md : id === 'beb' ? META_BEB.md : id === 'dis' ? META_DIS.md : id === 'acc' ? META_ACC.md : META_GEN.md) },
   alt: { tpl: ALT_DEF[id] || '{marca} {producto}', sep: ', ', max: 125 }
 });
 /* Lo guardado con la plantilla genérica de antes pasa a la nueva de suplementos, salvo que la persona ya haya confirmado esa estructura. */
@@ -1490,6 +1579,11 @@ function migrateMeta(m) {
   if (dis && !dis.confirmed) {
     if (dis.mt && dis.mt.tpl === META_GEN.mt.tpl) dis.mt = { ...dis.mt, tpl: META_DIS.mt.tpl };
     if (dis.md && dis.md.tpl === META_GEN.md.tpl) dis.md = { ...dis.md, tpl: META_DIS.md.tpl };
+  }
+  const acc = m && m.cats && m.cats.acc;
+  if (acc && !acc.confirmed) {
+    if (acc.mt && acc.mt.tpl === META_GEN.mt.tpl) acc.mt = { ...acc.mt, tpl: META_ACC.mt.tpl };
+    if (acc.md && acc.md.tpl === META_GEN.md.tpl) acc.md = { ...acc.md, tpl: META_ACC.md.tpl };
   }
   return m;
 }
@@ -1582,6 +1676,14 @@ function buildMeta(c, v, title, cfg, tienda, flags) {
   /* Datos pensados para el SEO: el tipo corto (o el tipo completo), lo que distingue a una variante (sabor y tamaño) y la primera frase de las características. */
   tokens.tipo_seo = dv.tipoCorto || dv.componente || dv.tipo || dv.producto || dv.modelo || '';
   tokens.variante_seo = [dv.sabor || dv.variante, dv.talla, dv.contenido].filter(Boolean).join(', ');
+  if (c.id === 'acc') {
+    const nm = tipo => mergeTipo(dv.producto, tipo), tp = dv.tipo || '';
+    tokens.nombre = nm(tp);
+    tokens.nombre_seo = nm(dv.tipoCorto || tp);
+    tokens.variante_seo = [dv.compresion, accTalla(dv), dv.lado, dv.color, dv.contenido].filter(Boolean).join(', ');
+    tokens.uso_pub = cap(dv.uso || accMaterial(dv) || '');
+    tokens.presentacion = dv.contenido ? (dv.envase ? `${dv.envase} con ${dv.contenido}` : dv.contenido) : (dv.envase || '');
+  }
   if (c.id === 'dis') {
     tokens.nombre_seo = dv.tipoCorto || dv.tipo || '';
     tokens.variante_seo = [cap(disTec(dv)), dv.contenido].filter(Boolean).join(', ');
@@ -1919,7 +2021,7 @@ const typeSug = cat => [...new Set(TYPE_DICT[cat].list.map(([, name]) => name).f
   put('sup', 'componente', [...typeSug('sup'), 'Vitamina C', 'Vitamina D3', 'Vitamina B12', 'Vitamina E', 'Omega 3']);
   ['dis', 'cos', 'beb'].forEach(c => put(c, 'tipo', typeSug(c)));
   put('sup', 'envase', ['Frasco', 'Bote', 'Tarro', 'Sobre', 'Sachet', 'Caja', 'Blíster', 'Botella', 'Lata', 'Pouch', 'Estuche']);
-  ['hig', 'acc'].forEach(c => put(c, 'producto', typeSug(c)));
+  ['hig', 'acc'].forEach(c => { put(c, 'producto', typeSug(c)); put(c, 'tipo', typeSug(c)); });
 }
 const CAT_KW = {
   dis: /\b(baumanometro|tensiometro|glucometro|termometro|oximetro|nebulizador|inhalocamara|estetoscopio|tiras reactivas|lancetas?|lancetero|esfigmomanometro|pulsioximetro|bascula|humidificador|vaporizador|aspirador nasal)\b/i,
@@ -2153,6 +2255,7 @@ const api = {
   META_HIG,
   META_BEB,
   META_DIS,
+  META_ACC,
   specRows,
   RUTINAS,
   rutinaDe,
