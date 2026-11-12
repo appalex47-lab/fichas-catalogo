@@ -589,3 +589,14 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 .lote-table--compact td.t{max-width:24ch}
 .lote-table--compact td[data-label="Avisos"]{white-space:normal;max-width:110px}
 @media (max-width:720px){.lote-table--compact td[data-label="Estado"],.lote-table--compact td[data-label="Avisos"]{max-width:none}}
+
+/* Catálogo: bandeja, herramientas y detalle */
+.cat-inbox{border:1px solid var(--line,#d0d5dd);border-radius:10px;padding:12px 14px;margin:0 0 12px;background:var(--surface,#fff)}.cat-inbox h3{margin:0 0 2px}
+.cat-ask{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line,#e4e7ec)}.cat-ask .ops{display:flex;gap:6px;flex-wrap:wrap}
+.cat-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}.cat-tools input[type=search]{min-width:220px;margin:0}
+.cat-d>div{margin:6px 0}.cat-d .ops{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+tr.cat-detail td{background:var(--surface-2,#f4f6f6);white-space:normal}
+
+.lgroup{border:1px solid var(--line,#d0d5dd);border-radius:10px;margin:0 0 10px;background:var(--surface,#fff)}
+.lgroup>summary{cursor:pointer;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.lgroup .tablewrap{padding:0 6px 6px}

@@ -86,6 +86,7 @@ test('catálogo: «No es complemento» lo saca de la lista y «Quitar vínculo»
   dlg(a).querySelector('input[data-sku="MOU-1"]').click();
   dlg(a).querySelector('[data-ld="link"]').click(); await wait(40);
   assert.equal(catalog(a).links.length, 1);
+  a.d.querySelector('[data-cat-open="MOU-1"]').click();
   a.d.querySelector('[data-cat-unlink]').click(); await wait(20);
   assert.equal(catalog(a).links.length, 0);
 });
@@ -170,5 +171,41 @@ test('campana: tres pestañas, solo se muestra una lista y las vacías no se pue
   assert.equal(a.d.querySelector('#bell-pop [data-bell-tab="rel"]').disabled, true);
   assert.match(a.text('#bell-pop .bell-body'), /Productos nuevos sin cargar \(1\)/);
   assert.doesNotMatch(a.text('#bell-pop .bell-body'), /Posibles complementos/);
+  assert.deepEqual(a.errors, []);
+});
+
+test('catálogo: bandeja «Por decidir», filtros, búsqueda y detalle plegado', { skip }, async () => {
+  const a = boot();
+  await addBeb(a, 'FRE-200', 'Fresubin');
+  await addBeb(a, 'SUE-100', 'Electrolit');
+  const dl = dlg(a); if (dl) dl.querySelector('[data-ld="later"]') && dl.querySelector('[data-ld="later"]').click();
+  await wait(40);
+  assert.match(a.text('#cat-body .cat-inbox'), /Por decidir \(2\)/);
+  assert.ok(a.d.querySelector('#cat-body .cat-ask [data-cat-find]'), 'cada pendiente trae su botón');
+  assert.equal(a.d.querySelectorAll('#cat-body .lote-table tbody tr[data-sku]').length, 2);
+  assert.equal(a.d.querySelectorAll('#cat-body [data-cat-unlink]').length, 0, 'el detalle está plegado');
+  const q = a.d.getElementById('cat-q'); q.value = 'fresu'; q.dispatchEvent(new a.w.Event('input', { bubbles: true }));
+  assert.equal(a.d.querySelectorAll('#cat-body .lote-table tbody tr[data-sku]').length, 1);
+  a.d.querySelector('#cat-body [data-cat-open]').click();
+  assert.ok(a.d.querySelector('#cat-body .cat-detail'), 'el detalle se abre debajo de la fila');
+  a.d.querySelector('#cat-body [data-cat-filter="vinculado"]').click();
+  assert.match(a.text('#cat-body'), /Ningún producto coincide/);
+  a.d.querySelector('#cat-body [data-cat-filter="todos"]').click();
+  a.d.querySelector('#cat-body [data-cat-indep="FRE-200"]').click();
+  assert.match(a.text('#cat-body'), /No es complemento/);
+  assert.deepEqual(a.errors, []);
+});
+
+test('catálogo: en pantallas anchas el detalle abre en un panel lateral', { skip }, async () => {
+  const a = boot();
+  a.w.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+  await addBeb(a, 'FRE-200', 'Fresubin');
+  a.d.querySelector('#cat-body [data-cat-open]').click();
+  const box = a.d.getElementById('cat-drawer');
+  assert.ok(box && !box.hidden);
+  assert.match(box.textContent, /FRE-200/);
+  assert.equal(a.d.querySelectorAll('#cat-body .cat-detail').length, 0, 'la tabla no se empuja');
+  box.querySelector('[data-catclose]').click();
+  assert.equal(a.d.getElementById('cat-drawer').hidden, true);
   assert.deepEqual(a.errors, []);
 });

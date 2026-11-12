@@ -130,7 +130,7 @@ async function hydratePersistentState(){
   renderPersistenceStatus();
 }
 const state = {
-  sel: new Set(), lotePage: 0, lotePageSize: 25, loteDrawer: '', dens: (() => { try { return localStorage.getItem('fichas.dens') || 'compact'; } catch (_) { return 'compact'; } })(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
+  sel: new Set(), loteGroup: false, loteGroupOpen: {}, catFilter: 'todos', catQ: '', catPage: 0, catOpen: new Set(), catDrawer: '', catInboxAll: false, lotePage: 0, lotePageSize: 25, loteDrawer: '', dens: (() => { try { return localStorage.getItem('fichas.dens') || 'compact'; } catch (_) { return 'compact'; } })(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
@@ -629,6 +629,20 @@ function renderLote() {
       + (e.ux.canApprove ? `<button type="button" class="btn btn--quiet" data-approve="${esc(it.id)}">Aprobar</button>` : '')
       + `<button type="button" class="btn btn--quiet" data-del="${it.id}">Eliminar</button>${compact ? '</div></details>' : ''}</td></tr>` + (open && !drawerMode() ? detail(x) : '');
   };
+  const tableFor = list => `<div class="tablewrap"><table class="lote-table${state.dens === 'compact' ? ' lote-table--compact' : ''}">
+      <thead><tr><th scope="col">SKU</th><th scope="col">Categoría</th><th scope="col">Título</th><th scope="col">Estado</th><th scope="col">Evaluación</th><th scope="col">Avisos</th><th scope="col">Acciones</th></tr></thead>
+      <tbody>${list.map(rowHTML).join('')}</tbody></table></div>`;
+  /* Agrupado por estado: cada grupo dice cuántos hay y por qué; se abren solos los que requieren acción. */
+  const GROUPS = [['bloqueado', 'Bloqueados', 'bad', true], ['revisar', 'Por revisar', 'warn', true], ['listo', 'Listos para aprobar', 'ok', false], ['aprobado', 'Aprobados', 'info', false], ['', 'Sin estado', 'info', false]];
+  const reasonsOf = list => { const m = new Map(); list.forEach(x => { const r = (((x.e.s360 && x.e.s360.recommendations) || []).find(y => y.severidad === 'error') || ((x.e.s360 && x.e.s360.recommendations) || [])[0]); if (r && r.texto) m.set(r.texto, (m.get(r.texto) || 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([t, n]) => `${n} · ${t.length > 60 ? t.slice(0, 59) + '…' : t}`).join(' · '); };
+  const groupedHTML = list => {
+    const by = new Map(GROUPS.map(g => [g[0], []]));
+    list.forEach(x => { const b = UX.bucketOf(x.e); (by.get(b) || by.get('')).push(x); });
+    return GROUPS.filter(g => by.get(g[0]).length).map(([key, label, tone, openDef]) => {
+      const items = by.get(key), open = key in state.loteGroupOpen ? state.loteGroupOpen[key] : openDef, why = key === 'bloqueado' || key === 'revisar' ? reasonsOf(items) : '';
+      return `<details class="lgroup" data-lgroup="${key}"${open ? ' open' : ''}><summary><span class="status status--${tone}">${esc(label)} ${items.length}</span>${why ? ` <span class="hint">${esc(why)}</span>` : ''}</summary>${tableFor(items.slice(0, 50))}${items.length > 50 ? `<p class="hint">Se muestran 50 de ${items.length}. Usa los filtros para ver el resto.</p>` : ''}</details>`;
+    }).join('');
+  };
   const kpi = (label, value) => `<div class="kpi"><span class="kpi-l">${esc(label)}</span><span class="kpi-v">${value == null ? '—' : value}</span></div>`;
   const summaryPanel =
     `<div class="summary-panel" aria-label="Resumen de calidad del lote">` +
@@ -650,11 +664,9 @@ function renderLote() {
     `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros del lote">${legacy}</div></details>` +
     `<p class="sr-only" id="lote-live" role="status" aria-live="polite">Mostrando ${rows.length} de ${all.length} producto(s)${state.loteFilter !== 'todos' ? `. Filtro: ${esc(filterLabel(state.loteFilter))}` : ''}.</p>` +
     bulkBarHtml(rows) +
-    (rows.length ? `<div class="tablewrap"><table class="lote-table${state.dens === 'compact' ? ' lote-table--compact' : ''}">
-      <thead><tr><th scope="col">SKU</th><th scope="col">Categoría</th><th scope="col">Título</th><th scope="col">Estado</th><th scope="col">Evaluación</th><th scope="col">Avisos</th><th scope="col">Acciones</th></tr></thead>
-      <tbody>${shown.map(rowHTML).join('')}</tbody></table></div>`
-      : `<p class="empty-state">Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button></p>`) +
-    (rows.length > state.lotePageSize || state.lotePage ? `<div class="pager" role="navigation" aria-label="Páginas del lote"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
+    (!rows.length ? `<p class="empty-state">Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button></p>`
+      : state.loteGroup ? groupedHTML(rows) : tableFor(shown)) +
+    (!state.loteGroup && (rows.length > state.lotePageSize || state.lotePage) ? `<div class="pager" role="navigation" aria-label="Páginas del lote"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
   renderLoteDrawer(all);
 }
 function syncLoteButtons() {
@@ -2773,30 +2785,98 @@ function renderCatalog() {
   renderBell();
   const box = $('#cat-body'); if (!box) return;
   const c = state.catalog, L = Catalog.STATUS_LABEL;
-  if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en el lote se agregan aquí solos. Vaciar el lote no los borra.</p></div>'; return; }
-  const waiting = c.entries.filter(e => Catalog.status(c, e) === 'esperando').length;
-  const pend = c.entries.filter(e => e.elegible && Catalog.status(c, e) === 'sin_evaluar').length;
-  const eff = Catalog.effectiveRels(c), nameOf = sku => { const x = Catalog.find(c, sku); return x ? x.nombre : sku; };
-  const manual = (a, b, kind) => (c.relMan || []).find(r => r.kind === kind && ((Catalog.lk(r.a) === Catalog.lk(a) && Catalog.lk(r.b) === Catalog.lk(b)) || (Catalog.lk(r.a) === Catalog.lk(b) && Catalog.lk(r.b) === Catalog.lk(a))));
-  const relBlock = (e, kind, label) => {
-    const list = (eff.get(Catalog.lk(e.sku)) || {})[kind] || [];
-    const gone = (c.relMan || []).filter(r => r.kind === kind && !r.on && (Catalog.lk(r.a) === Catalog.lk(e.sku) || Catalog.lk(r.b) === Catalog.lk(e.sku))).map(r => Catalog.lk(r.a) === Catalog.lk(e.sku) ? r.b : r.a);
+  if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en el lote se agregan aquí solos. Vaciar el lote no los borra.</p></div>'; renderCatDrawer(); return; }
+  const lk = Catalog.lk, eff = Catalog.effectiveRels(c);
+  const nameOf = sku => { const x = Catalog.find(c, sku); return x ? x.nombre : sku; };
+  const stOf = e => Catalog.status(c, e);
+  const waiting = c.entries.filter(e => stOf(e) === 'esperando').length;
+  const pendList = c.entries.filter(e => e.elegible && stOf(e) === 'sin_evaluar');
+  const decide = [...pendList, ...c.entries.filter(e => stOf(e) === 'esperando')];
+  /* Por decidir: lo que espera una confirmación tuya, con los botones a la vista. */
+  const decideShown = state.catInboxAll ? decide : decide.slice(0, 5);
+  const inbox = decide.length ? `<div class="cat-inbox"><h3>Por decidir (${decide.length})</h3><p class="hint">Solo lo que espera tu confirmación. Tú decides cada vínculo.</p>`
+    + decideShown.map(e => `<div class="cat-ask" data-sku="${esc(e.sku)}"><div><b>${esc(e.sku)}</b> ${esc(e.nombre)}<span class="hint"> · ${stOf(e) === 'esperando' ? 'Esperando producto principal' : '¿Es complemento de algún producto principal?'}</span></div><div class="ops"><button type="button" class="btn btn--primary" data-cat-find="${esc(e.sku)}">Buscar principal</button><button type="button" class="btn btn--quiet" data-cat-indep="${esc(e.sku)}">No es complemento</button></div></div>`).join('')
+    + (decide.length > 5 ? `<button type="button" class="linkbtn" data-cat-inboxall="1">${state.catInboxAll ? 'Ver menos' : `Ver los ${decide.length}`}</button>` : '') + '</div>' : '';
+  /* Filtros y búsqueda */
+  const tests = {
+    todos: () => true,
+    decidir: e => decide.includes(e),
+    vinculado: e => stOf(e) === 'vinculado',
+    principal: e => !e.elegible || e.padre,
+    cargado: e => !!e.exportedAt
+  };
+  const label = { todos: 'Todos', decidir: 'Por decidir', vinculado: 'Vinculados', principal: 'Principales', cargado: 'Cargados a Magento' };
+  const q = Catalog.lk(state.catQ);
+  const filtered = c.entries.filter(e => (tests[state.catFilter] || tests.todos)(e) && (!q || lk(e.sku).includes(q) || lk(e.nombre).includes(q))).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
+  const chips = Object.keys(label).map(k => `<button type="button" class="chip" data-cat-filter="${k}" aria-pressed="${state.catFilter === k}">${label[k]} (${c.entries.filter(tests[k]).length})</button>`).join('');
+  const size = 25, pages = Math.max(1, Math.ceil(filtered.length / size));
+  if (state.catPage >= pages) state.catPage = pages - 1;
+  const shown = filtered.slice(state.catPage * size, state.catPage * size + size);
+  const inlineMode = !drawerMode();
+  const rows = shown.map(e => {
+    const st = stOf(e), kids = Catalog.childrenOf(c, e.sku), pars = Catalog.parentsOf(c, e.sku), r = eff.get(lk(e.sku)) || { upsell: [], related: [] };
+    const open = inlineMode ? state.catOpen.has(e.sku) : state.catDrawer === e.sku;
+    const summary = [kids.length ? `${kids.length} compl.` : '', pars.length ? `de ${pars.length}` : '', r.upsell.length ? `${r.upsell.length} alt.` : '', r.related.length ? `${r.related.length} rel.` : ''].filter(Boolean).join(' · ') || '—';
+    return `<tr class="click${open ? ' sel' : ''}" data-sku="${esc(e.sku)}"><td data-label="SKU">${esc(e.sku)}</td><td class="t" data-label="Producto">${esc(e.nombre)}${[e.area, e.area2].filter(Boolean).length ? `<span class="ld-why">${esc([e.area, e.area2].filter(Boolean).join(' · '))}${e.atc ? ' · ATC ' + esc(e.atc) : ''}</span>` : ''}</td>`
+      + `<td data-label="Estado"><span class="status status--${st === 'esperando' ? 'warn' : st === 'vinculado' ? 'ok' : 'info'}">${esc(L[st])}</span></td><td data-label="Vínculos">${esc(summary)}</td>`
+      + `<td class="ops"><button type="button" class="btn btn--quiet" data-cat-open="${esc(e.sku)}" aria-expanded="${open}">${open ? 'Ocultar' : 'Ver'}</button></td></tr>`
+      + (inlineMode && open ? `<tr class="cat-detail"><td colspan="5">${catDetailHtml(e)}</td></tr>` : '');
+  }).join('');
+  box.innerHTML = `<p class="hint"><strong>${c.entries.length}</strong> producto(s) · <strong>${c.links.length}</strong> vínculo(s) · <strong>${waiting}</strong> esperando producto principal${pendList.length ? ` · ${pendList.length} sin evaluar` : ''}.</p>`
+    + inbox
+    + `<div class="actions"><button type="button" class="btn" id="cat-review"${pendList.length || waiting ? '' : ' disabled'}>Revisar pendientes</button></div>`
+    + `<div class="cat-tools"><label class="sr-only" for="cat-q">Buscar en el catálogo</label><input type="search" id="cat-q" placeholder="Buscar SKU o nombre" value="${esc(state.catQ)}" autocomplete="off"><div class="chips" role="group" aria-label="Filtrar el catálogo">${chips}</div></div>`
+    + (rows ? `<div class="lote-wrap"><table class="lote-table lote-table--compact"><thead><tr><th>SKU</th><th>Producto</th><th>Estado</th><th>Vínculos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="empty-state">Ningún producto coincide.</p>')
+    + (filtered.length > size ? `<div class="pager" role="navigation" aria-label="Páginas del catálogo"><span class="hint">Mostrando ${state.catPage * size + 1}–${state.catPage * size + shown.length} de ${filtered.length}</span><span class="spacer"></span><button type="button" class="btn btn--quiet" data-cat-page="-1"${state.catPage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.catPage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-cat-page="1"${state.catPage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
+  renderCatDrawer();
+}
+/* Detalle de un producto del catálogo: complementos, alternativas, relacionados y acciones. */
+function catDetailHtml(e) {
+  const c = state.catalog, lk = Catalog.lk, eff = Catalog.effectiveRels(c);
+  const nameOf = sku => { const x = Catalog.find(c, sku); return x ? x.nombre : sku; };
+  const kids = Catalog.childrenOf(c, e.sku), pars = Catalog.parentsOf(c, e.sku);
+  const manual = (a, b, kind) => (c.relMan || []).find(r => r.kind === kind && ((lk(r.a) === lk(a) && lk(r.b) === lk(b)) || (lk(r.a) === lk(b) && lk(r.b) === lk(a))));
+  const relBlock = (kind, label) => {
+    const list = (eff.get(lk(e.sku)) || {})[kind] || [];
+    const gone = (c.relMan || []).filter(r => r.kind === kind && !r.on && (lk(r.a) === lk(e.sku) || lk(r.b) === lk(e.sku))).map(r => lk(r.a) === lk(e.sku) ? r.b : r.a);
     return `<div><b>${label}:</b> ${list.map(k => `<span class="tag tag--info">${esc(nameOf(k))}${manual(e.sku, k, kind) ? ' (a mano)' : ''} <button type="button" class="linkbtn" data-cat-relx="${esc(e.sku)}|${esc(k)}|${kind}" aria-label="Quitar ${esc(nameOf(k))} de ${label.toLowerCase()}">×</button></span>`).join(' ')}`
       + `${gone.map(k => `<span class="tag tag--quiet">Quitado: ${esc(nameOf(k))} <button type="button" class="linkbtn" data-cat-relundo="${esc(e.sku)}|${esc(k)}|${kind}">Deshacer</button></span>`).join(' ')}`
       + ` <button type="button" class="linkbtn" data-cat-reladd="${esc(e.sku)}|${kind}">Agregar</button></div>`;
   };
-  const rows = c.entries.slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))).map(e => {
-    const st = Catalog.status(c, e), kids = Catalog.childrenOf(c, e.sku), pars = Catalog.parentsOf(c, e.sku);
-    const role = !e.elegible ? 'Principal' : e.padre ? 'Complemento y principal' : 'Complemento posible';
-    const chip = (p, ch, name) => `<span class="tag tag--info">${esc(name)} <button type="button" class="linkbtn" data-cat-unlink="${esc(p)}|${esc(ch)}" aria-label="Quitar vínculo con ${esc(name)}">×</button></span>`;
-    const rel = [kids.length ? `<div><b>Complementos:</b> ${kids.map(k => chip(e.sku, k.sku, k.nombre)).join(' ')}</div>` : '', pars.length ? `<div><b>Complemento de:</b> ${pars.map(k => chip(k.sku, e.sku, k.nombre)).join(' ')}</div>` : '', relBlock(e, 'upsell', 'Alternativas'), relBlock(e, 'related', 'Relacionados')].join('');
-    return `<tr data-sku="${esc(e.sku)}"><td data-label="SKU">${esc(e.sku)}</td><td class="t" data-label="Producto">${esc(e.nombre)}${[e.area, e.area2].filter(Boolean).length ? `<span class="ld-why">${esc([e.area, e.area2].filter(Boolean).join(' · '))}${e.atc ? ' · ATC ' + esc(e.atc) : ''}</span>` : ''}</td><td data-label="Rol">${esc(role)}</td><td data-label="Estado"><span class="status status--${st === 'esperando' ? 'warn' : st === 'vinculado' ? 'ok' : 'info'}">${esc(L[st])}</span></td><td data-label="Vínculos">${rel}</td>`
-      + `<td class="ops"><button type="button" class="btn btn--quiet" data-cat-find="${esc(e.sku)}">Buscar</button>${e.elegible ? `<button type="button" class="btn btn--quiet" data-cat-parent="${esc(e.sku)}" aria-pressed="${!!e.padre}">${e.padre ? 'Quitar de principales' : 'Marcar como principal'}</button>` : ''}<button type="button" class="btn btn--quiet" data-cat-del="${esc(e.sku)}">Quitar</button></td></tr>`;
-  }).join('');
-  box.innerHTML = `<p class="hint"><strong>${c.entries.length}</strong> producto(s) · <strong>${c.links.length}</strong> vínculo(s) · <strong>${waiting}</strong> esperando producto principal${pend ? ` · ${pend} sin evaluar` : ''}.</p>`
-    + `<div class="actions"><button type="button" class="btn" id="cat-review"${pend || waiting ? '' : ' disabled'}>Revisar pendientes</button></div>`
-    + `<div class="lote-wrap"><table class="lote-table"><thead><tr><th>SKU</th><th>Producto</th><th>Rol</th><th>Estado</th><th>Vínculos</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const chip = (p, ch, name) => `<span class="tag tag--info">${esc(name)} <button type="button" class="linkbtn" data-cat-unlink="${esc(p)}|${esc(ch)}" aria-label="Quitar vínculo con ${esc(name)}">×</button></span>`;
+  const role = !e.elegible ? 'Principal' : e.padre ? 'Complemento y principal' : 'Complemento posible';
+  return `<div class="cat-d"><p class="hint">${esc(role)}${e.exportedAt ? ' · ya cargado a Magento' : ''}</p>`
+    + [kids.length ? `<div><b>Complementos:</b> ${kids.map(k => chip(e.sku, k.sku, k.nombre)).join(' ')}</div>` : '', pars.length ? `<div><b>Complemento de:</b> ${pars.map(k => chip(k.sku, e.sku, k.nombre)).join(' ')}</div>` : '', relBlock('upsell', 'Alternativas'), relBlock('related', 'Relacionados')].join('')
+    + `<div class="ops"><button type="button" class="btn btn--quiet" data-cat-find="${esc(e.sku)}">Buscar</button>${e.elegible ? `<button type="button" class="btn btn--quiet" data-cat-parent="${esc(e.sku)}" aria-pressed="${!!e.padre}">${e.padre ? 'Quitar de principales' : 'Marcar como principal'}</button>` : ''}<button type="button" class="btn btn--quiet" data-cat-del="${esc(e.sku)}">Quitar</button></div></div>`;
 }
+function renderCatDrawer() {
+  let box = $('#cat-drawer');
+  if (!box) { box = document.createElement('aside'); box.id = 'cat-drawer'; box.className = 'lote-drawer'; box.setAttribute('aria-label', 'Detalle del producto del catálogo'); box.hidden = true; document.body.appendChild(box); }
+  const e = drawerMode() && state.catDrawer ? Catalog.find(state.catalog, state.catDrawer) : null;
+  if (!e) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="ld-head"><div><b>${esc(e.sku)}</b><div class="hint">${esc(e.nombre)}</div></div><button type="button" class="btn btn--quiet" data-catclose="1" aria-label="Cerrar el detalle">✕</button></div><div class="ld-body">${catDetailHtml(e)}</div>`;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-cat-open],[data-catclose],[data-cat-filter],[data-cat-page],[data-cat-indep],[data-cat-inboxall],tr.click[data-sku]');
+  if (!t) return;
+  if (t.matches('tr.click[data-sku]') && e.target.closest('button,a,input,summary')) return;
+  if (t.dataset.catclose !== undefined) { state.catDrawer = ''; return renderCatalog(); }
+  if (t.dataset.catFilter) { state.catFilter = t.dataset.catFilter; state.catPage = 0; return renderCatalog(); }
+  if (t.dataset.catPage) { state.catPage = Math.max(0, state.catPage + Number(t.dataset.catPage)); return renderCatalog(); }
+  if (t.dataset.catInboxall) { state.catInboxAll = !state.catInboxAll; return renderCatalog(); }
+  if (t.dataset.catIndep) { Catalog.setComp(state.catalog, t.dataset.catIndep, 'independiente'); saveCatalog(); toast('Marcado como producto que no es complemento.'); return renderCatalog(); }
+  const sku = t.dataset.catOpen || t.dataset.sku;
+  if (drawerMode()) state.catDrawer = state.catDrawer === sku ? '' : sku;
+  else if (state.catOpen.has(sku)) state.catOpen.delete(sku); else state.catOpen.add(sku);
+  renderCatalog();
+});
+document.addEventListener('input', e => {
+  const q = e.target.closest && e.target.closest('#cat-q'); if (!q) return;
+  const pos = q.selectionStart; state.catQ = q.value; state.catPage = 0; renderCatalog();
+  const n = $('#cat-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.catDrawer && !document.querySelector('.cdlg-scrim')) { state.catDrawer = ''; renderCatalog(); } });
 /* Compartir el catálogo: se descarga como archivo y se une con el de otra persona. */
 const catShare = (msg, bad) => { const el = $('#cat-share-status'); if (el) { el.textContent = msg; el.className = 'hint' + (bad ? ' status bad' : ''); } };
 $('#cat-export').addEventListener('click', e => withBusy(e.currentTarget, async () => {
@@ -2947,7 +3027,7 @@ function bulkBarHtml(rows) {
     + `<button type="button" class="btn btn--quiet" data-bk="selfilt">Marcar los ${rows.length} filtrados</button>`
     + `<button type="button" class="btn btn--quiet" data-bk="clearsel"${k ? '' : ' disabled'}>Quitar marcas</button>`
     + `<button type="button" class="btn" data-bk="change"${k ? '' : ' disabled'}>Cambiar un campo…</button>`
-    + `<button type="button" class="btn" data-bk="replace">Buscar y reemplazar…</button><span class="spacer"></span><button type="button" class="btn btn--quiet" data-dens="1" aria-pressed="${state.dens === 'compact'}" title="Cambia entre filas compactas y cómodas">Densidad: ${state.dens === 'compact' ? 'compacta' : 'cómoda'}</button></div>`;
+    + `<button type="button" class="btn" data-bk="replace">Buscar y reemplazar…</button><span class="spacer"></span><button type="button" class="btn btn--quiet" data-group="1" aria-pressed="${state.loteGroup}" title="Agrupa la lista por estado de trabajo">Agrupar por estado</button><button type="button" class="btn btn--quiet" data-dens="1" aria-pressed="${state.dens === 'compact'}" title="Cambia entre filas compactas y cómodas">Densidad: ${state.dens === 'compact' ? 'compacta' : 'cómoda'}</button></div>`;
 }
 const bulkValues = key => {
   const def = Bulk.byKey(key), out = new Set();
@@ -3059,6 +3139,7 @@ function openBulk(o) {
   buildValue(); refresh();
   const first = scrim.querySelector(o.mode === 'replace' ? `#${id}-f` : `#${id}-v`); if (first) first.focus();
 }
+$('#lote-body').addEventListener('toggle', e => { const g = e.target.closest && e.target.closest('details[data-lgroup]'); if (g) state.loteGroupOpen[g.dataset.lgroup] = g.open; }, true);
 $('#lote-body').addEventListener('change', e => {
   const c = e.target.closest && e.target.closest('input[data-bksel]'); if (!c) return;
   c.checked ? state.sel.add(c.dataset.bksel) : state.sel.delete(c.dataset.bksel);
@@ -3066,6 +3147,8 @@ $('#lote-body').addEventListener('change', e => {
   document.querySelectorAll('#lote-body [data-bk="clearsel"],#lote-body [data-bk="change"]').forEach(b => { b.disabled = !state.sel.size; });
 });
 $('#lote-body').addEventListener('click', e => {
+  const gp = e.target.closest && e.target.closest('[data-group]');
+  if (gp) { state.loteGroup = !state.loteGroup; return renderLote(); }
   const dn = e.target.closest && e.target.closest('[data-dens]');
   if (dn) { state.dens = state.dens === 'compact' ? 'comfy' : 'compact'; try { localStorage.setItem('fichas.dens', state.dens); } catch (_) {} return renderLote(); }
   const t = e.target.closest && e.target.closest('[data-bk]'); if (!t || !Bulk) return;

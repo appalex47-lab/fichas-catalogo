@@ -57,3 +57,21 @@ test('lote: en pantallas anchas «Ver» abre el detalle en un panel lateral sin 
   assert.equal(a.d.getElementById('lote-drawer').hidden, true);
   assert.deepEqual(a.errors, []);
 });
+
+test('lote: «Agrupar por estado» arma un grupo por estado y abre solo los que requieren acción', { skip }, async () => {
+  const items = JSON.parse(many(4));
+  items[0].v.marca = ''; // sin marca: queda bloqueado
+  const a = boot({ 'fichas.lote.v1': JSON.stringify(items) });
+  await wait(400);
+  a.d.querySelector('#lote-body [data-group]').click();
+  const g = [...a.d.querySelectorAll('#lote-body details.lgroup')];
+  assert.ok(g.length >= 2, 'hay al menos dos grupos');
+  assert.deepEqual(g.map(x => x.dataset.lgroup).slice(0, 1), ['bloqueado']);
+  assert.equal(g.find(x => x.dataset.lgroup === 'bloqueado').open, true, 'lo bloqueado se abre solo');
+  assert.equal(g.find(x => x.dataset.lgroup === 'listo').open, false, 'lo listo queda plegado');
+  assert.match(a.text('#lote-body details[data-lgroup="bloqueado"] summary'), /Bloqueados 1/);
+  assert.equal(a.d.querySelector('#lote-body .pager'), null);
+  a.d.querySelector('#lote-body [data-group]').click();
+  assert.equal(a.d.querySelectorAll('#lote-body details.lgroup').length, 0, 'se vuelve a la tabla');
+  assert.deepEqual(a.errors, []);
+});
