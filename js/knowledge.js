@@ -26,8 +26,8 @@ const SCHEMA = 'fichas.knowledge.v1';
 const VERSION = '1.0';
 
 /* ---------- vocabulario ---------- */
-const TYPES = Object.freeze(['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'product']);
-const TYPE_LABEL = Object.freeze({ substance: 'Sustancia activa', laboratory: 'Laboratorio', brand: 'Marca', manufacturer: 'Fabricante', pharmaceuticalForm: 'Forma farmacéutica', concentration: 'Concentración', unit: 'Unidad', presentation: 'Presentación', category: 'Categoría', subcategory: 'Subcategoría', product: 'Producto' });
+const TYPES = Object.freeze(['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory', 'product']);
+const TYPE_LABEL = Object.freeze({ substance: 'Sustancia activa', laboratory: 'Laboratorio', brand: 'Marca', manufacturer: 'Fabricante', pharmaceuticalForm: 'Forma farmacéutica', concentration: 'Concentración', unit: 'Unidad', presentation: 'Presentación', category: 'Categoría', subcategory: 'Subcategoría', storeCategory: 'Categoría de la tienda', product: 'Producto' });
 const STATUS = Object.freeze({ OBSERVED: 'observed', NORMALIZED: 'normalized', SUGGESTED: 'suggested', CONFIRMED: 'confirmed', INFERRED: 'inferred', TRUSTED: 'trusted', REJECTED: 'rejected', CONFLICTED: 'conflicted' });
 const STATUS_LABEL = Object.freeze({ observed: 'Observado', normalized: 'Normalizado', suggested: 'Sugerido', confirmed: 'Confirmado', inferred: 'Inferido', trusted: 'De confianza', rejected: 'Rechazado', conflicted: 'En conflicto' });
 const AUDIT = Object.freeze({ CREATED: 'KNOWLEDGE_CREATED', UPDATED: 'KNOWLEDGE_UPDATED', CONFIRMED: 'KNOWLEDGE_CONFIRMED', REJECTED: 'KNOWLEDGE_REJECTED', CONFLICT: 'KNOWLEDGE_CONFLICT', SUGGESTION: 'KNOWLEDGE_SUGGESTION', AUTO: 'AUTO_CORRECTION', MANUAL: 'MANUAL_CORRECTION' });
@@ -35,12 +35,12 @@ const LEVELS = Object.freeze({ SUGGEST: 1, ASSISTED: 2, AUTO_SAFE: 3, REVIEW: 4 
 const LEVEL_LABEL = Object.freeze({ 1: 'Sugerir', 2: 'Corrección asistida', 3: 'Autocorrección segura', 4: 'Revisión obligatoria' });
 
 /* Qué campo del formulario alimenta qué tipo de entidad (independiente de la categoría). */
-const FIELD_TYPE = Object.freeze({ marca: 'brand', principio: 'substance', componente: 'substance', laboratorio: 'laboratory', fabricante: 'manufacturer', forma: 'pharmaceuticalForm', concentracion: 'concentration', contenido: 'presentation', paquete: 'presentation', presentacion: 'presentation', tipo: 'subcategory' });
+const FIELD_TYPE = Object.freeze({ marca: 'brand', principio: 'substance', componente: 'substance', laboratorio: 'laboratory', fabricante: 'manufacturer', forma: 'pharmaceuticalForm', concentracion: 'concentration', contenido: 'presentation', paquete: 'presentation', presentacion: 'presentation', tipo: 'subcategory', categoria: 'storeCategory' });
 const PRESENTATION_FIELDS = Object.freeze(['contenido', 'paquete', 'presentacion']);
 /* Tipos y campos críticos: nunca se autocorrigen (sustancias, concentraciones, relación marca/laboratorio, claims, datos regulatorios). */
 const CRITICAL_TYPES = Object.freeze(['substance', 'concentration', 'laboratory', 'brand', 'manufacturer']);
 const CRITICAL_FIELDS = Object.freeze(['principio', 'componente', 'concentracion', 'laboratorio', 'marca', 'fabricante', 'receta', 'leyenda', 'precauciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'inci', 'fps', 'nivel', 'via']);
-const AUTO_TYPES = Object.freeze(['pharmaceuticalForm', 'unit', 'presentation', 'category', 'subcategory']);
+const AUTO_TYPES = Object.freeze(['pharmaceuticalForm', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory']);
 /* Predicados cuyo objeto debe ser único para un sujeto: dos objetos distintos son un conflicto, no una elección. */
 const FUNCTIONAL = Object.freeze(['brand→laboratory', 'product→brand', 'product→laboratory', 'product→manufacturer', 'product→pharmaceuticalForm', 'product→presentation', 'product→concentration', 'product→category', 'product→subcategory']);
 

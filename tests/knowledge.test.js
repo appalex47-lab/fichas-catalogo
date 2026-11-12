@@ -15,7 +15,7 @@ const actions = ev => ev.map(e => e.action);
 /* ---------- identidad y modelo ---------- */
 test('conocimiento: identidad, tipos y estados', () => {
   assert.equal(K.SCHEMA, 'fichas.knowledge.v1');
-  assert.deepEqual(K.TYPES, ['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'product']);
+  assert.deepEqual(K.TYPES, ['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory', 'product']);
   assert.deepEqual(Object.values(K.STATUS), ['observed', 'normalized', 'suggested', 'confirmed', 'inferred', 'trusted', 'rejected', 'conflicted']);
   assert.equal(K.idFor('brand', 'Marca X'), 'brand:marca-x');
   assert.equal(K.idFor('substance', 'Acetaminofén'), K.idFor('substance', 'acetaminofen'), 'acentos y mayúsculas no cambian la identidad');
@@ -453,4 +453,16 @@ test('rendimiento: observar, evaluar y buscar con miles de registros no recorre 
   assert.ok(t1 < 20000, `600 productos en ${t1} ms`); assert.ok(ta < 5000, `60 evaluaciones en ${ta} ms`);
   const s = await kb.stats(); assert.equal(s.byType.brand, 150); assert.equal(s.byType.laboratory, 40);
   assert.equal((await kb.listConflicts()).length, 0, 'mismas marcas con el mismo laboratorio no generan conflictos');
+});
+
+/* ---------- categoría de la tienda ---------- */
+test('conocimiento: la categoría de la tienda se aprende como su propio tipo', async () => {
+  const { kb } = make();
+  await kb.init();
+  await kb.observe(med('Tempra', 'Genomma', 'S1', { categoria: 'Gastroenterología' }));
+  const e = await ent(kb, 'storeCategory', 'Gastroenterología');
+  assert.ok(e, 'la categoría quedó registrada');
+  assert.equal(K.TYPE_LABEL.storeCategory, 'Categoría de la tienda');
+  assert.ok(K.AUTO_TYPES.includes('storeCategory'), 'mayúsculas y alias confirmados se corrigen solos');
+  assert.ok(!(await ent(kb, 'category', 'Gastroenterología')), 'no se mezcla con la categoría de la herramienta');
 });
