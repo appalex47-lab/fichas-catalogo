@@ -68,3 +68,19 @@ test('masivo: buscar y reemplazar encuentra los productos con el valor exacto', 
   assert.ok(lote(a).every(x => x.v.laboratorio === 'Genomma Lab'));
   assert.deepEqual(a.errors, []);
 });
+
+test('masivo: Conocimiento propone el laboratorio de una marca conocida y se aplica a todos con un clic', { skip }, async () => {
+  const a = boot();
+  a.addMed('K1', 'Tempra', '30', { laboratorio: 'Genomma' });
+  await wait(500);
+  a.addMed('K2', 'Tempra', '20', { laboratorio: '' });
+  a.addMed('K3', 'Tempra', '10', { laboratorio: '' });
+  await wait(1500);
+  const btn = a.d.querySelector('[data-bk="apply"]');
+  assert.ok(btn, 'aparece «Aplicar» para el laboratorio');
+  assert.match(a.text('#lote-body .bulk-box'), /2 producto\(s\) sin laboratorio/);
+  btn.click(); await wait(200);
+  assert.equal(labOf(a, 'K2'), 'Genomma'); assert.equal(labOf(a, 'K3'), 'Genomma');
+  assert.match(a.text('#lote-body .bulk-box'), /Último cambio masivo/);
+  assert.deepEqual(a.errors, []);
+});

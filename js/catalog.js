@@ -67,7 +67,7 @@ function upsert(cat, item, title, at) {
   const elegible = eligibleOf(item.cat, v);
   let e = find(cat, sku), isNew = !e, removed = [];
   if (!e) { e = { sku, addedAt: at, comp: 'sin_evaluar' }; cat.entries.push(e); }
-  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at, rv: relData(v), rutina: item.cat === 'cos' ? (v.rutina || F.rutinaDe(v)) : '', zona: v.zona || '' });
+  Object.assign(e, { cat: item.cat, nombre: shortName(item.cat, v) || String(title || sku), titulo: String(title || ''), marca: v.marca || '', receta: v.receta || '', especialidad: v.especialidad || '', area: v.area || '', area2: v.area2 || '', atc: v.atc || '', elegible, updatedAt: at, rv: relData({ ...v, ...(item.vt || {}) }), rutina: item.cat === 'cos' ? (v.rutina || F.rutinaDe(v)) : '', zona: v.zona || '' });
   if (!elegible) {
     /* Si dejó de ser elegible (por ejemplo, se declaró que requiere receta), pierde sus vínculos como complemento. */
     removed = cat.links.filter(l => lk(l.c) === lk(sku));
@@ -205,8 +205,8 @@ function applyOver(list, o) {
   return out;
 }
 /* Lo que valen las reglas más lo hecho a mano, sin filtrar por lo ya cargado a Magento (para mostrar en pantalla). */
-function effectiveRels(cat) {
-  const map = F.relations(cat.entries.map(e => ({ sku: e.sku, cat: e.cat, v: e.rv || { marca: e.marca } })));
+function effectiveRels(cat, allow) {
+  const map = F.relations(cat.entries.map(e => ({ sku: e.sku, cat: e.cat, v: e.rv || { marca: e.marca } })), allow);
   const cm = crosssellMap(cat), ov = relOver(cat), out = new Map();
   cat.entries.forEach(e => {
     const k = lk(e.sku), r = map.get(k) || { upsell: [], related: [], crosssell: [] }, o = ov.get(k) || {};
@@ -215,7 +215,7 @@ function effectiveRels(cat) {
   return out;
 }
 function currentRels(cat) {
-  const eff = effectiveRels(cat), known = knownSkus(cat), out = new Map();
+  const known = knownSkus(cat), eff = effectiveRels(cat, sku => known.has(lk(sku))), out = new Map();
   const ok = a => [...new Set(a)].filter(x => known.has(lk(x))).sort();
   cat.entries.forEach(e => {
     const k = lk(e.sku), r = eff.get(k);
@@ -278,7 +278,9 @@ function relUpdateCsv(cat, skus) {
   return { header: H, rows };
 }
 
-const api = { merge, setRel, clearRel, relOver, effectiveRels, REL_MAN, routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
+/* Productos del catálogo para calcular alternativas y relacionados en el CSV. */
+const relPool = cat => cat.entries.map(e => ({ sku: e.sku, cat: e.cat, v: e.rv || { marca: e.marca } }));
+const api = { relPool, merge, setRel, clearRel, relOver, effectiveRels, REL_MAN, routineMates, REL_KINDS, REL_LABEL, currentRels, relDiff, baseline, alerts, dismiss, relUpdateCsv, shortName, empty, normalize, find, isParent, parentsOf, childrenOf, linked, status, STATUS_LABEL, upsert, candidateParents, waitingChildren, otherChildren, link, unlink, setComp, setParent, remove, crosssellMap, knownSkus, markExported, lk };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasCatalog = api;
 })(typeof self !== 'undefined' ? self : this);

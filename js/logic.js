@@ -1852,7 +1852,7 @@ const complementEligible = (cat, v) => cat !== 'med' || (!!v && v.receta === 'no
 const REL_MAX = 4;
 const relKey = x => String(x ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const relSet = x => relKey(x).split(' ').filter(Boolean).sort().join(' ');
-function relations(entries) {
+function relations(entries, allow) {
   const list = entries.filter(e => e && e.sku).map(e => {
     const v = e.v || {};
     return { sku: e.sku, cat: e.cat, elig: complementEligible(e.cat, v), marca: relKey(v.marca), org: relKey(v.laboratorio || v.fabricante), compat: String(v.compat || ''),
@@ -1862,11 +1862,11 @@ function relations(entries) {
   const bySku = new Map(list.map(e => [e.sku.toLowerCase(), e]));
   const out = new Map();
   for (const e of list) {
-    const others = list.filter(o => o.sku.toLowerCase() !== e.sku.toLowerCase());
+    const others = list.filter(o => o.sku.toLowerCase() !== e.sku.toLowerCase() && (!allow || allow(o.sku)));
     const upsell = e.alt ? others.filter(o => o.alt === e.alt && o.marca !== e.marca) : [];
     const used = new Set(upsell.map(o => o.sku.toLowerCase()));
     const related = others.filter(o => o.cat === e.cat && !used.has(o.sku.toLowerCase()) && ((e.marca && o.marca === e.marca) || (e.org && o.org === e.org)))
-      .sort((a, b) => (b.marca === e.marca) - (a.marca === e.marca));
+      .sort((a, b) => ((b.marca === e.marca) - (a.marca === e.marca)) || a.sku.localeCompare(b.sku));
     const cross = [...new Set(e.compat.split(/[\s,;|]+/).filter(Boolean).map(x => x.toLowerCase()))]
       .filter(k => k !== e.sku.toLowerCase() && bySku.has(k) && bySku.get(k).elig).map(k => bySku.get(k));
     const by = (a, b) => a.sku.localeCompare(b.sku);
@@ -1914,7 +1914,10 @@ function magentoBatch(items, keep, metaCfg, opts) {
   }
   const rel = { upsell: 0, related: 0, crosssell: 0 };
   if (opts.relations) {
-    const map = relations([...entries.values()]);
+    /* Alternativas y relacionados se calculan con el archivo y con el catálogo, pero solo cuentan los SKU del archivo o los que Magento ya conoce. */
+    const known = opts.knownSkus, allow = sku => entries.has(sku.toLowerCase()) || !!(known && known.has(sku.toLowerCase()));
+    const extras = (opts.catalogRel || []).filter(x => x && x.sku && !entries.has(String(x.sku).toLowerCase())).map(x => ({ sku: x.sku, cat: x.cat, v: x.v || {} }));
+    const map = relations([...entries.values(), ...extras], allow);
     for (const [key, row] of bySku) {
       const r = map.get(key) || ((opts.relOver && opts.relOver.has(key)) ? { upsell: [], related: [], crosssell: [] } : null);
       if (!r) continue;

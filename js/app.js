@@ -1473,7 +1473,7 @@ function panelMeta(r) {
     + metaBlock('Alt de la imagen principal', m.alt, 'alt', true, 'Va en base_image_label.');
 }
 
-function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog), relOver: Catalog.relOver(state.catalog) }; }
+function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog), relOver: Catalog.relOver(state.catalog), catalogRel: Catalog.relPool(state.catalog) }; }
 function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta, expOpts()); }
 function renderExport(assessed) {
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
@@ -2627,11 +2627,14 @@ $('#cl-body').addEventListener('click', async e => {
  * principal queda «esperando» (estado interno, no se exporta). La IA solo propone; cada vínculo lo confirma una persona. */
 const saveCatalog = () => persist('fichas.catalog.v1', state.catalog);
 const catalogNow = () => new Date().toISOString();
-const catalogTitle = it => { try { return computeFor(it.cat, it.v, keepSet(), state.meta).title.title; } catch (e) { return (it.v && it.v.marca) || it.sku; } };
+const catalogRes = it => { try { return computeFor(it.cat, it.v, keepSet(), state.meta); } catch (e) { return null; } };
+const catalogTitle = it => { const r = catalogRes(it); return r ? r.title.title : ((it.v && it.v.marca) || it.sku); };
 function catalogSync(items) {
   const touched = [];
   items.forEach(it => {
-    const r = Catalog.upsert(state.catalog, it, catalogTitle(it), catalogNow());
+    const res = catalogRes(it);
+    /* Los datos para relacionar se guardan ya normalizados (igual que en el CSV), para comparar manzanas con manzanas. */
+    const r = Catalog.upsert(state.catalog, res ? { ...it, vt: res.vt.v } : it, res ? res.title.title : ((it.v && it.v.marca) || it.sku), catalogNow());
     if (!r.entry) return;
     touched.push(r.entry.sku);
     if (r.removed.length) {
@@ -2988,7 +2991,7 @@ function openBulk(o) {
     const conf = Bulk.conflicts(state.lote, ids, key, v);
     [...checked].forEach(x => { if (!ids.includes(x)) checked.delete(x); });
     if (o.mode === 'replace') ids.forEach(x => checked.add(x));
-    q('b').innerHTML = rows.length ? rows.map(r => `<tr><td><input type="checkbox" data-pid="${esc(r.id)}"${checked.has(r.id) && !r.na && !r.same ? ' checked' : ''}${r.na || r.same ? ' disabled' : ''} aria-label="Cambiar ${esc(r.sku || 'producto')}"></td><td>${esc(r.sku || 'sin SKU')}</td><td>${esc(Bulk.show(d, r.from))}</td><td>${r.na ? '<span class="hint">no aplica a esta categoría</span>' : r.same ? '<span class="hint">ya lo tiene</span>' : `<b>${esc(Bulk.show(d, r.to))}</b>`}</td><td>${esc(conf.get(r.id) || '')}</td></tr>`).join('')
+    q('b').innerHTML = rows.length ? rows.map(r => `<tr><td><input type="checkbox" data-pid="${esc(r.id)}"${checked.has(r.id) && !r.na && !r.same ? ' checked' : ''}${r.na || r.same ? ' disabled' : ''} aria-label="Cambiar ${esc(r.sku || 'producto')}"></td><td data-label="SKU">${esc(r.sku || 'sin SKU')}</td><td data-label="Antes">${esc(Bulk.show(d, r.from))}</td><td data-label="Después">${r.na ? '<span class="hint">no aplica a esta categoría</span>' : r.same ? '<span class="hint">ya lo tiene</span>' : `<b>${esc(Bulk.show(d, r.to))}</b>`}</td><td data-label="Conocimiento">${esc(conf.get(r.id) || '')}</td></tr>`).join('')
       : `<tr><td colspan="5" class="hint">${ids.length || o.mode !== 'replace' ? 'Escribe el nuevo valor para ver el antes y el después.' : 'Escribe el valor actual para encontrar productos.'}</td></tr>`;
     q('r').hidden = !d.reg;
     const my = ++noteSeq;
