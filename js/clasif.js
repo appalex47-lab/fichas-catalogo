@@ -115,7 +115,19 @@ function missing(d, principios) {
   return out;
 }
 
-const api = { ATC_AREAS, areaFromAtc, keyOf, cleanAtc, empty, normalize, find, lookup, upsert, verify, unverify, remove, toCsv, fromCsv, missing, HEADERS };
+/* Une las filas de otro diccionario con el mío. Una fila verificada mía nunca se cambia; una fila mía sin verificar toma la verificada del otro. */
+function merge(mine, theirs) {
+  const inc = normalize(theirs), sum = { added: 0, updated: 0, kept: 0 };
+  inc.rows.forEach(r => {
+    const cur = mine.rows.find(x => x.key === r.key);
+    if (!cur) { mine.rows.push({ ...r }); sum.added++; }
+    else if (cur.estado !== 'verificado' && r.estado === 'verificado') { Object.assign(cur, r); sum.updated++; }
+    else if (cur.estado !== 'verificado' && !cur.atc && r.atc) { Object.assign(cur, { atc: r.atc, area: cur.area || r.area, area2: cur.area2 || r.area2, fuente: cur.fuente || r.fuente }); sum.updated++; }
+    else sum.kept++;
+  });
+  return sum;
+}
+const api = { merge, ATC_AREAS, areaFromAtc, keyOf, cleanAtc, empty, normalize, find, lookup, upsert, verify, unverify, remove, toCsv, fromCsv, missing, HEADERS };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.FichasClasif = api;
 })(typeof self !== 'undefined' ? self : this);

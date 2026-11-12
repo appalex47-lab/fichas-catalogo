@@ -118,18 +118,14 @@ test('editar: guardar cambios reemplaza el producto en su misma posición, sin d
 });
 
 test('respaldo: exportar y restaurar en otra instancia conserva los productos', { skip }, async () => {
-  const a = boot();
+  const { boot: hboot } = require('./helpers/boot');
+  const a = hboot();
   a.addMed('B1', 'Tempra', '30'); a.addMed('B2', 'Dolofin', '20');
-  a.d.getElementById('lote-backup').click();
-  await new Promise(r => setTimeout(r, 100));
-  const text = Buffer.from(await a.downloads.at(-1).arrayBuffer()).toString('utf8');
-  assert.equal(JSON.parse(text).schema, 'fichas.lote-backup.v1');
-  const b = boot();
-  const file = new b.w.File([text], 'respaldo.json', { type: 'application/json' });
-  const input = b.d.getElementById('lote-restore');
-  Object.defineProperty(input, 'files', { value: [file] });
-  input.dispatchEvent(new b.w.Event('change', { bubbles: true }));
-  await new Promise(r => setTimeout(r, 200));
+  const file = await a.backup(['lote']);
+  assert.equal(file.schema, 'fichas.backup.v2');
+  assert.deepEqual(Object.keys(file.parts), ['lote']);
+  const b = hboot();
+  await b.restore(file);
   assert.equal(b.count(), '2');
   assert.equal(b.rows().length, 2);
 });

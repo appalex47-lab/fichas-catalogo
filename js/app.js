@@ -7,6 +7,9 @@
 const {
   CATS,
   TITLE_MAX,
+  MC_DESC_MAX,
+  merchantFeed,
+  merchantText,
   batchCsv,
   computeFor,
   defExp,
@@ -33,6 +36,7 @@ const {
 const Catalog = window.FichasCatalog;
 const Clasif = window.FichasClasif;
 const Bulk = window.FichasBulk || null;
+const Backup = window.FichasBackup || null;
 const Anomalies = window.FichasAnomalies || { provenanceFor: () => ({}), detectBatch: () => [], summarize: () => ({ total:0,error:0,warning:0,info:0,byType:{} }), event: () => ({}) };
 const Normalization = window.FichasNormalization || {};
 const Canonical = window.FichasCanonical || { canonicalize: () => ({ schema: 'fichas.canonical.v1', version: '1.0', identity: {}, fields: {}, derived: {}, quality: {}, provenance: {}, anomalyTypes: [] }) };
@@ -147,6 +151,8 @@ const state = {
   state.meta = m ? { ...d, ...m, cats: Object.fromEntries(Object.keys(d.cats).map(id => [id, { ...d.cats[id], ...((m.cats || {})[id] || {}) }])) } : d;
   migrateMeta(state.meta);
   state.exp = { ...defExp(), ...(store.get('fichas.exp.v2', null) || {}) };
+  state.mc = { incF: false, incIA: false, fmt: 'txt', ...(store.get('fichas.mc.v1', null) || {}) };
+  state.plat = 'magento';
   state.dic = { marcas: '', principios: '', labs: '', pos: false, ...(store.get('fichas.dic.v1', null) || {}) };
 }
 Object.assign(state, { dirty: false, changes: [], fOpen: {}, histOpen: false, loteOpen: new Set(), gotos: [], metaRev: 0, _baseSig: '', _prevV: {}, _lastAssess: null, _assessKey: '' });
@@ -505,46 +511,6 @@ function renderPersistenceStatus(){
       (isFile ? ' Si tenías productos en otra versión del ZIP, debes abrir aquella versión y trasladar el respaldo, porque los archivos locales no comparten un origen de almacenamiento garantizado.' : '');
   }
 }
-async function exportLoteBackup(){
-  const payload={schema:'fichas.lote-backup.v1',createdAt:new Date().toISOString(),lote:state.lote,audit:state.audit,catalog:state.catalog};
-  /* Fase 11: el conocimiento aprendido viaja en el mismo respaldo (entidades, alias, relaciones, evidencia, correcciones, conflictos y versión de la base). */
-  if (Knowledge) { try { const kb = await Knowledge.exportBackup(); if (kb && kb.counts && kb.counts.entities) payload.knowledge = kb; } catch (e) { if (window.console) console.error(e); } }
-  return saveFile(`respaldo-lote-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(payload,null,2),'application/json;charset=utf-8');
-}
-function importLoteBackup(file) {
-  if (!file) return;
-  const rd = new FileReader();
-  rd.onload = async () => {
-    try {
-      const p = JSON.parse(rd.result);
-      if (!p || !Array.isArray(p.lote)) throw new Error('Formato de respaldo no válido.');
-      const valid = p.lote.filter(it => it && CATS[it.cat] && it.v && typeof it.v === 'object').map(it => (it.id ? it : { ...it, id: uid() }));
-      const dropped = p.lote.length - valid.length;
-      if (state.lote.length) {
-        const ok = await confirmDialog({ title: '¿Restaurar este respaldo?', message: `Reemplazará los ${state.lote.length} producto(s) actuales por ${valid.length} del respaldo. Los actuales se perderán si no tienes otro respaldo.`, confirmLabel: 'Restaurar', danger: true });
-        if (!ok) { notify('Restauración cancelada.', 'warn'); return; }
-      }
-      state.lote = valid; state.loteOpen.clear();
-      state.audit = Array.isArray(p.audit) ? p.audit : state.audit;
-      if (state._editingId && !state.lote.some(x => x.id === state._editingId)) { state._editingId = null; state._editingProvenance = null; syncAddButton(); }
-      persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
-      if (p.catalog) { state.catalog = Catalog.normalize(p.catalog); saveCatalog(); }
-      catalogSync(state.lote.filter(x => x.sku));
-      let kMsg = '', kWarn = false;
-      if (Knowledge) {
-        try {
-          if (p.knowledge) { const kr = await Knowledge.importBackup(p.knowledge); kMsg = kr.ok ? ` Conocimiento: ${kr.report.added} nuevos, ${kr.report.updated} actualizados.` : ` El conocimiento del respaldo no se restauró: ${kr.error}`; kWarn = !kr.ok; }
-          else { await learn(state.lote, { source: 'restore' }); }
-          state.kRev++; kLoteSig.clear();
-        } catch (ke) { if (window.console) console.error(ke); kMsg = ' El conocimiento no se pudo restaurar.'; kWarn = true; }
-      }
-      renderLote(); renderOutputs(); renderPersistenceStatus();
-      notify(`Respaldo restaurado: ${state.lote.length} producto(s).${dropped ? ` Se omitieron ${dropped} registro(s) no válidos.` : ''}${kMsg}`, (dropped || kWarn) ? 'warn' : 'ok');
-    } catch (e) { if (window.console) console.error(e); notify(UX.friendlyError(e, 'restaurar el respaldo').message, 'error'); }
-  };
-  rd.onerror = () => notify('No se pudo leer el archivo. Intenta nuevamente.', 'error');
-  rd.readAsText(file);
-}
 function renderLote() {
   $('#lote-count').textContent = state.lote.length;
   renderPersistenceStatus();
@@ -667,11 +633,11 @@ function renderLote() {
     (!rows.length ? `<p class="empty-state">Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button></p>`
       : state.loteGroup ? groupedHTML(rows) : tableFor(shown)) +
     (!state.loteGroup && (rows.length > state.lotePageSize || state.lotePage) ? `<div class="pager" role="navigation" aria-label="Páginas del lote"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
-  renderLoteDrawer(all);
+  renderLoteDrawer(all); scheduleBackup();
 }
 function syncLoteButtons() {
   const empty = !state.lote.length;
-  ['lote-copy', 'lote-dl', 'lote-backup', 'lote-clear'].forEach(id => { const b = document.getElementById(id); if (b) { b.disabled = empty; b.title = empty ? 'Agrega productos al lote para usar esta acción.' : ''; } });
+  ['lote-copy', 'lote-dl', 'lote-clear'].forEach(id => { const b = document.getElementById(id); if (b) { b.disabled = empty; b.title = empty ? 'Agrega productos al lote para usar esta acción.' : ''; } });
 }
 function exportRows() {
   const keep = keepSet();
@@ -904,7 +870,8 @@ function navTo(name) {
   if (name === 'config') { openSettings(); return; }
   if (name === 'validacion') setTab('eval');
   if (name === 'contenido' && state.tab === 'eval') setTab('titulo');
-  const sel = { captura: '#h-prod', validacion: '#h-out', contenido: '#h-out', lote: '#lote', exportacion: '#exportar', conocimiento: '#conocimiento', catalogo: '#catalogo' }[name];
+  const sel = { captura: '#h-prod', validacion: '#h-out', contenido: '#h-out', lote: '#lote', exportacion: '#exportar', conocimiento: '#conocimiento', catalogo: '#catalogo', respaldo: '#respaldo' }[name];
+  if (name === 'respaldo') renderBackup();
   if (name === 'conocimiento') renderKnowledge();
   scrollToEl(document.querySelector(sel));
 }
@@ -1177,11 +1144,6 @@ $('#lote-dl').addEventListener('click', e => withBusy(e.currentTarget, async () 
   if (!state.lote.length) { notify('El lote está vacío.', 'warn'); return; }
   await saveFile('fichas-catalogo.csv', '\uFEFF' + toSheet(exportRows(), ','));
 }, 'descargar el CSV'));
-$('#lote-backup').addEventListener('click', e => withBusy(e.currentTarget, async () => {
-  if (!state.lote.length) { notify('No hay productos que respaldar.', 'warn'); return; }
-  await exportLoteBackup();
-}, 'generar el respaldo'));
-$('#lote-restore').addEventListener('change', e => { importLoteBackup(e.target.files && e.target.files[0]); e.target.value=''; });
 
 /* Datos crudos: extracción por reglas y diccionarios */
 const catOptions = Object.entries(CATS).map(([id, c]) => `<option value="${id}">${c.emoji} ${esc(c.name)}</option>`).join('');
@@ -1358,6 +1320,7 @@ bulkSec.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransf
 /* Meta etiquetas, alt y exportación a Magento */
 const SEPS = [[' | ', 'Barra vertical ( | )'], [' - ', 'Guion ( - )'], ['. ', 'Punto ( . )'], [', ', 'Coma ( , )'], [' ', 'Espacio']];
 const saveExp = () => store.set('fichas.exp.v2', state.exp);
+const saveMc = () => store.set('fichas.mc.v1', state.mc);
 const saveMeta = () => { state.metaRev++; return store.set('fichas.meta.v2', state.meta); };
 const clone = o => JSON.parse(JSON.stringify(o));
 
@@ -1498,6 +1461,7 @@ function panelMeta(r) {
 function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog), relOver: Catalog.relOver(state.catalog), catalogRel: Catalog.relPool(state.catalog) }; }
 function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta, expOpts()); }
 function renderExport(assessed) {
+  if (state.plat === 'mc') renderMc();
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
   if (!state.lote.length) { box.innerHTML = `<div class="empty-state"><p><strong>No hay productos listos para exportar.</strong></p><p class="hint">Agrega productos al lote y aquí verás cuántos están listos, con advertencias o bloqueados.</p><div class="actions"><button type="button" class="btn" data-nav-go="captura">Agregar producto</button></div></div>`; dl.disabled = true; cp.disabled = true; return; }
   const ex = currentBatch(), e = ex.excluded, reasons = [], notes = [];
@@ -1598,6 +1562,58 @@ $('#exp-incf').addEventListener('change', e => { state.exp.incF = e.target.check
 $('#exp-excl').addEventListener('change', e => { state.exp.excL = e.target.checked; saveExp(); renderExport(); });
 $('#exp-ia').addEventListener('change', e => { state.exp.incIA = e.target.checked; saveExp(); renderExport(); });
 $('#exp-rel').addEventListener('change', e => { state.exp.incRel = e.target.checked; saveExp(); renderExport(); });
+
+/* ---------- Exportar a Merchant Center ---------- */
+function mcFeed() {
+  const key = [state.lote.length, UX.hash(JSON.stringify(state.lote)), state.metaRev, state.keepText, state.mc.incF, state.mc.incIA].join('|');
+  if (state._mcKey !== key) { state._mcFeed = merchantFeed(state.lote, keepSet(), state.meta, { incFaltantes: state.mc.incF, incIA: state.mc.incIA }); state._mcKey = key; }
+  return state._mcFeed;
+}
+function renderMc() {
+  const box = $('#mc-summary'); if (!box) return;
+  const dl = $('#mc-dl'), cp = $('#mc-copy');
+  $('#mc-incf').checked = !!state.mc.incF; $('#mc-ia').checked = !!state.mc.incIA; $('#mc-fmt').value = state.mc.fmt;
+  if (!state.lote.length) { box.innerHTML = '<div class="empty-state"><p><strong>No hay productos listos para exportar.</strong></p><p class="hint">Agrega productos al lote y aquí verás cuántos salen en el archivo.</p></div>'; dl.disabled = cp.disabled = true; return; }
+  const f = mcFeed(), e = f.excluded, why = [], notes = [];
+  if (e.sinSku) why.push(`${e.sinSku} sin SKU. Merchant Center necesita el id para ubicar el producto.`);
+  if (e.faltantes) why.push(`${e.faltantes} con datos faltantes. Activa «Incluir filas con datos faltantes» si quieres exportarlas.`);
+  if (e.sinDescripcion) why.push(`${e.sinDescripcion} sin título o sin descripción de Merchant Center.`);
+  if (e.ia) why.push(`${e.ia} con datos de IA sin confirmar. Confírmalos en el lote o activa la opción para incluirlos.`);
+  if (e.duplicadas) why.push(`${e.duplicadas} SKU repetidos. Se exporta el último de cada uno.`);
+  if (e.tituloLargo) notes.push(`${e.tituloLargo} título(s) pasan de ${TITLE_MAX} caracteres y Merchant Center los puede cortar.`);
+  if (e.descLarga) notes.push(`${e.descLarga} descripción(es) pasan de ${MC_DESC_MAX} caracteres.`);
+  const out = new Set(f.rows.map(r => r[0].toLowerCase()));
+  const med = state.lote.filter(it => it.cat === 'med' && it.v && it.v.receta === 'si' && out.has(String(it.sku || '').trim().toLowerCase())).length;
+  if (med) notes.push(`${med} medicamento(s) con receta: Google restringe su publicidad. Se exportan igual; revisa la política antes de cargarlos.`);
+  const prev = f.rows.slice(0, 5);
+  box.innerHTML = `<p><strong>${f.rows.length} de ${f.total}</strong> productos se exportan.${f.rows.length ? '' : ' No hay productos listos para exportar.'}</p>`
+    + (why.length ? `<div class="note note--warn"><p><strong>No se exportan</strong></p><ul>${why.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '')
+    + (notes.length ? `<div class="note note--info"><ul>${notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '')
+    + (prev.length ? `<details class="plain"><summary>Vista previa (${prev.length} de ${f.rows.length})</summary><div class="tablewrap"><table class="lote-table"><thead><tr>${f.header.map(h => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${prev.map(r => `<tr>${r.map((c, i) => `<td data-label="${esc(f.header[i])}">${esc(c.length > 110 ? c.slice(0, 109) + '…' : c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>` : '');
+  dl.disabled = cp.disabled = !f.rows.length;
+}
+const mcName = () => `merchant-center.${state.mc.fmt === 'csv' ? 'csv' : 'txt'}`;
+$('#mc-incf').addEventListener('change', e => { state.mc.incF = e.target.checked; saveMc(); renderMc(); });
+$('#mc-ia').addEventListener('change', e => { state.mc.incIA = e.target.checked; saveMc(); renderMc(); });
+$('#mc-fmt').addEventListener('change', e => { state.mc.fmt = e.target.value === 'csv' ? 'csv' : 'txt'; saveMc(); renderMc(); });
+$('#mc-dl').addEventListener('click', e => withBusy(e.currentTarget, async () => {
+  const f = mcFeed();
+  if (!f.rows.length) { notify('No hay productos listos para exportar.', 'warn'); return; }
+  await saveFile(mcName(), merchantText(f, state.mc.fmt), state.mc.fmt === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8');
+}, 'descargar el archivo de Merchant Center'));
+$('#mc-copy').addEventListener('click', e => withBusy(e.currentTarget, async () => {
+  const f = mcFeed();
+  if (!f.rows.length) { notify('No hay productos listos para exportar.', 'warn'); return; }
+  await copyText(merchantText(f, state.mc.fmt), 'Copiado. Pégalo en un archivo .txt o .csv.');
+}, 'copiar para Merchant Center'));
+function showPlatform(p) {
+  state.plat = p === 'mc' ? 'mc' : 'magento';
+  $$('#exp-plat [data-plat]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.plat === state.plat)));
+  $('#exp-magento').hidden = state.plat !== 'magento'; $('#exp-mc').hidden = state.plat !== 'mc';
+  if (state.plat === 'mc') renderMc();
+}
+$('#exp-plat').addEventListener('click', e => { const b = e.target.closest('[data-plat]'); if (b) showPlatform(b.dataset.plat); });
+
 $('#exp-copy').addEventListener('click', e => withBusy(e.currentTarget, async () => {
   const ex = currentBatch();
   if (!ex.rows.length) { notify('No hay productos listos para exportar.', 'warn'); return; }
@@ -2144,7 +2160,7 @@ if (typeof IntersectionObserver !== 'undefined') {
       captVisible = (ratios.captura || 0) > 0;
       if ($('#asst').hidden) $('#asst-open').hidden = !captVisible;
     }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
-    [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
+    [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion'], ['#catalogo', 'catalogo'], ['#conocimiento', 'conocimiento'], ['#respaldo', 'respaldo']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
   } catch (_) { /* sin scroll-spy */ }
 }
 /* Ningún error se queda en silencio: se registra en consola y el usuario recibe un mensaje comprensible. */
@@ -2432,29 +2448,6 @@ $('#k-integrity').addEventListener('click', ev => withBusy(ev.currentTarget, asy
   const r = await Knowledge.integrity();
   notify(r.ok ? `Integridad correcta: ${r.entities} entidades, sin referencias rotas.` : `Se encontraron ${r.total} problema(s) de integridad.`, r.ok ? 'ok' : 'warn');
 }, 'verificar la integridad'));
-$('#k-backup').addEventListener('click', ev => withBusy(ev.currentTarget, async () => {
-  const data = await Knowledge.exportBackup();
-  await saveFile(`conocimiento-fichas-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data), 'application/json;charset=utf-8');
-}, 'generar el respaldo de conocimiento'));
-$('#k-restore-pick').addEventListener('click', () => $('#k-restore').click());
-$('#k-restore').addEventListener('change', e => {
-  const file = e.target.files && e.target.files[0]; e.target.value = ''; if (!file) return;
-  const rd = new FileReader();
-  rd.onload = async () => {
-    try {
-      const data = JSON.parse(rd.result); const v = Knowledge.db.validateBackup(data);
-      if (!v.ok) { notify(v.errors[0], 'error'); return; }
-      const ok = await confirmDialog({ title: '¿Restaurar el conocimiento?', message: `Se combinará con lo que ya sabe la aplicación: no se borra nada, no se duplica y la evidencia se conserva.${v.warnings.length ? ' ' + v.warnings[0] : ''}`, confirmLabel: 'Restaurar' });
-      if (!ok) { notify('Restauración cancelada.', 'warn'); return; }
-      const r = await Knowledge.importBackup(data);
-      if (!r.ok) { notify(r.error, 'error'); return; }
-      state.kRev++; kLoteSig.clear(); await renderKnowledge(); scheduleLoteKnowledge();
-      notify(`Conocimiento restaurado: ${r.report.added} nuevos, ${r.report.updated} actualizados.${r.integrity.ok ? '' : ` Atención: ${r.integrity.total} referencia(s) rotas.`}`, r.integrity.ok ? 'ok' : 'warn');
-    } catch (err) { if (window.console) console.error(err); notify(UX.friendlyError(err, 'restaurar el conocimiento').message, 'error'); }
-  };
-  rd.onerror = () => notify('No se pudo leer el archivo. Intenta nuevamente.', 'error');
-  rd.readAsText(file);
-});
 $('#k-dict-add').addEventListener('click', ev => withBusy(ev.currentTarget, async () => {
   const text = $('#k-dict-text').value; if (!text.trim()) { notify('Escribe al menos una equivalencia.', 'warn'); return; }
   const r = await Knowledge.importDictionary(text, $('#k-dict-type').value, {});
@@ -2877,26 +2870,6 @@ document.addEventListener('input', e => {
   const n = $('#cat-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.catDrawer && !document.querySelector('.cdlg-scrim')) { state.catDrawer = ''; renderCatalog(); } });
-/* Compartir el catálogo: se descarga como archivo y se une con el de otra persona. */
-const catShare = (msg, bad) => { const el = $('#cat-share-status'); if (el) { el.textContent = msg; el.className = 'hint' + (bad ? ' status bad' : ''); } };
-$('#cat-export').addEventListener('click', e => withBusy(e.currentTarget, async () => {
-  if (!state.catalog.entries.length) { catShare('El catálogo está vacío; no hay nada que compartir.', true); return; }
-  const at = catalogNow();
-  await saveFile(`catalogo-${at.slice(0, 10)}.json`, JSON.stringify({ kind: 'fichas.catalog.share', v: 1, at, catalog: state.catalog }, null, 1), 'application/json');
-  catShare(`Catálogo descargado: ${state.catalog.entries.length} producto(s) y ${state.catalog.links.length} vínculo(s).`);
-}, 'descargar el catálogo'));
-$('#cat-import-btn').addEventListener('click', () => $('#cat-import').click());
-$('#cat-import').addEventListener('change', async e => {
-  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
-  try {
-    const data = JSON.parse(await f.text()), inc = data && data.kind === 'fichas.catalog.share' ? data.catalog : data;
-    if (!inc || !Array.isArray(inc.entries)) { catShare('Ese archivo no es un catálogo compartido de esta herramienta.', true); return; }
-    const r = Catalog.merge(state.catalog, inc);
-    saveCatalog(); renderCatalog(); renderBell();
-    state.audit.push(Anomalies.event('catalogo_unido', null, { agregados: r.added, actualizados: r.updated })); persist('fichas.audit.v1', state.audit);
-    catShare(`Unido: ${r.added} producto(s) nuevos, ${r.updated} actualizados, ${r.same} sin cambio, ${r.links} vínculo(s) y ${r.rels} alternativa(s) o relacionado(s) a mano.${r.invalid ? ` ${r.invalid} omitidos por apuntar a productos que no están.` : ''}`);
-  } catch (err) { catShare('No se pudo leer el archivo. ¿Es un .json descargado desde «Descargar catálogo para compartir»?', true); }
-});
 /* ---------- Campana: productos ya cargados cuyos vínculos cambiaron y productos nuevos sin cargar ---------- */
 const pendingLinks = c => c.entries.filter(x => (x.elegible && Catalog.status(c, x) === 'sin_evaluar') || (Catalog.isParent(x) && Catalog.waitingChildren(c, x).length)).map(x => x.sku);
 const bellList = (o, sign) => Catalog.REL_KINDS.filter(k => o[k].length).map(k => `${sign}${o[k].length} ${Catalog.REL_LABEL[k]} (${o[k].map(esc).join(', ')})`).join(' · ');
@@ -2990,6 +2963,151 @@ function renderLoteDrawer(all) {
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-ldclose]')) { state.loteDrawer = ''; renderLote(); } });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.loteDrawer && !document.querySelector('.cdlg-scrim')) { state.loteDrawer = ''; renderLote(); } });
 document.addEventListener('change', e => { const z = e.target.closest && e.target.closest('#lote-size'); if (z) { state.lotePageSize = Number(z.value) || 25; state.lotePage = 0; renderLote(); } });
+
+
+/* ---------- Respaldo y compartir ----------
+ * Un solo método: un archivo con las partes que elijas. Al cargar se reconoce lo que trae (también los archivos de versiones anteriores)
+ * y se elige, parte por parte, unir, reemplazar o no cargar. Unir nunca borra; reemplazar descarga antes un respaldo de lo actual. */
+const bkSel = new Set(Backup ? Backup.PARTS : []);
+async function bkCounts() {
+  const k = { lote: state.lote.length, catalogo: state.catalog.entries.length, clasif: state.clasif.rows.length, ajustes: 1, conocimiento: 0 };
+  if (Knowledge) { try { k.conocimiento = (await Knowledge.stats()).entities || 0; } catch (_) { /* sin conocimiento disponible */ } }
+  return k;
+}
+let bkTimer = 0;
+const scheduleBackup = () => { clearTimeout(bkTimer); bkTimer = setTimeout(renderBackup, 300); };
+async function renderBackup() {
+  const box = $('#bk-parts'); if (!box || !Backup) return;
+  const k = await bkCounts();
+  const unit = { lote: 'producto(s)', catalogo: 'producto(s)', conocimiento: 'dato(s)', clasif: 'fila(s)', ajustes: 'conjunto' };
+  box.innerHTML = Backup.PARTS.map(p => `<label class="check"><input type="checkbox" data-bkpart="${p}"${bkSel.has(p) ? ' checked' : ''}${p === 'conocimiento' && !Knowledge ? ' disabled' : ''}><span><b>${esc(Backup.LABEL[p])}</b> <span class="hint">${esc(Backup.HINT[p])}</span></span><span class="tag tag--info">${k[p]} ${unit[p]}</span></label>`).join('');
+  bkSum();
+}
+function bkSum() {
+  const n = $$('#bk-parts input:checked').length;
+  $('#bk-sum').textContent = n ? `Se incluirán ${n} de ${Backup.PARTS.length} partes.` : 'Elige al menos una parte.';
+  $('#bk-dl').disabled = !n;
+}
+document.addEventListener('change', e => {
+  const c = e.target.closest && e.target.closest('input[data-bkpart]'); if (!c) return;
+  c.checked ? bkSel.add(c.dataset.bkpart) : bkSel.delete(c.dataset.bkpart); bkSum();
+});
+const bkSettings = () => ({ meta: state.meta, keepText: state.keepText, exp: state.exp, mc: state.mc });
+async function bkBuild(parts) {
+  const out = {};
+  if (parts.includes('lote')) out.lote = { items: state.lote, audit: state.audit };
+  if (parts.includes('catalogo')) out.catalogo = state.catalog;
+  if (parts.includes('clasif')) out.clasif = state.clasif;
+  if (parts.includes('ajustes')) out.ajustes = bkSettings();
+  if (parts.includes('conocimiento') && Knowledge) { try { const kb = await Knowledge.exportBackup(); if (kb && kb.counts && kb.counts.entities) out.conocimiento = kb; } catch (e) { if (window.console) console.error(e); } }
+  return Backup.build(out);
+}
+const bkDate = () => new Date().toISOString().slice(0, 10);
+$('#bk-dl').addEventListener('click', e => withBusy(e.currentTarget, async () => {
+  const parts = $$('#bk-parts input:checked').map(c => c.dataset.bkpart);
+  if (!parts.length) { notify('Elige al menos una parte.', 'warn'); return; }
+  const file = await bkBuild(parts);
+  await saveFile(`respaldo-fichas-${bkDate()}.json`, JSON.stringify(file, null, 1), 'application/json;charset=utf-8');
+  $('#bk-status').textContent = `Respaldo descargado: ${Object.keys(file.parts).map(p => Backup.LABEL[p]).join(', ')}.`;
+}, 'descargar el respaldo'));
+$('#bk-pick').addEventListener('click', () => $('#bk-file').click());
+$('#bk-file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    let data; try { data = JSON.parse(rd.result); } catch (_) { data = null; }
+    const d = Backup.detect(data);
+    if (!d) { $('#bk-status').textContent = 'Ese archivo no es un respaldo de esta herramienta.'; $('#bk-status').className = 'hint status bad'; return; }
+    $('#bk-status').className = 'hint'; $('#bk-status').textContent = '';
+    openRestore(d, f.name);
+  };
+  rd.onerror = () => { $('#bk-status').textContent = 'No se pudo leer el archivo.'; };
+  rd.readAsText(f);
+});
+function openRestore(d, name) {
+  const prev = document.activeElement, id = 'bkr' + Math.random().toString(36).slice(2, 7);
+  const k = null;
+  bkCounts().then(mine => {
+    const rows = Backup.PARTS.filter(p => d.parts[p]).map(p => {
+      const theirs = Backup.count(p, d.parts[p]);
+      const unir = { lote: 'Unir: agregar los que no tengo', catalogo: 'Unir: gana el dato más reciente', conocimiento: 'Unir', clasif: 'Unir: nunca baja una fila verificada' }[p];
+      const opts = p === 'ajustes' ? [['no', 'No cargar'], ['reemplazar', 'Reemplazar lo mío']] : [['unir', unir], ['reemplazar', 'Reemplazar lo mío'], ['no', 'No cargar']];
+      return `<div class="bk-pick"><b>${esc(Backup.LABEL[p])}</b><span class="hint">trae ${theirs}${p === 'ajustes' ? '' : ` · tienes ${mine[p]}`}</span><label class="sr-only" for="${id}-${p}">Qué hacer con ${esc(Backup.LABEL[p])}</label><select id="${id}-${p}" data-bkdo="${p}">${opts.map(o => `<option value="${o[0]}">${esc(o[1])}</option>`).join('')}</select></div>`;
+    }).join('');
+    const scrim = document.createElement('div'); scrim.className = 'cdlg-scrim'; scrim.id = 'bk-dlg';
+    scrim.innerHTML = `<div class="cdlg bulk-dlg" role="dialog" aria-modal="true" aria-labelledby="${id}-t"><h3 id="${id}-t">Cargar respaldo</h3><p><b>${esc(name)}</b>${d.createdAt ? ` · creado el ${esc(new Date(d.createdAt).toLocaleDateString())}` : ''}. Contiene:</p>${rows}`
+      + `<div class="note note--warn"><p>«Reemplazar» borra lo que tienes de esa parte. Antes de aplicar, la herramienta descarga un respaldo automático de lo actual.</p></div>`
+      + `<p class="status bad" id="${id}-e" role="alert"></p><div class="actions"><button type="button" class="btn" data-id="no">Cancelar</button><button type="button" class="btn btn--primary" data-id="yes">Cargar lo elegido</button></div></div>`;
+    document.body.appendChild(scrim);
+    const close = () => { document.removeEventListener('keydown', onKey, true); scrim.remove(); if (prev && prev.focus) { try { prev.focus(); } catch (_) {} } };
+    function onKey(ev) { if (ev.key === 'Escape') { ev.preventDefault(); close(); } }
+    document.addEventListener('keydown', onKey, true);
+    scrim.addEventListener('click', async ev => {
+      const b = ev.target.closest && ev.target.closest('[data-id]'); if (!b) return;
+      if (b.dataset.id === 'no') return close();
+      const choice = Object.fromEntries([...scrim.querySelectorAll('select[data-bkdo]')].map(s => [s.dataset.bkdo, s.value]));
+      if (!Object.values(choice).some(v => v !== 'no')) { scrim.querySelector('[role="alert"]').textContent = 'Elige qué cargar.'; return; }
+      b.disabled = true;
+      try { const msg = await applyRestore(d, choice); close(); $('#bk-status').textContent = msg; notify(msg, 'ok'); }
+      catch (er) { b.disabled = false; if (window.console) console.error(er); scrim.querySelector('[role="alert"]').textContent = UX.friendlyError(er, 'cargar el respaldo').message; }
+    });
+    const first = scrim.querySelector('select'); if (first) first.focus();
+  });
+}
+async function applyRestore(d, choice) {
+  const done = [];
+  /* Lo que se va a reemplazar se descarga antes. */
+  const rep = Object.keys(choice).filter(p => choice[p] === 'reemplazar' && d.parts[p]);
+  if (rep.length) {
+    const auto = await bkBuild(rep);
+    await saveFile(`respaldo-automatico-antes-de-cargar-${bkDate()}.json`, JSON.stringify(auto, null, 1), 'application/json;charset=utf-8');
+  }
+  const lote = d.parts.lote;
+  if (lote && choice.lote !== 'no') {
+    const valid = lote.items.filter(it => it && CATS[it.cat] && it.v && typeof it.v === 'object').map(it => (it.id ? it : { ...it, id: uid() }));
+    if (choice.lote === 'reemplazar') {
+      state.lote = valid; state.loteOpen.clear(); state.sel.clear(); state.loteDrawer = '';
+      if (Array.isArray(lote.audit) && lote.audit.length) state.audit = lote.audit;
+      if (state._editingId && !state.lote.some(x => x.id === state._editingId)) { state._editingId = null; state._editingProvenance = null; syncAddButton(); }
+      done.push(`lote reemplazado (${valid.length})`);
+    } else {
+      const r = Backup.mergeLote(state.lote, valid);
+      state.lote = r.items; done.push(`lote: ${r.added} agregados, ${r.skipped} ya estaban`);
+    }
+    state.audit.push(Anomalies.event('respaldo_cargado', null, { parte: 'lote', modo: choice.lote })); state.audit = state.audit.slice(-500);
+    persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
+  }
+  if (d.parts.catalogo && choice.catalogo !== 'no') {
+    if (choice.catalogo === 'reemplazar') { state.catalog = Catalog.normalize(d.parts.catalogo); done.push('catálogo reemplazado'); }
+    else { const r = Catalog.merge(state.catalog, d.parts.catalogo); done.push(`catálogo: ${r.added} nuevos, ${r.updated} actualizados, ${r.links} vínculos`); }
+    saveCatalog();
+  }
+  if (d.parts.clasif && choice.clasif !== 'no') {
+    if (choice.clasif === 'reemplazar') { state.clasif = Clasif.normalize(d.parts.clasif); done.push('diccionario ATC reemplazado'); }
+    else { const r = Clasif.merge(state.clasif, d.parts.clasif); done.push(`diccionario ATC: ${r.added} nuevas, ${r.updated} actualizadas`); }
+    saveClasif(); renderClasif();
+  }
+  if (d.parts.ajustes && choice.ajustes === 'reemplazar') { applySettings(d.parts.ajustes); done.push('ajustes reemplazados'); }
+  if (d.parts.conocimiento && choice.conocimiento !== 'no' && Knowledge) {
+    await Knowledge.init();
+    if (choice.conocimiento === 'reemplazar') await Knowledge.reset();
+    const kr = await Knowledge.importBackup(d.parts.conocimiento);
+    if (!kr.ok) throw new Error(`El conocimiento no se pudo cargar: ${kr.error}`);
+    done.push(`conocimiento: ${kr.report.added} nuevos, ${kr.report.updated} actualizados`);
+  } else if (state.lote.length && Knowledge && lote && choice.lote !== 'no') { try { await learn(state.lote, { source: 'restore' }); } catch (_) { /* aprender es opcional */ } }
+  catalogSync(state.lote.filter(x => x.sku));
+  state.kRev++; kLoteSig.clear(); state.ksugById.clear();
+  renderCats(); renderForm(); renderOutputs(); renderLote(); renderCatalog(); renderBackup(); if (Knowledge) renderKnowledge();
+  try { saveQualitySnapshot('respaldo_cargado'); } catch (_) { /* no interrumpe la carga */ }
+  return `Respaldo cargado: ${done.join('; ')}.`;
+}
+function applySettings(a) {
+  if (a.meta && typeof a.meta === 'object') { const d = defMeta(); state.meta = { ...d, ...a.meta, cats: Object.fromEntries(Object.keys(d.cats).map(id => [id, { ...d.cats[id], ...((a.meta.cats || {})[id] || {}) }])) }; migrateMeta(state.meta); saveMeta(); renderMetaCfg(); }
+  if (typeof a.keepText === 'string') { state.keepText = a.keepText; store.set('fichas.keep.v1', state.keepText); $('#keep').value = state.keepText; }
+  if (a.exp && typeof a.exp === 'object') { state.exp = { ...defExp(), ...a.exp }; saveExp(); $('#exp-ia').checked = !!state.exp.incIA; $('#exp-rel').checked = state.exp.incRel !== false; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL; }
+  if (a.mc && typeof a.mc === 'object') { state.mc = { incF: false, incIA: false, fmt: 'txt', ...a.mc }; saveMc(); renderMc(); }
+}
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-navto]'); if (t) navTo(t.dataset.navto); });
 
 /* ---------- Cambios masivos del lote ----------
  * Panel de resumen con correcciones sugeridas (Conocimiento y el propio lote) y cambios que elige la persona.

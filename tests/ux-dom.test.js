@@ -9,7 +9,7 @@ const BAD = /\bundefined\b|\bNaN\b|\[object Object\]|\bnull\b/;
 test('UX: al abrir la app se ve dónde estoy, qué producto y qué hacer', { skip }, () => {
   const a = boot();
   const nav = [...a.d.querySelectorAll('#mainnav [data-nav]')].map(b => b.querySelector('.mnav-t').textContent);
-  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportación']);
+  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportar']);
   assert.ok(a.d.querySelector('.railutil [data-nav="conocimiento"]'), 'Conocimiento vive en la bandeja de utilidades');
   assert.equal(a.d.querySelector('#mainnav [aria-current="true"]').dataset.nav, 'captura');
   assert.match(a.text('#prod-bar'), /PRODUCTO/);
@@ -170,9 +170,9 @@ test('UX: estados vacíos útiles y botones del lote deshabilitados', { skip }, 
   assert.match(a.text('#lote-body'), /Todavía no hay productos en el lote/);
   assert.ok(a.d.querySelector('#lote-body [data-nav-go="captura"]'), 'CTA Agregar producto');
   assert.match(a.text('#exp-summary'), /No hay productos listos para exportar/);
-  for (const id of ['lote-copy', 'lote-dl', 'lote-backup', 'lote-clear']) assert.equal(a.d.getElementById(id).disabled, true, id);
+  for (const id of ['lote-copy', 'lote-dl', 'lote-clear']) assert.equal(a.d.getElementById(id).disabled, true, id);
   a.addMed('A1', 'Tempra', '30');
-  for (const id of ['lote-copy', 'lote-dl', 'lote-backup', 'lote-clear']) assert.equal(a.d.getElementById(id).disabled, false, id);
+  for (const id of ['lote-copy', 'lote-dl', 'lote-clear']) assert.equal(a.d.getElementById(id).disabled, false, id);
 });
 
 test('UX: nunca se muestra estado vacío si hay productos (tampoco tras recargar)', { skip }, () => {
@@ -272,26 +272,21 @@ test('UX: un error al descargar se explica en lenguaje comprensible', { skip }, 
   assert.doesNotMatch(t, /Cannot read/);
 });
 
-test('UX: restaurar un respaldo sobre un lote con productos pide confirmación y avisa si el archivo es inválido', { skip }, async () => {
+test('UX: cargar un respaldo deja elegir unir o reemplazar, descarga un respaldo antes de reemplazar y avisa si el archivo es inválido', { skip }, async () => {
   const a = boot();
   a.addMed('B1', 'Tempra', '30'); a.addMed('B2', 'Dolofin', '20');
-  a.d.getElementById('lote-backup').click();
-  await wait(100);
-  const text = Buffer.from(await a.downloads.at(-1).arrayBuffer()).toString('utf8');
-  const restore = (x, txt) => { const file = new x.w.File([txt], 'respaldo.json', { type: 'application/json' }); const input = x.d.getElementById('lote-restore'); Object.defineProperty(input, 'files', { value: [file], configurable: true }); input.dispatchEvent(new x.w.Event('change', { bubbles: true })); };
+  const file = await a.backup(['lote']);
   a.addMed('B3', 'Dolo', '10');
-  restore(a, text); await wait(150);
-  assert.match(a.text('#confirm-dlg h3'), /Restaurar este respaldo/);
-  await a.confirm(false);
-  assert.equal(a.count(), '3');
-  assert.match(a.toast(), /Restauración cancelada/);
-  restore(a, text); await wait(150); await a.confirm(true);
-  assert.equal(a.count(), '2');
-  assert.match(a.toast(), /Respaldo restaurado: 2/);
-  restore(a, '{no es json'); await wait(150);
-  assert.equal(a.d.getElementById('toast').dataset.kind, 'error');
-  assert.match(a.toast(), /formato válido/);
-  assert.doesNotMatch(a.toast(), BAD);
+  await a.restore(file, {}, { cancel: true });
+  assert.equal(a.count(), '3', 'cancelar no cambia nada');
+  await a.restore(file);
+  assert.equal(a.count(), '3', 'unir por defecto: los SKU que ya tengo no se duplican');
+  const n = a.downloads.length;
+  await a.restore(file, { lote: 'reemplazar' });
+  assert.equal(a.count(), '2', 'reemplazar deja solo lo del archivo');
+  assert.ok(a.downloads.length > n + 0, 'antes de reemplazar se descarga un respaldo automático');
+  await a.restore('{no es json');
+  assert.match(a.text('#bk-status'), /no es un respaldo/);
   assert.equal(a.count(), '2', 'un respaldo inválido no toca el lote');
 });
 

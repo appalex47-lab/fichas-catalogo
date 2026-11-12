@@ -41,6 +41,25 @@ function boot(storage = {}, opts = {}) {
   const toast = () => d.getElementById('toast').textContent;
   const confirm = async yes => { const b = d.querySelector(`#confirm-dlg [data-cd="${yes ? 'yes' : 'no'}"]`); if (b) b.click(); await wait(20); };
   const ls = () => Object.fromEntries(Array.from({ length: w.localStorage.length }, (_, i) => { const k = w.localStorage.key(i); return [k, w.localStorage.getItem(k)]; }));
-  return { w, d, errors, downloads, copied, fill, fillMed, addMed, rows, text, toast, confirm, ls, wait, count: () => d.getElementById('lote-count').textContent };
+  /* Respaldo: descarga con las partes marcadas (todas por defecto) y devuelve el archivo; cargar un archivo y elegir qué hacer con cada parte. */
+  const backup = async parts => {
+    d.querySelector('[data-nav="respaldo"]').click(); await wait(150);
+    if (parts) d.querySelectorAll('#bk-parts input[data-bkpart]').forEach(c => { c.checked = parts.includes(c.dataset.bkpart); c.dispatchEvent(new w.Event('change', { bubbles: true })); });
+    const n = downloads.length; d.getElementById('bk-dl').click(); await wait(250);
+    return downloads.length > n ? JSON.parse(Buffer.from(await downloads[downloads.length - 1].arrayBuffer()).toString('utf8')) : null;
+  };
+  const restore = async (content, choice, o) => {
+    const text = typeof content === 'string' ? content : JSON.stringify(content);
+    const f = new w.File([text], 'respaldo.json', { type: 'application/json' }), i = d.getElementById('bk-file');
+    d.getElementById('bk-status').textContent = '';
+    Object.defineProperty(i, 'files', { value: [f], configurable: true }); i.dispatchEvent(new w.Event('change', { bubbles: true }));
+    for (let k = 0; k < 40 && !d.getElementById('bk-dlg') && !/no es un respaldo/.test(d.getElementById('bk-status').textContent); k++) await wait(50);
+    const dlg = d.getElementById('bk-dlg'); if (!dlg) return null;
+    Object.entries(choice || {}).forEach(([k, v]) => { const sel = dlg.querySelector(`select[data-bkdo="${k}"]`); if (sel) { sel.value = v; sel.dispatchEvent(new w.Event('change', { bubbles: true })); } });
+    if (o && o.cancel) { dlg.querySelector('[data-id="no"]').click(); return dlg; }
+    dlg.querySelector('[data-id="yes"]').click(); await wait((o && o.wait) || 400);
+    return dlg;
+  };
+  return { w, d, errors, downloads, copied, fill, fillMed, addMed, rows, text, toast, confirm, ls, wait, backup, restore, count: () => d.getElementById('lote-count').textContent };
 }
 module.exports = { boot, skip, wait };
