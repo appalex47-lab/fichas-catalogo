@@ -130,7 +130,7 @@ async function hydratePersistentState(){
   renderPersistenceStatus();
 }
 const state = {
-  sel: new Set(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
+  sel: new Set(), lotePage: 0, lotePageSize: 25, loteDrawer: '', dens: (() => { try { return localStorage.getItem('fichas.dens') || 'compact'; } catch (_) { return 'compact'; } })(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
@@ -576,7 +576,9 @@ function renderLote() {
   const { contentSum, magSum, s360Sum } = assessed;
   const cnt = {}; [...Object.keys(FILTERS), ...Object.keys(UX.PRIMARY_FILTERS), ...Object.keys(UX.MORE_FILTERS)].forEach(k => { cnt[k] = all.filter(x => passFilter(x.e, k)).length; });
   const rows = all.filter(x => passFilter(x.e, state.loteFilter));
-  const shown = rows.slice(0, state.loteShown);
+  const pages = Math.max(1, Math.ceil(rows.length / state.lotePageSize));
+  if (state.lotePage >= pages) state.lotePage = pages - 1;
+  const from = state.lotePage * state.lotePageSize, shown = rows.slice(from, from + state.lotePageSize);
   const auditRows = state.audit.slice(-8).reverse().map(x => `<li><strong>${esc(String(x.action || '').replaceAll('_', ' '))}</strong> · ${esc(x.sku || 'sin SKU')} · ${esc(new Date(x.at).toLocaleString())}</li>`).join('');
   const filterLabel = k => (UX.PRIMARY_FILTERS[k] || UX.MORE_FILTERS[k] || FILTERS[k] || '');
   const primary = Object.entries(UX.PRIMARY_FILTERS).map(([k, l]) => {
@@ -589,36 +591,43 @@ function renderLote() {
   const legacyActive = !UX.PRIMARY_FILTERS[state.loteFilter] && state.loteFilter !== 'todos';
   const anomTags = e => state.anomalies.filter(a => a.indexes.includes(e.__index)).map(a => `<span class="tag tag--${a.severity === 'error' ? 'bad' : 'warn'}">${esc(a.type === 'duplicate-sku' ? 'SKU duplicado' : a.type === 'duplicate-title' ? 'Título duplicado' : a.type === 'near-duplicate-sku' ? 'SKU similar' : a.type === 'near-duplicate-title' ? 'Título similar' : 'Dato pendiente')}</span>`).join(' ') || '<span class="hint">—</span>';
   const num = v => (v == null ? '—' : v);
-  const metrics = e => `<div class="lmetrics"><span>Health <b>${num(e.health.score)}</b></span><span>SEO <b>${num(e.seo && e.seo.score && e.seo.score.total)}</b></span><span>Contenido <b>${num(e.content && e.content.score && e.content.score.total)}</b></span><span>Magento <b>${e.magento ? esc((MAG_SHORT[e.magento.state] || [])[1] || '—') : '—'}</b></span><span>360° <b>${num(e.s360 && e.s360.global && e.s360.global.score)}</b></span></div>`;
+  const metricsFull = e => `<div class="lmetrics"><span>Health <b>${num(e.health.score)}</b></span><span>SEO <b>${num(e.seo && e.seo.score && e.seo.score.total)}</b></span><span>Contenido <b>${num(e.content && e.content.score && e.content.score.total)}</b></span><span>Magento <b>${e.magento ? esc((MAG_SHORT[e.magento.state] || [])[1] || '—') : '—'}</b></span><span>360° <b>${num(e.s360 && e.s360.global && e.s360.global.score)}</b></span></div>`;
+  /* Compacta: letras con el nombre completo al pasar el cursor, para que quepa en una línea. */
+  const metricsCompact = e => { const ms = e.magento ? (MAG_SHORT[e.magento.state] || []) : []; return `<div class="lmetrics lmetrics--c"><span title="Health">H <b>${num(e.health.score)}</b></span><span title="SEO">S <b>${num(e.seo && e.seo.score && e.seo.score.total)}</b></span><span title="Contenido">C <b>${num(e.content && e.content.score && e.content.score.total)}</b></span><span title="Magento: ${esc(ms[1] || '—')}">M <b>${esc(ms[0] || '—')}</b></span><span title="Score 360°">360° <b>${num(e.s360 && e.s360.global && e.s360.global.score)}</b></span></div>`; };
+  const metrics = e => state.dens === 'compact' ? metricsCompact(e) : metricsFull(e);
   const relLine = it => {
     const r = relMap.get(String(it.sku || '').toLowerCase());
     if (!r || !(r.upsell.length + r.related.length + r.crosssell.length)) return '';
     const l = (t, a) => a.length ? `<li><strong>${t}:</strong> ${a.map(esc).join(', ')}</li>` : '';
     return `<p class="hint"><strong>Productos relacionados que se exportan a Magento</strong> (solo si están en el mismo archivo):</p><ul class="seo-rules">${l('Alternativas (mismo principio activo, concentración y presentación)', r.upsell)}${l('Relacionados (misma marca o laboratorio)', r.related)}${l('Compatibles (los que capturaste)', r.crosssell)}</ul>`;
   };
-  const detail = ({ it, e }) => {
+  const detailBody = ({ it, e }) => {
     const recs = (e.s360 && e.s360.recommendations) || [];
     const nba = UX.nextBestAction(e, { CATS, cat: it.cat, values: it.v, humanReview: humanReviewOf(it) });
     const fixBtn = (rec, label) => { const t = UX.targetFor(rec, { CATS, cat: it.cat, values: it.v }); return t && ['field', 'sku', 'img', 'output', 'settings'].includes(t.kind) ? `<button type="button" class="btn btn--quiet" data-fix="${esc(it.id)}" data-fixrec="${recs.indexOf(rec)}">${esc(label)}</button>` : ''; };
     const topRecs = recs.slice(0, 4).map(r => `<li><span class="tag tag--${r.prioridad <= 3 ? 'bad' : r.prioridad <= 5 ? 'warn' : 'info'}">${esc(r.claseLabel)}</span> ${esc(r.texto)} ${fixBtn(r, 'Corregir')}</li>`).join('');
-    return `<tr class="lrow-detail"><td colspan="7"><p class="hint"><strong>${esc(e.ux.label)}.</strong> ${esc(e.ux.why)}</p><p><strong>${esc(UX.attentionText(UX.summaryCounts(e)))}</strong></p>`
+    return `<p class="hint"><strong>${esc(e.ux.label)}.</strong> ${esc(e.ux.why)}</p><p><strong>${esc(UX.attentionText(UX.summaryCounts(e)))}</strong></p>`
       + `<p class="hint">${esc(e.s360.global.explain)}</p>`
       + (nba.kind === 'accion' ? `<div class="nba nba--${esc(nba.clase)}"><h3>Qué hacer ahora · ${esc(nba.claseLabel)}</h3><p class="nba-main">${esc(nba.texto)}</p>${nba.impacto ? `<p class="nba-sub">${esc(nba.impacto)}</p>` : ''}</div>` : '')
       + (topRecs ? `<ul class="seo-rules">${topRecs}</ul>${recs.length > 4 ? `<p class="hint">y ${recs.length - 4} más. Edita el producto para verlas todas.</p>` : ''}` : '<p class="hint">Sin recomendaciones pendientes.</p>')
       + relLine(it)
-      + (e.ux.canRevoke ? `<button type="button" class="btn" data-revoke="${esc(it.id)}">Retirar aprobación</button>` : '') + `</td></tr>`;
+      + (e.ux.canRevoke ? `<button type="button" class="btn" data-revoke="${esc(it.id)}">Retirar aprobación</button>` : '');
   };
+  const detail = x => `<tr class="lrow-detail"><td colspan="7">${detailBody(x)}</td></tr>`;
+  state._detailBody = detailBody;
   const waitTag = it => { const ce = it.sku ? Catalog.find(state.catalog, it.sku) : null; return ce && ce.elegible && Catalog.status(state.catalog, ce) === 'esperando' ? ' <span class="tag tag--warn" data-wait-parent title="Es un complemento y aún no tiene producto principal en el catálogo.">Espera producto principal</span>' : ''; };
   const rowHTML = x => {
-    const { it, e } = x, open = state.loteOpen.has(it.id);
-    return `<tr data-id="${esc(it.id)}"><td data-label="SKU">${Bulk ? `<input type="checkbox" class="bk-sel" data-bksel="${esc(it.id)}" aria-label="Marcar ${esc(it.sku || 'producto sin SKU')} para un cambio masivo"${state.sel.has(it.id) ? ' checked' : ''}> ` : ''}${esc(it.sku || 'sin SKU')}</td><td data-label="Categoría">${e.res.c.emoji} ${esc(e.res.c.name)}</td><td class="t" data-label="Título">${esc(e.res.title.title)}</td>`
+    const compact = state.dens === 'compact';
+    const { it, e } = x, open = drawerMode() ? state.loteDrawer === it.id : state.loteOpen.has(it.id);
+    return `<tr data-id="${esc(it.id)}"><td data-label="SKU">${Bulk ? `<input type="checkbox" class="bk-sel" data-bksel="${esc(it.id)}" aria-label="Marcar ${esc(it.sku || 'producto sin SKU')} para un cambio masivo"${state.sel.has(it.id) ? ' checked' : ''}> ` : ''}${esc(it.sku || 'sin SKU')}</td><td data-label="Categoría" class="cat">${compact ? `<span title="${esc(e.res.c.name)}" aria-label="${esc(e.res.c.name)}">${e.res.c.emoji}</span>` : `${e.res.c.emoji} ${esc(e.res.c.name)}`}</td><td class="t" data-label="Título">${esc(e.res.title.title)}</td>`
       + `<td data-label="Estado"><span class="status status--${e.ux.tone}" title="${esc(e.ux.why)}"><span aria-hidden="true">${e.ux.icon}</span> ${esc(e.ux.label)}</span> ${tagsHTML(e)}${waitTag(it)}</td>`
       + `<td data-label="Evaluación">${metrics(e)}</td><td data-label="Avisos">${anomTags(e)}</td>`
       + `<td class="ops">${e.ia ? `<button type="button" class="btn btn--ai" data-aiok="${it.id}">Confirmar IA</button>` : ''}`
       + `<button type="button" class="btn btn--quiet" data-toggle="${esc(it.id)}" aria-expanded="${open}">${open ? 'Ocultar' : 'Ver'}</button>`
       + `<button type="button" class="btn btn--quiet" data-edit="${it.id}">Editar</button>`
+      + (compact ? `<details class="rowmenu"><summary class="btn btn--quiet" aria-label="Más acciones de ${esc(it.sku || 'producto')}">⋯</summary><div class="rowmenu-pop">` : '')
       + (e.ux.canApprove ? `<button type="button" class="btn btn--quiet" data-approve="${esc(it.id)}">Aprobar</button>` : '')
-      + `<button type="button" class="btn btn--quiet" data-del="${it.id}">Eliminar</button></td></tr>` + (open ? detail(x) : '');
+      + `<button type="button" class="btn btn--quiet" data-del="${it.id}">Eliminar</button>${compact ? '</div></details>' : ''}</td></tr>` + (open && !drawerMode() ? detail(x) : '');
   };
   const kpi = (label, value) => `<div class="kpi"><span class="kpi-l">${esc(label)}</span><span class="kpi-v">${value == null ? '—' : value}</span></div>`;
   const summaryPanel =
@@ -641,11 +650,12 @@ function renderLote() {
     `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros del lote">${legacy}</div></details>` +
     `<p class="sr-only" id="lote-live" role="status" aria-live="polite">Mostrando ${rows.length} de ${all.length} producto(s)${state.loteFilter !== 'todos' ? `. Filtro: ${esc(filterLabel(state.loteFilter))}` : ''}.</p>` +
     bulkBarHtml(rows) +
-    (rows.length ? `<div class="tablewrap"><table class="lote-table">
+    (rows.length ? `<div class="tablewrap"><table class="lote-table${state.dens === 'compact' ? ' lote-table--compact' : ''}">
       <thead><tr><th scope="col">SKU</th><th scope="col">Categoría</th><th scope="col">Título</th><th scope="col">Estado</th><th scope="col">Evaluación</th><th scope="col">Avisos</th><th scope="col">Acciones</th></tr></thead>
       <tbody>${shown.map(rowHTML).join('')}</tbody></table></div>`
       : `<p class="empty-state">Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button></p>`) +
-    (rows.length > shown.length ? `<div class="actions"><button type="button" class="btn" data-more="1">Mostrar ${Math.min(50, rows.length - shown.length)} más (${rows.length - shown.length} restantes)</button></div>` : '');
+    (rows.length > state.lotePageSize || state.lotePage ? `<div class="pager" role="navigation" aria-label="Páginas del lote"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
+  renderLoteDrawer(all);
 }
 function syncLoteButtons() {
   const empty = !state.lote.length;
@@ -1016,11 +1026,11 @@ document.addEventListener('click', e => {
     saveMeta(); renderMetaCfg(); renderOutputs(); renderExport();
   }
   if (t.dataset.filter) {
-    state.loteFilter = t.dataset.filter; state.loteShown = 50; renderLote();
+    state.loteFilter = t.dataset.filter; state.loteShown = 50; state.lotePage = 0; renderLote();
     const chip = document.querySelector(`#lote-body [data-filter="${state.loteFilter}"]`); if (chip && !chip.disabled) chip.focus();
     const lv = $('#lote-live'); if (lv) announce(lv.textContent);
   }
-  if (t.dataset.more) { state.loteShown += 50; renderLote(); }
+  if (t.dataset.page) { state.lotePage = Math.max(0, state.lotePage + Number(t.dataset.page)); renderLote(); }
   if (t.dataset.aiapply !== undefined) {
     const s = (state.aiSuggest || [])[+t.dataset.aiapply];
     if (!s) return;
@@ -1316,7 +1326,7 @@ function bulkAdd() {
   b.rows = b.rows.filter(r => !(r.cat && !r.error));
   const left = b.rows.length;
   if (!left) { state.bulk = null; $('#bulk-status').textContent = ''; }
-  state.loteFilter = 'todos'; state.loteShown = 50;
+  state.loteFilter = 'todos'; state.loteShown = 50; state.lotePage = 0;
   renderBulk(); renderLote();
   toast(`${added} agregados${updated ? `, ${updated} actualizados por SKU` : ''}${left ? `. ${left} filas siguen pendientes de revisión.` : ''}`);
   renderCatalog(); if (bulkSynced.length) setTimeout(() => toast('Los productos nuevos ya están en el catálogo. Revisa sus complementos en Catálogo, con «Revisar pendientes».'), 1500);
@@ -1960,7 +1970,7 @@ function runAction(id) {
   if (kind === 'abrir' && arg === 'reglas') { closeAsst(); openRules(); return; }
   closeAsst();
   if (kind === 'ir') scrollTo(arg);
-  else if (kind === 'filtro') { state.loteFilter = arg; state.loteShown = 50; renderLote(); scrollTo('lote'); }
+  else if (kind === 'filtro') { state.loteFilter = arg; state.loteShown = 50; state.lotePage = 0; renderLote(); scrollTo('lote'); }
   else if (kind === 'pestana') { setTab(arg); scrollTo('h-out'); }
   else if (kind === 'campo') { const el = document.getElementById('f-' + arg); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } }
 }
@@ -2083,7 +2093,8 @@ document.addEventListener('click', e => {
   if (t.dataset.revoke) setApproval(t.dataset.revoke, false);
   if (t.dataset.toggle) {
     const id = t.dataset.toggle;
-    if (state.loteOpen.has(id)) state.loteOpen.delete(id); else state.loteOpen.add(id);
+    if (drawerMode()) state.loteDrawer = state.loteDrawer === id ? '' : id;
+    else if (state.loteOpen.has(id)) state.loteOpen.delete(id); else state.loteOpen.add(id);
     renderLote();
     const b = document.querySelector(`#lote-body [data-toggle="${id}"]`); if (b) b.focus();
   }
@@ -2884,6 +2895,22 @@ document.addEventListener('click', async e => {
 });
 
 
+
+/* ---------- Detalle del lote en un panel lateral ----------
+ * En pantallas anchas «Ver» abre un panel a la derecha, sin empujar la lista; en angostas se abre debajo de la fila, como siempre. */
+const drawerMode = () => !!(window.matchMedia && window.matchMedia('(min-width:721px)').matches);
+function renderLoteDrawer(all) {
+  let box = $('#lote-drawer');
+  if (!box) { box = document.createElement('aside'); box.id = 'lote-drawer'; box.className = 'lote-drawer'; box.setAttribute('aria-label', 'Detalle del producto'); box.hidden = true; document.body.appendChild(box); }
+  const x = drawerMode() && state.loteDrawer ? all.find(y => y.it.id === state.loteDrawer) : null;
+  if (!x) { box.hidden = true; box.innerHTML = ''; if (state.loteDrawer && !drawerMode()) state.loteDrawer = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="ld-head"><div><b>${esc(x.it.sku || 'sin SKU')}</b><div class="hint">${esc(x.e.res.title.title)}</div></div><button type="button" class="btn btn--quiet" data-ldclose="1" aria-label="Cerrar el detalle">✕</button></div><div class="ld-body">${state._detailBody(x)}</div>`;
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-ldclose]')) { state.loteDrawer = ''; renderLote(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.loteDrawer && !document.querySelector('.cdlg-scrim')) { state.loteDrawer = ''; renderLote(); } });
+document.addEventListener('change', e => { const z = e.target.closest && e.target.closest('#lote-size'); if (z) { state.lotePageSize = Number(z.value) || 25; state.lotePage = 0; renderLote(); } });
+
 /* ---------- Cambios masivos del lote ----------
  * Panel de resumen con correcciones sugeridas (Conocimiento y el propio lote) y cambios que elige la persona.
  * Lo regulatorio (vía y receta) nunca se aplica sin que la persona marque producto por producto y confirme. */
@@ -2920,7 +2947,7 @@ function bulkBarHtml(rows) {
     + `<button type="button" class="btn btn--quiet" data-bk="selfilt">Marcar los ${rows.length} filtrados</button>`
     + `<button type="button" class="btn btn--quiet" data-bk="clearsel"${k ? '' : ' disabled'}>Quitar marcas</button>`
     + `<button type="button" class="btn" data-bk="change"${k ? '' : ' disabled'}>Cambiar un campo…</button>`
-    + `<button type="button" class="btn" data-bk="replace">Buscar y reemplazar…</button></div>`;
+    + `<button type="button" class="btn" data-bk="replace">Buscar y reemplazar…</button><span class="spacer"></span><button type="button" class="btn btn--quiet" data-dens="1" aria-pressed="${state.dens === 'compact'}" title="Cambia entre filas compactas y cómodas">Densidad: ${state.dens === 'compact' ? 'compacta' : 'cómoda'}</button></div>`;
 }
 const bulkValues = key => {
   const def = Bulk.byKey(key), out = new Set();
@@ -3039,6 +3066,8 @@ $('#lote-body').addEventListener('change', e => {
   document.querySelectorAll('#lote-body [data-bk="clearsel"],#lote-body [data-bk="change"]').forEach(b => { b.disabled = !state.sel.size; });
 });
 $('#lote-body').addEventListener('click', e => {
+  const dn = e.target.closest && e.target.closest('[data-dens]');
+  if (dn) { state.dens = state.dens === 'compact' ? 'comfy' : 'compact'; try { localStorage.setItem('fichas.dens', state.dens); } catch (_) {} return renderLote(); }
   const t = e.target.closest && e.target.closest('[data-bk]'); if (!t || !Bulk) return;
   const act = t.dataset.bk, g = t.dataset.g ? bulkGroups().find(x => x.id === t.dataset.g) : null;
   if (act === 'undo') return undoBulk();

@@ -565,3 +565,27 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 @media (max-width:720px){.bell-wrap{right:calc(64px + 10px);top:8px}.bell-t{display:none}}
 @media (min-width:721px){.pbar{padding-right:190px}}
 @media (max-width:720px){.pbar{padding-right:84px}}
+
+/* Lote compacto y panel de detalle */
+.pager{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}.pager .spacer,.bk-bar .spacer{flex:1}.pager select{margin:0 4px}
+.lote-table--compact td,.lote-table--compact th{padding-top:6px;padding-bottom:6px}
+.lote-table--compact td.t{max-width:34ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lote-table--compact .lmetrics{display:flex;gap:8px;flex-wrap:wrap;white-space:nowrap;font-size:12px}
+.lote-table--compact .tag--quiet{display:none}
+.lote-drawer{position:fixed;top:0;bottom:0;right:116px;width:min(460px,calc(100vw - 140px));z-index:58;background:var(--surface,#fff);border-left:1px solid var(--line,#d0d5dd);box-shadow:-8px 0 30px rgba(20,32,43,.18);display:flex;flex-direction:column}
+.lote-drawer[hidden]{display:none}
+.ld-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--line,#e4e7ec)}
+.ld-body{padding:12px 16px 24px;overflow:auto;overscroll-behavior:contain}
+@media (max-width:720px){.lote-drawer{display:none}}
+
+.lote-table--compact td{white-space:nowrap;vertical-align:middle}.lote-table--compact td.ops{white-space:nowrap}.lote-table--compact td.ops>*{vertical-align:middle}
+.lote-table--compact td.cat{text-align:center;font-size:16px}
+.lote-table--compact .status{padding:2px 8px;font-size:11px}.lote-table--compact td[data-label="Estado"] .tag{margin:0 2px;font-size:11px;padding:1px 6px}
+.lote-table--compact .lmetrics{flex-wrap:nowrap}
+.rowmenu{position:relative}.rowmenu summary{list-style:none;cursor:pointer}.rowmenu summary::-webkit-details-marker{display:none}
+.rowmenu-pop{position:absolute;right:0;top:100%;z-index:20;display:flex;flex-direction:column;gap:2px;min-width:130px;padding:6px;background:var(--surface,#fff);border:1px solid var(--line,#d0d5dd);border-radius:8px;box-shadow:0 8px 24px rgba(20,32,43,.18)}
+@media (max-width:720px){.lote-table--compact td{white-space:normal}.rowmenu-pop{position:static;box-shadow:none;border:0;padding:0;flex-direction:row;flex-wrap:wrap}}
+.lote-table--compact td[data-label="Estado"]{white-space:normal;max-width:210px;line-height:1.5}
+.lote-table--compact td.t{max-width:24ch}
+.lote-table--compact td[data-label="Avisos"]{white-space:normal;max-width:110px}
+@media (max-width:720px){.lote-table--compact td[data-label="Estado"],.lote-table--compact td[data-label="Avisos"]{max-width:none}}

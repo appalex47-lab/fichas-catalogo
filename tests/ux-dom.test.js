@@ -82,7 +82,7 @@ test('UX: el estado de guardado cambia de «sin guardar» a «Guardado» y el pr
   await wait(30);
   assert.match(a.text('#save-state'), /Guardado/);
   assert.match(a.text('#lote-body tbody tr .status'), /LISTO PARA APROBACIÓN/);
-  assert.match(a.text('#lote-body tbody tr .lmetrics'), /Health\s*\d+\s*SEO\s*\d+\s*Contenido\s*\d+\s*Magento.+360°\s*\d+/);
+  assert.match(a.text('#lote-body tbody tr .lmetrics'), /H\s*\d+\s*S\s*\d+\s*C\s*\d+\s*M\s*\S+\s*360°\s*\d+/);
   assert.deepEqual(a.errors, []);
 });
 
