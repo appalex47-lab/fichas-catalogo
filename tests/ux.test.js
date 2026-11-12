@@ -374,7 +374,7 @@ test('accesibilidad: foco visible, salto al contenido, reducción de movimiento 
 test('navegación: las secciones principales (las seis de la Fase 10 + Conocimiento de la Fase 11) existen y apuntan a una sección real', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const nav = [...html.matchAll(/data-nav="(\w+)"[^>]*>[\s\S]*?<span class="mnav-t">([^<]+)</g)].map(m => [m[1], m[2]]);
-  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportación'], ['catalogo', 'Catálogo'], ['conocimiento', 'Conocimiento']]);
+  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportar'], ['catalogo', 'Catálogo'], ['conocimiento', 'Conocimiento'], ['respaldo', 'Respaldo']]);
   assert.match(html, /id="rules-open"/); assert.match(html, /id="set-open"/); assert.match(html, /href="#masiva"/);
   for (const id of ['h-prod', 'h-out', 'lote', 'exportar', 'prod-bar', 'prod-metrics', 'prod-guide', 'live', 'panel-eval', 'catalogo']) assert.match(html, new RegExp(`id="${id}"`), id);
 });
@@ -422,9 +422,9 @@ test('botones: todo botón del HTML tiene un handler y todo data-* generado tien
 
 test('botones: copiar y descargar usan protección de doble clic y confirmación en acciones destructivas', () => {
   const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
-  for (const id of ['lote-copy', 'lote-dl', 'lote-backup', 'exp-copy', 'exp-dl']) assert.match(app, new RegExp(`\\$\\('#${id}'\\)\\.addEventListener\\('click', e => withBusy`), id);
+  for (const id of ['lote-copy', 'lote-dl', 'bk-dl', 'exp-copy', 'exp-dl', 'mc-dl', 'mc-copy']) assert.match(app, new RegExp(`\\$\\('#${id}'\\)\\.addEventListener\\('click', e => withBusy`), id);
   assert.match(app, /function confirmDialog/);
-  for (const t of ['¿Eliminar este producto?', '¿Vaciar todo el lote?', '¿Restaurar este respaldo?', '¿Limpiar el formulario?']) assert.ok(app.includes(t), t);
+  for (const t of ['¿Eliminar este producto?', '¿Vaciar todo el lote?', '¿Limpiar el formulario?']) assert.ok(app.includes(t), t);
   assert.doesNotMatch(app, /toast\(e\.message\)/, 'no se muestran mensajes técnicos crudos');
 });
 

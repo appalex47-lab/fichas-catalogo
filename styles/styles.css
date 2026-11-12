@@ -600,3 +600,8 @@ tr.cat-detail td{background:var(--surface-2,#f4f6f6);white-space:normal}
 .lgroup{border:1px solid var(--line,#d0d5dd);border-radius:10px;margin:0 0 10px;background:var(--surface,#fff)}
 .lgroup>summary{cursor:pointer;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .lgroup .tablewrap{padding:0 6px 6px}
+
+/* Respaldo */
+.bk-pick{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line,#e4e7ec)}
+.bk-pick select{grid-column:1 / -1;margin:0}
+#bk-parts .check{align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line,#e4e7ec)}#bk-parts .check .tag{margin-left:auto;white-space:nowrap}

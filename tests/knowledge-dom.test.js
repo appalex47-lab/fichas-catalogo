@@ -153,47 +153,51 @@ test('conocimiento UI: los datos críticos corregidos no se ofrecen para aprendi
   assert.match(a.text('#k-rules'), /solo se sugerirá, nunca se aplicará sola/);
 });
 
-test('conocimiento UI: el respaldo del lote incluye el conocimiento y se restaura', { skip }, async () => {
+test('conocimiento UI: el respaldo incluye el conocimiento y se restaura', { skip }, async () => {
   const a = boot();
   a.addMed('B1', 'Tempra', '30'); a.addMed('B2', 'Dolofin', '20', { principio: 'Ibuprofeno' }); await until(async () => (await eng(a).stats()).byType.brand >= 2);
-  a.d.getElementById('lote-backup').click(); await wait(200);
-  const data = JSON.parse(Buffer.from(await a.downloads.at(-1).arrayBuffer()).toString('utf8'));
-  assert.equal(data.schema, 'fichas.lote-backup.v1'); assert.ok(data.knowledge); assert.equal(data.knowledge.schema, 'fichas.knowledge.v1'); assert.equal(data.knowledge.dbVersion, 1);
-  for (const s of ['entities', 'aliases', 'relationships', 'evidence', 'corrections', 'conflicts']) assert.ok(s in data.knowledge.stores, s);
+  const data = await a.backup(['lote', 'conocimiento']);
+  assert.equal(data.schema, 'fichas.backup.v2'); const kn = data.parts.conocimiento; assert.ok(kn); assert.equal(kn.schema, 'fichas.knowledge.v1'); assert.equal(kn.dbVersion, 1);
+  for (const s of ['entities', 'aliases', 'relationships', 'evidence', 'corrections', 'conflicts']) assert.ok(s in kn.stores, s);
   const b = boot();
-  const file = new b.w.File([JSON.stringify(data)], 'respaldo.json', { type: 'application/json' }); const input = b.d.getElementById('lote-restore');
-  Object.defineProperty(input, 'files', { value: [file], configurable: true }); input.dispatchEvent(new b.w.Event('change', { bubbles: true }));
-  await wait(200); assert.equal(b.count(), '2');
-  await until(() => /Conocimiento: \d+ nuevos/.test(lastToast(b)));
+  await b.restore(data, {}, { wait: 600 });
+  assert.equal(b.count(), '2');
+  await until(() => /conocimiento: \d+ nuevos/.test(b.text('#bk-status')));
   const s = await eng(b).stats(); assert.ok(s.byType.brand >= 2); assert.ok(s.evidence > 5);
   assert.equal((await eng(b).integrity()).ok, true);
 });
 
-test('conocimiento UI: un respaldo antiguo sin conocimiento reconstruye lo aprendido desde el lote', { skip }, async () => {
+test('conocimiento UI: un respaldo sin conocimiento reconstruye lo aprendido desde el lote', { skip }, async () => {
   const a = boot(); a.addMed('B1', 'Tempra', '30'); await wait(100);
-  a.d.getElementById('lote-backup').click(); await wait(200);
-  const data = JSON.parse(Buffer.from(await a.downloads.at(-1).arrayBuffer()).toString('utf8')); delete data.knowledge;
-  const b = boot(); const file = new b.w.File([JSON.stringify(data)], 'r.json'); const input = b.d.getElementById('lote-restore');
-  Object.defineProperty(input, 'files', { value: [file], configurable: true }); input.dispatchEvent(new b.w.Event('change', { bubbles: true }));
-  await wait(200); await until(async () => (await eng(b).stats()).byType.brand >= 1);
+  const data = await a.backup(['lote']);
+  const b = boot(); await b.restore(data, {}, { wait: 500 });
+  await until(async () => (await eng(b).stats()).byType.brand >= 1);
   assert.equal(b.count(), '1');
 });
 
-test('conocimiento UI: respaldo y restauración del conocimiento por separado', { skip }, async () => {
-  const a = boot(); a.addMed('B1', 'Tempra', '30'); await learned(a, 1); await nav(a);
-  a.d.getElementById('k-backup').click(); await wait(200);
-  const text = Buffer.from(await a.downloads.at(-1).arrayBuffer()).toString('utf8'); const data = JSON.parse(text);
-  assert.equal(data.schema, 'fichas.knowledge.v1'); assert.ok(data.counts.entities > 3);
-  const b = boot(); await nav(b);
-  const restore = txt => { const f = new b.w.File([txt], 'k.json'); const i = b.d.getElementById('k-restore'); Object.defineProperty(i, 'files', { value: [f], configurable: true }); i.dispatchEvent(new b.w.Event('change', { bubbles: true })); };
-  restore('{no es json'); await wait(100); assert.match(lastToast(b), /formato válido/);
-  restore(JSON.stringify({ schema: 'otra.cosa' })); await wait(100); assert.match(lastToast(b), /no es un respaldo de conocimiento/);
-  restore(text); await until(() => b.d.getElementById('confirm-dlg')); await b.confirm(true);
-  await until(() => /Conocimiento restaurado/.test(lastToast(b)));
-  assert.equal((await eng(b).stats()).entities, data.counts.entities);
-  restore(text); await until(() => b.d.getElementById('confirm-dlg')); await b.confirm(true);
-  await until(() => /0 nuevos/.test(lastToast(b)));
-  assert.equal((await eng(b).stats()).entities, data.counts.entities, 'restaurar dos veces no duplica');
+test('conocimiento UI: un respaldo del lote de versiones anteriores se sigue reconociendo', { skip }, async () => {
+  const a = boot(); a.addMed('B1', 'Tempra', '30'); await wait(100);
+  const old = { schema: 'fichas.lote-backup.v1', createdAt: new Date().toISOString(), lote: JSON.parse(a.w.localStorage.getItem('fichas.lote.v1')), audit: [], catalog: { v: 1, entries: [], links: [] } };
+  const b = boot(); await b.restore(old, {}, { wait: 500 });
+  assert.equal(b.count(), '1');
+});
+
+test('conocimiento UI: respaldo y carga del conocimiento por separado', { skip }, async () => {
+  const a = boot(); a.addMed('B1', 'Tempra', '30'); await learned(a, 1);
+  const data = await a.backup(['conocimiento']);
+  assert.deepEqual(Object.keys(data.parts), ['conocimiento']);
+  const kn = data.parts.conocimiento; assert.equal(kn.schema, 'fichas.knowledge.v1'); assert.ok(kn.counts.entities > 3);
+  const b = boot();
+  await b.restore('{no es json'); assert.match(b.text('#bk-status'), /no es un respaldo/);
+  await b.restore({ schema: 'otra.cosa' }); assert.match(b.text('#bk-status'), /no es un respaldo/);
+  await b.restore(data, {}, { wait: 600 });
+  await until(() => /conocimiento: \d+ nuevos/.test(b.text('#bk-status')));
+  assert.equal((await eng(b).stats()).entities, kn.counts.entities);
+  await b.restore(data, {}, { wait: 600 });
+  await until(() => /conocimiento: 0 nuevos/.test(b.text('#bk-status')));
+  assert.equal((await eng(b).stats()).entities, kn.counts.entities, 'cargar dos veces no duplica');
+  await b.restore(kn, {}, { wait: 600 });
+  assert.match(b.text('#bk-status'), /conocimiento: 0 nuevos/, 'el archivo viejo solo de conocimiento también se reconoce');
 });
 
 test('conocimiento UI: reiniciar y diccionario del usuario piden confirmación o validan', { skip }, async () => {

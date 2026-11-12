@@ -1354,3 +1354,22 @@ test('suplementos: la información nutrimental va al final, antes de las pregunt
   assert.ok(pos(/Modo de consumo/) < pos(/Advertencias:/) && pos(/Advertencias:/) < pos(/Condiciones de conservación|Información nutrimental/));
   assert.ok(pos(/<h2>Información nutrimental/) > pos(/Advertencias:/) && pos(/<h2>Información nutrimental/) < pos(/<h2>Preguntas frecuentes/));
 });
+
+test('Merchant Center: id, título y descripción de los productos exportables, con sus avisos', () => {
+  const ok = { sku: 'A1', cat: 'med', ai: {}, v: { marca: 'Tempra', concentracion: '500 mg', principio: 'Paracetamol', forma: 'Tabletas', contenido: '20', laboratorio: 'Genomma', via: 'Oral', receta: 'no' } };
+  const items = [ok, { ...ok, sku: '' }, { sku: 'B2', cat: 'med', ai: {}, v: { marca: 'Solo marca' } }, { ...ok, sku: 'C3', ai: { via: 'sugerido' } }, { ...ok, sku: 'a1' }];
+  const f = F.merchantFeed(items, keep, F.defMeta(), {});
+  assert.deepEqual(f.header, ['id', 'title', 'description']);
+  assert.equal(f.rows.length, 1);
+  assert.deepEqual(f.excluded, { sinSku: 1, faltantes: 1, sinDescripcion: 0, ia: 1, duplicadas: 1, tituloLargo: 0, descLarga: 0 });
+  assert.equal(f.rows[0][0], 'a1', 'se queda el último de los SKU repetidos');
+  assert.match(f.rows[0][1], /Tempra 500 mg/);
+  assert.ok(f.rows[0][2].length > 40);
+  const con = F.merchantFeed(items, keep, F.defMeta(), { incFaltantes: true, incIA: true });
+  assert.ok(con.rows.length >= 3);
+  const txt = F.merchantText(f, 'txt').split('\n');
+  assert.equal(txt[0], 'id\ttitle\tdescription');
+  assert.equal(txt[1].split('\t').length, 3);
+  assert.ok(F.merchantText({ header: f.header, rows: [['X', 'a\tb\nc', 'd']] }, 'txt').includes('X\ta b c\td'), 'tabuladores y saltos de línea se vuelven espacios');
+  assert.match(F.merchantText(f, 'csv'), /^id,title,description\r\n/);
+});

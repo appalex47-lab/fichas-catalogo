@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 
 test('UI: controles de copia, descarga y respaldo del lote existen', () => {
-  for (const id of ['lote-copy','lote-dl','lote-backup','lote-restore','exp-copy','exp-dl','doc-dl']) assert.match(html, new RegExp(`id="${id}"`));
+  for (const id of ['lote-copy','lote-dl','bk-dl','bk-pick','bk-file','exp-copy','exp-dl','mc-dl','mc-copy','doc-dl']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(app, /function manualCopyDialog/);
   assert.match(app, /function saveFile\(filename, data, mime\)/);
   assert.match(app, /function hydratePersistentState/);

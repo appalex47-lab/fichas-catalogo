@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/styles.css?v=32.0">
+<link rel="stylesheet" href="styles/styles.css?v=33.0">
 </head>
 <body>
 <a class="skip" href="#h-prod">Saltar al contenido</a>
@@ -35,12 +35,13 @@
       <button class="mnav" data-nav="validacion"><span class="mnav-ico" aria-hidden="true">✓</span><span class="mnav-t">Validación</span></button>
       <button class="mnav" data-nav="contenido"><span class="mnav-ico" aria-hidden="true">¶</span><span class="mnav-t">Contenido</span></button>
       <button class="mnav" data-nav="lote"><span class="mnav-ico" aria-hidden="true">▤</span><span class="mnav-t">Lote</span> <span class="mnav-count" id="lote-count" aria-label="productos en el lote">0</span></button>
-      <button class="mnav" data-nav="exportacion"><span class="mnav-ico" aria-hidden="true">⇩</span><span class="mnav-t">Exportación</span></button>
+      <button class="mnav" data-nav="exportacion"><span class="mnav-ico" aria-hidden="true">⇩</span><span class="mnav-t">Exportar</span></button>
     </nav>
     <nav class="railutil" aria-label="Utilidades">
       <a class="mnav" href="#masiva"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg></span><span class="mnav-t">Carga masiva</span></a>
       <button class="mnav" type="button" data-nav="catalogo"><span class="mnav-ico" aria-hidden="true">⌘</span><span class="mnav-t">Catálogo</span></button>
       <button class="mnav" type="button" data-nav="conocimiento"><span class="mnav-ico" aria-hidden="true">✦</span><span class="mnav-t">Conocimiento</span></button>
+      <button class="mnav" type="button" data-nav="respaldo"><span class="mnav-ico" aria-hidden="true">⛁</span><span class="mnav-t">Respaldo</span></button>
       <button class="mnav" type="button" id="rules-open" aria-haspopup="dialog" aria-label="Reglas de construcción de fichas"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="mnav-t">Reglas</span></button>
       <button class="mnav" type="button" id="set-open" aria-haspopup="dialog" aria-label="Ajustes"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="mnav-t">Configuración</span></button>
     </nav>
@@ -172,9 +173,7 @@
     <div class="lote-head">
       <h2 id="h-lote"><span class="section-num">4</span> Lote</h2>
       <div class="actions" style="margin:0">
-        <button class="btn btn--quiet" id="lote-copy">Copiar para hoja de cálculo</button>
-        <button class="btn btn--primary" id="lote-dl">Descargar CSV</button>
-        <button class="btn btn--quiet" id="lote-backup">Respaldar lote</button><label class="btn btn--risk" for="lote-restore">Restaurar lote</label><input type="file" id="lote-restore" accept="application/json,.json" hidden><button class="btn btn--risk" id="lote-clear">Vaciar lote</button>
+        <button class="btn btn--quiet" type="button" data-navto="respaldo">Respaldo y hoja de cálculo →</button><button class="btn btn--risk" id="lote-clear">Vaciar lote</button>
       </div>
     </div>
     <div id="persistence-status" class="hint persistence-status" role="status"></div><div id="lote-body"></div>
@@ -183,18 +182,18 @@
   <section class="panel" id="catalogo" aria-labelledby="h-cat">
     <h2 id="h-cat">Catálogo interno y complementos</h2>
     <p class="sub" style="margin:0 0 12px">Aquí quedan los productos que ya guardaste, aunque vacíes el lote. Cuando guardas un complemento (por ejemplo, un suero), la app propone de qué productos principales lo es. Si todavía no hay principal, queda esperando y se te pregunta cuando guardes uno. Los medicamentos con receta o de alta especialidad nunca son complemento.</p>
-    <div class="actions" id="cat-share">
-      <button type="button" class="btn" id="cat-export">Descargar catálogo para compartir</button>
-      <button type="button" class="btn" id="cat-import-btn">Unir el catálogo de otra persona</button>
-      <input type="file" id="cat-import" accept=".json,application/json" hidden>
-    </div>
-    <p class="hint" id="cat-share-status" role="status"></p>
-    <p class="hint">Para trabajar en equipo: cada persona descarga su archivo y se lo pasa a las demás; al unirlo se suman productos, vínculos y alternativas a mano, y en un producto repetido gana el dato más reciente. Lo que alguien quitó no se borra en los demás.</p>
+    <p class="hint">Para respaldar o compartir el catálogo (y unir el de otra persona), usa <button type="button" class="linkbtn" data-navto="respaldo">Respaldo</button>.</p>
     <div id="cat-body"></div>
   </section>
 
   <section class="panel exp" id="exportar" aria-labelledby="h-exp">
-    <h2 id="h-exp"><span class="section-num">5</span> Exportar a Magento</h2>
+    <h2 id="h-exp"><span class="section-num">5</span> Exportar a otras plataformas</h2>
+    <div class="chips" role="group" aria-label="Plataforma de destino" id="exp-plat">
+      <button type="button" class="chip" data-plat="magento" aria-pressed="true">Exportar a Magento</button>
+      <button type="button" class="chip" data-plat="mc" aria-pressed="false">Exportar a Merchant Center</button>
+    </div>
+    <div id="exp-magento">
+      <h3 id="h-mg" style="margin:12px 0 4px">Exportar a Magento</h3>
     <p class="sub" style="margin:0 0 14px">Genera el CSV con el mismo formato de tu archivo de carga: 104 columnas, en el mismo orden. Prueba primero con 2 o 3 SKU.</p>
     <details class="help"><summary>¿Por qué no se exportan algunas filas?</summary><div class="help-body"><p>No se exportan las filas sin SKU, con la descripción de Magento bloqueada, con datos faltantes ni con datos sugeridos por IA sin confirmar, salvo que lo actives aquí. Los SKU repetidos se exportan una sola vez. El resumen de abajo te dice cuántas quedan fuera y por qué.</p></div></details>
     <div class="exp-grid">
@@ -224,6 +223,31 @@
         <div id="exp-summary"></div>
         <div class="actions"><button class="btn btn--primary" id="exp-dl">Descargar CSV para Magento</button><button class="btn" id="exp-copy">Copiar CSV</button></div>
         <p class="hint">Saltos de línea CRLF y comillas solo donde hay comas, igual que tu archivo. En Magento: Sistema, Transferencia de datos, Importar, entidad Productos, comportamiento Añadir/Actualizar.</p>
+      </div>
+    </div>
+    </div>
+    <div id="exp-mc" hidden>
+      <h3 id="h-mc" style="margin-top:0">Exportar a Merchant Center</h3>
+      <p class="sub" style="margin:0 0 14px">Merchant Center se carga en otra plataforma. Este archivo lleva solo lo que genera la herramienta: <code>id</code> (el SKU), <code>title</code> y <code>description</code>. La plataforma lo empareja por <code>id</code>, así que no lleva precio, disponibilidad ni enlace.</p>
+      <div class="exp-grid">
+        <div>
+          <h3 style="margin-top:0">Cómo se llena cada fila</h3>
+          <dl class="comp">
+            <dt>id</dt><dd>SKU del lote</dd>
+            <dt>title</dt><dd>Título optimizado (Google permite hasta 150 caracteres)</dd>
+            <dt>description</dt><dd>Descripción de Merchant Center (hasta 5,000 caracteres)</dd>
+          </dl>
+          <p class="hint" style="margin-top:14px">Referencias de Google: <a href="https://support.google.com/merchants/answer/7052112" target="_blank" rel="noopener">especificación de datos de producto</a>.</p>
+        </div>
+        <div>
+          <h3 style="margin-top:0">Qué filas se exportan</h3>
+          <label class="check"><input type="checkbox" id="mc-incf"><span>Incluir filas con datos faltantes</span></label>
+          <label class="check"><input type="checkbox" id="mc-ia"><span>Incluir filas con datos sugeridos por IA sin confirmar</span></label>
+          <label for="mc-fmt" style="display:block;margin-top:10px">Formato del archivo</label>
+          <select id="mc-fmt"><option value="txt">Texto con tabuladores (.txt), el que pide Google</option><option value="csv">CSV (.csv)</option></select>
+          <div id="mc-summary"></div>
+          <div class="actions"><button class="btn btn--primary" id="mc-dl">Descargar para Merchant Center</button><button class="btn" id="mc-copy">Copiar</button></div>
+        </div>
       </div>
     </div>
   </section>
@@ -258,11 +282,31 @@
       <button type="button" class="btn btn--quiet" id="k-learn">Aprender del lote actual</button>
       <button type="button" class="btn btn--ai" id="k-ai">Pedir alias a la IA</button>
       <button type="button" class="btn btn--quiet" id="k-integrity">Verificar integridad</button>
-      <button type="button" class="btn btn--quiet" id="k-backup">Respaldar conocimiento</button>
-      <button type="button" class="btn btn--quiet" id="k-restore-pick">Restaurar conocimiento</button>
-      <input type="file" id="k-restore" accept="application/json,.json" hidden>
+      <button type="button" class="btn btn--quiet" data-navto="respaldo">Respaldar o compartir lo aprendido</button>
       <label class="check"><input type="checkbox" id="k-auto"> Aplicar correcciones seguras al guardar</label>
       <button type="button" class="btn btn--risk" id="k-reset">Reiniciar conocimiento</button>
+    </div>
+  </section>
+
+  <section class="panel" id="respaldo" aria-labelledby="h-bk">
+    <h2 id="h-bk"><span class="section-num">7</span> Respaldo</h2>
+    <p class="sub" style="margin:0 0 14px">Un solo lugar para guardar tu trabajo, pasarlo a otra computadora o compartirlo. Descargas un archivo con las partes que elijas y lo cargas donde lo necesites.</p>
+    <div class="exp-grid">
+      <div>
+        <h3 style="margin-top:0">Descargar respaldo</h3>
+        <div id="bk-parts" role="group" aria-label="Qué incluir en el respaldo"></div>
+        <p class="hint" id="bk-sum" role="status"></p>
+        <div class="actions"><button class="btn btn--primary" id="bk-dl">Descargar respaldo</button></div>
+        <p class="hint">Para trabajar en equipo, marca solo «Catálogo interno» y pasa el archivo: quien lo reciba lo une con el suyo. Las llaves de IA nunca van en el archivo.</p>
+        <h3>Lote como hoja de cálculo</h3>
+        <div class="actions"><button class="btn btn--primary" id="lote-dl">Descargar CSV</button><button class="btn btn--quiet" id="lote-copy">Copiar para hoja de cálculo</button></div>
+      </div>
+      <div>
+        <h3 style="margin-top:0">Cargar respaldo</h3>
+        <p class="hint">Elige un archivo de respaldo. Acepta el formato nuevo y también los archivos anteriores: respaldo del lote, catálogo para compartir y respaldo de conocimiento. Antes de aplicar verás qué trae y qué tienes tú, parte por parte.</p>
+        <div class="actions"><button class="btn" id="bk-pick">Elegir archivo…</button><input type="file" id="bk-file" accept="application/json,.json" hidden></div>
+        <p class="hint" id="bk-status" role="status" aria-live="polite"></p>
+      </div>
     </div>
   </section>
 
@@ -426,28 +470,29 @@
   <div class="asst-form"><textarea id="asst-in" placeholder="Pregunta cómo usar la herramienta" aria-label="Pregunta"></textarea><button class="btn btn--primary" id="asst-send">Enviar</button></div>
   <p class="asst-note">Las respuestas de IA pueden fallar. Para temas regulatorios, consulta a Regulatorio.</p>
 </aside>
-<script src="js/logic.js?v=32.0"></script>
-<script src="js/catalog.js?v=32.0"></script>
-<script src="js/clasif.js?v=32.0"></script>
-<script src="js/quality.js?v=32.0"></script>
-<script src="js/normalization.js?v=32.0"></script>
-<script src="js/anomalies.js?v=32.0"></script>
-<script src="js/canonical.js?v=32.0"></script>
-<script src="js/health.js?v=32.0"></script>
-<script src="js/integration.js?v=32.0"></script>
-<script src="js/sync.js?v=32.0"></script>
-<script src="js/connector.js?v=32.0"></script>
-<script src="js/assist.js?v=32.0"></script>
-<script src="js/ai.js?v=32.0"></script>
-<script src="js/rules.js?v=32.0"></script>
-<script src="js/seo.js?v=32.0"></script>
-<script src="js/content.js?v=32.0"></script>
-<script src="js/magento-readiness.js?v=32.0"></script>
-<script src="js/score360.js?v=32.0"></script>
-<script src="js/knowledge-db.js?v=32.0"></script>
-<script src="js/knowledge.js?v=32.0"></script>
-<script src="js/bulk.js?v=32.0"></script>
-<script src="js/ux.js?v=32.0"></script>
-<script src="js/app.js?v=32.0"></script>
+<script src="js/logic.js?v=33.0"></script>
+<script src="js/catalog.js?v=33.0"></script>
+<script src="js/clasif.js?v=33.0"></script>
+<script src="js/quality.js?v=33.0"></script>
+<script src="js/normalization.js?v=33.0"></script>
+<script src="js/anomalies.js?v=33.0"></script>
+<script src="js/canonical.js?v=33.0"></script>
+<script src="js/health.js?v=33.0"></script>
+<script src="js/integration.js?v=33.0"></script>
+<script src="js/sync.js?v=33.0"></script>
+<script src="js/connector.js?v=33.0"></script>
+<script src="js/assist.js?v=33.0"></script>
+<script src="js/ai.js?v=33.0"></script>
+<script src="js/rules.js?v=33.0"></script>
+<script src="js/seo.js?v=33.0"></script>
+<script src="js/content.js?v=33.0"></script>
+<script src="js/magento-readiness.js?v=33.0"></script>
+<script src="js/score360.js?v=33.0"></script>
+<script src="js/knowledge-db.js?v=33.0"></script>
+<script src="js/knowledge.js?v=33.0"></script>
+<script src="js/bulk.js?v=33.0"></script>
+<script src="js/backup.js?v=33.0"></script>
+<script src="js/ux.js?v=33.0"></script>
+<script src="js/app.js?v=33.0"></script>
 </body>
 </html>

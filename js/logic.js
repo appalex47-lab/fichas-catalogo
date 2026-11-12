@@ -1941,6 +1941,39 @@ const batchCsv = ex => {
   return toSheet([MAG_HEADER, ...ex.rows], MAG_CONTRACT.fieldSeparator, '\r\n') + '\r\n';
 };
 
+
+/* ---------- Merchant Center ----------
+ * Archivo para cargar en la plataforma que alimenta Merchant Center: id (el SKU), título y descripción. Se empareja por id, así que no lleva
+ * precio, disponibilidad ni enlace. Google limita el título a 150 caracteres y la descripción a 5,000. */
+const MC_HEADER = ['id', 'title', 'description'];
+const MC_DESC_MAX = 5000;
+function merchantFeed(items, keep, metaCfg, opts) {
+  opts = opts || {};
+  const ex = { sinSku: 0, faltantes: 0, sinDescripcion: 0, ia: 0, duplicadas: 0, tituloLargo: 0, descLarga: 0 };
+  const rows = new Map();
+  for (const it of items) {
+    const sku = String(it.sku || '').trim();
+    if (!sku) { ex.sinSku++; continue; }
+    if (!opts.incIA && Object.values(it.ai || {}).some(v => v === 'sugerido' || v === 'imagen')) { ex.ia++; continue; }
+    const res = computeFor(it.cat, it.v, keep, metaCfg);
+    if (res.title.missing.length && !opts.incFaltantes) { ex.faltantes++; continue; }
+    const title = String(res.title.title || '').trim(), description = String(res.mc.text || '').trim();
+    if (!title || !description) { ex.sinDescripcion++; continue; }
+    if (title.length > TITLE_MAX) ex.tituloLargo++;
+    if (description.length > MC_DESC_MAX) ex.descLarga++;
+    const key = sku.toLowerCase();
+    if (rows.has(key)) ex.duplicadas++;
+    rows.set(key, [sku, title, description]);
+  }
+  return { header: MC_HEADER, rows: [...rows.values()], excluded: ex, total: items.length };
+}
+/* format: 'txt' (tabuladores, el que pide Google) o 'csv'. Los tabuladores y saltos de línea dentro de un texto se vuelven espacios. */
+function merchantText(feed, format) {
+  const clean = x => String(x == null ? '' : x).replace(/[\t\r\n]+/g, ' ').trim();
+  const all = [feed.header, ...feed.rows].map(r => r.map(clean));
+  return format === 'csv' ? toSheet(all, ',', '\r\n') + '\r\n' : all.map(r => r.join('\t')).join('\n') + '\n';
+}
+
 const CP1252_EXTRA = { '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87, 'ˆ': 0x88, '‰': 0x89, 'Š': 0x8A, '‹': 0x8B, 'Œ': 0x8C, 'Ž': 0x8E, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F };
 function encodeCp1252(str) {
   const bytes = []; let lost = 0;
@@ -2254,7 +2287,7 @@ const api = {
   CONT,
   COS_ACT,
   COUNT_NOUN_RE,
-  TITLE_MAX,
+  TITLE_MAX, MC_HEADER, MC_DESC_MAX, merchantFeed, merchantText,
   dupBrand,
   CP1252_EXTRA,
   DIS_TECH,
