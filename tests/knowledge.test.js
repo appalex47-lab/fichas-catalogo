@@ -15,7 +15,7 @@ const actions = ev => ev.map(e => e.action);
 /* ---------- identidad y modelo ---------- */
 test('conocimiento: identidad, tipos y estados', () => {
   assert.equal(K.SCHEMA, 'fichas.knowledge.v1');
-  assert.deepEqual(K.TYPES, ['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory', 'product']);
+  assert.deepEqual(K.TYPES, ['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory', 'route', 'prescription', 'product']);
   assert.deepEqual(Object.values(K.STATUS), ['observed', 'normalized', 'suggested', 'confirmed', 'inferred', 'trusted', 'rejected', 'conflicted']);
   assert.equal(K.idFor('brand', 'Marca X'), 'brand:marca-x');
   assert.equal(K.idFor('substance', 'Acetaminofén'), K.idFor('substance', 'acetaminofen'), 'acentos y mayúsculas no cambian la identidad');
@@ -465,4 +465,24 @@ test('conocimiento: la categoría de la tienda se aprende como su propio tipo', 
   assert.equal(K.TYPE_LABEL.storeCategory, 'Categoría de la tienda');
   assert.ok(K.AUTO_TYPES.includes('storeCategory'), 'mayúsculas y alias confirmados se corrigen solos');
   assert.ok(!(await ent(kb, 'category', 'Gastroenterología')), 'no se mezcla con la categoría de la herramienta');
+});
+
+/* ---------- vía y receta aprendidas por sustancia ---------- */
+test('conocimiento: propone la vía y la receta que faltan solo si la sustancia siempre se vio igual y al menos dos veces', async () => {
+  const { kb } = make();
+  await kb.init();
+  const mk = (sku, over) => ({ id: 'id-' + sku, sku, cat: 'med', v: { marca: 'M' + sku, principio: 'Omeprazol', concentracion: '20 mg', forma: 'Cápsulas', contenido: '14', laboratorio: 'Pisa', via: 'Oral', receta: 'no', ...over } });
+  await kb.observe(mk('A'));
+  let a = await kb.assess(mk('Z', { via: '', receta: '' }));
+  assert.ok(!a.suggestions.some(s => s.field === 'via'), 'con una sola vez no se propone');
+  await kb.observe(mk('B'));
+  a = await kb.assess(mk('Z', { via: '', receta: '' }));
+  const via = a.suggestions.find(s => s.field === 'via'), rec = a.suggestions.find(s => s.field === 'receta');
+  assert.deepEqual([via.to, via.kind, via.critical], ['Oral', 'fill', true]);
+  assert.deepEqual([rec.to, rec.level], ['no', 4], 'la receta vuelve como «no» y siempre exige revisión');
+  assert.ok(K.CRITICAL_TYPES.includes('route') && K.CRITICAL_TYPES.includes('prescription'));
+  assert.ok(!(await kb.assess(mk('Z', { via: 'Oral' }))).suggestions.some(s => s.field === 'via'), 'si ya trae la vía no se sugiere');
+  await kb.observe(mk('C', { via: 'Subcutánea' }));
+  a = await kb.assess(mk('Z', { via: '' }));
+  assert.ok(!a.suggestions.some(s => s.field === 'via'), 'con dos vías distintas observadas no se propone ninguna');
 });

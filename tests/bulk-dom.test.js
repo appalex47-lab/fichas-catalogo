@@ -84,3 +84,12 @@ test('masivo: Conocimiento propone el laboratorio de una marca conocida y se apl
   assert.match(a.text('#lote-body .bulk-box'), /Último cambio masivo/);
   assert.deepEqual(a.errors, []);
 });
+
+test('masivo: el resumen muestra lo que se corrigió solo', { skip }, async () => {
+  const a = boot();
+  a.addMed('C1', 'Tempra', '30 pzas');
+  await wait(1500);
+  assert.match(a.text('#lote-body .bulk-box'), /Se corrigieron solas \(1\)/);
+  assert.match(a.text('#lote-body .bulk-box'), /30 piezas/);
+  assert.deepEqual(a.errors, []);
+});
