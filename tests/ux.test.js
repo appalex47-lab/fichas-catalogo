@@ -296,14 +296,16 @@ test('ux: alertas contextuales «Hay N problemas en SEO» y «Magento bloqueado�
 
 /* ---------- Filtros del lote ---------- */
 test('ux: filtros principales con datos reales detrás', () => {
-  assert.deepEqual(Object.values(U.PRIMARY_FILTERS), ['Todos', 'Errores', 'Revisar', 'Listos', 'SEO', 'Contenido', 'Magento', 'Health', 'Score crítico']);
+  assert.deepEqual(Object.values(U.PRIMARY_FILTERS), ['Todos', 'Bloqueados', 'Por revisar', 'Listos para aprobar', 'Aprobados']);
+  assert.deepEqual(Object.values(U.MORE_FILTERS), ['SEO', 'Contenido', 'Magento', 'Health', 'Score crítico']);
   const mk = it => { const a = assess(it); a.ux = U.deriveStatus(a, { hasData: true, saved: true }); return a; };
   const ok = mk(complete), blocked = mk(noSku), bad = mk(contradiction);
   assert.equal(U.passUx(ok, 'ux_listos'), true);
   assert.equal(U.passUx(blocked, 'ux_listos'), false);
   assert.equal(U.passUx(blocked, 'ux_errores'), true, 'bloqueado cuenta como error');
   assert.equal(U.passUx(bad, 'ux_errores'), true);
-  assert.equal(U.passUx(bad, 'ux_revisar'), true);
+  assert.equal(U.passUx(bad, 'ux_revisar'), U.bucketOf(bad) === 'revisar');
+  assert.ok(['bloqueado', 'revisar'].includes(U.bucketOf(bad)));
   assert.equal(U.passUx(ok, 'ux_magento'), false, 'Magento READY no necesita revisión');
   assert.equal(U.passUx(mk({ ...complete, img: '' }), 'ux_magento'), true, 'Magento con advertencias sí');
   assert.equal(U.passUx(blocked, 'ux_magento'), true);
@@ -445,4 +447,17 @@ test('móvil: el lote se convierte en tarjetas, el riel de navegación se angost
   assert.match(html, /name="viewport"/);
   const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
   for (const label of ['SKU', 'Categoría', 'Título', 'Estado', 'Evaluación', 'Avisos']) assert.ok(app.includes(`data-label="${label}"`), label);
+});
+
+test('ux: cada producto guardado cae en un solo estado de trabajo', () => {
+  const mk = (key, errors, attention) => ({ ux: { key }, s360: { recommendations: [...Array(errors).fill({ clase: 'error', severidad: 'error' }), ...Array(attention).fill({ clase: 'atencion', severidad: 'warning' })] } });
+  assert.equal(U.bucketOf(mk('LISTO_PARA_APROBACION', 0, 0)), 'listo');
+  assert.equal(U.bucketOf(mk('LISTO_PARA_APROBACION', 0, 2)), 'listo', 'los avisos no impiden aprobar');
+  assert.equal(U.bucketOf(mk('EN_REVISION', 0, 0)), 'revisar');
+  assert.equal(U.bucketOf(mk('EN_REVISION', 1, 0)), 'bloqueado', 'un error bloquea');
+  assert.equal(U.bucketOf(mk('BLOQUEADO', 0, 0)), 'bloqueado');
+  assert.equal(U.bucketOf(mk('APROBADO', 0, 0)), 'aprobado');
+  assert.equal(U.bucketOf(mk('BORRADOR', 0, 0)), '');
+  const e = mk('LISTO_PARA_APROBACION', 0, 0);
+  assert.deepEqual(['ux_errores', 'ux_revisar', 'ux_listos', 'ux_aprobados'].map(k => U.passUx(e, k)), [false, false, true, false]);
 });

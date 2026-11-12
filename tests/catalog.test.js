@@ -271,3 +271,28 @@ test('unir: lo más viejo no pisa lo nuevo y los vínculos huérfanos se omiten'
   assert.equal(r.same, 1);
   assert.equal(a.links.length, 0);
 });
+
+/* ---------- alternativas y relacionados con todo el catálogo ---------- */
+test('CSV: alternativas y relacionados usan el catálogo, pero solo con SKU del archivo o ya cargados a Magento', () => {
+  const meta = F.defMeta();
+  const omep = (sku, marca, lab) => ({ sku, cat: 'med', v: { marca, principio: 'Omeprazol', concentracion: '20 mg', forma: 'Cápsulas', contenido: '14 piezas', laboratorio: lab, via: 'Oral', receta: 'no', especialidad: 'no' } });
+  const col = (ex, sku, name) => ex.rows.find(r => r[0] === sku)[ex.header.indexOf(name)];
+  const pool = [omep('PIS-014', 'Pisamed', 'Pisa'), omep('SAN-022', 'Sanomep', 'Sanofi'), { sku: 'GEN-007', cat: 'med', v: { marca: 'Genfar Lora', principio: 'Loratadina', concentracion: '10 mg', forma: 'Tabletas', contenido: '10 piezas', laboratorio: 'Genfar', receta: 'no', especialidad: 'no' } }];
+  const solo = F.magentoBatch([omep('GEN-001', 'Genomep', 'Genfar')], new Set(), meta, { relations: true });
+  assert.equal(col(solo, 'GEN-001', 'upsell_skus'), '', 'sin catálogo no hay alternativas');
+  const known = new Set(['pis-014', 'gen-007']);
+  const ex = F.magentoBatch([omep('GEN-001', 'Genomep', 'Genfar')], new Set(), meta, { relations: true, catalogRel: pool, knownSkus: known });
+  assert.equal(col(ex, 'GEN-001', 'upsell_skus'), 'PIS-014', 'SAN-022 no se ha cargado y no entra');
+  assert.equal(col(ex, 'GEN-001', 'related_skus'), 'GEN-007', 'misma marca o laboratorio, ya cargado');
+  const todos = F.magentoBatch([omep('GEN-001', 'Genomep', 'Genfar'), omep('SAN-022', 'Sanomep', 'Sanofi')], new Set(), meta, { relations: true, catalogRel: pool, knownSkus: known });
+  assert.equal(col(todos, 'GEN-001', 'upsell_skus'), 'PIS-014|SAN-022', 'lo que va en el mismo archivo sí entra');
+});
+
+test('catálogo: la campana también cuenta solo SKU ya cargados antes de aplicar el máximo', () => {
+  const c = C.empty();
+  const mk = (sku, marca) => C.upsert(c, { sku, cat: 'beb', v: { marca, tipo: 'Suero', contenido: '600 mL' } }, sku, 'T');
+  ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'].forEach(s => mk(s, 'Marca'));
+  C.markExported(c, ['A6'], '2026-01-01');
+  const r = C.currentRels(c).get('a1');
+  assert.deepEqual(r.related, ['A6'], 'los cinco sin cargar no ocupan los 4 lugares');
+});

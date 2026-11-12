@@ -188,7 +188,7 @@ test('UX: filtros principales con conteos reales y anuncio accesible', { skip },
   const a = boot();
   a.addMed('A1', 'Tempra', '30'); a.addMed('', 'Dolofin', '20');
   const chips = [...a.d.querySelectorAll('#lote-body > .filters .chip')].map(c => c.textContent);
-  assert.deepEqual(chips.map(c => c.replace(/ \(\d+\)/, '')), ['Todos', 'Errores', 'Revisar', 'Listos', 'SEO', 'Contenido', 'Magento', 'Health', 'Score crítico']);
+  assert.deepEqual(chips.map(c => c.replace(/ \(\d+\)/, '')), ['Todos', 'Bloqueados', 'Por revisar', 'Listos para aprobar', 'Aprobados']);
   const n = k => Number(a.d.querySelector(`[data-filter="${k}"]`).textContent.match(/\((\d+)\)/)[1]);
   assert.equal(n('todos'), 2); assert.equal(n('ux_errores'), 1); assert.equal(n('ux_listos'), 1);
   assert.equal(a.d.querySelector('[data-filter="ux_critico"]').disabled, true, 'sin datos detrás, el filtro no se ofrece');

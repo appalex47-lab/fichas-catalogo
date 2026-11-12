@@ -543,3 +543,12 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 .bell-pop .bell-d{display:block;color:var(--muted,#555)}
 
 .tabla-especificaciones{width:100%;border-collapse:collapse;margin:8px 0}.tabla-especificaciones th,.tabla-especificaciones td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}.tabla-especificaciones th{font-weight:600;width:40%;text-transform:none;letter-spacing:0;font-size:inherit}
+
+/* Cambios masivos del lote */
+.bulk-box{margin:12px 0}.bulk-box h3{margin:12px 0 4px;font-size:15px}
+.fixes{display:grid}.fix{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.fix:last-child{border-bottom:0}.fix .ops{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:720px){.fix{grid-template-columns:1fr}.fix .ops{justify-content:flex-start}}
+.bk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}.bk-sel{margin-right:6px;vertical-align:middle}
+.bulk-dlg{max-width:760px;max-height:92vh;overflow:auto}.bulk-form{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px}.bulk-form .field{min-width:200px;flex:1}
+.bulk-form select,.bulk-form input[type=text]{width:100%;margin:0}.bulk-prev{max-height:38vh;overflow:auto;margin:0 0 10px}.bulk-reg{display:block;margin:0 0 10px}

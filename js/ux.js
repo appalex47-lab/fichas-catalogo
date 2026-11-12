@@ -324,15 +324,30 @@ function contextAlerts(a, ctx) {
 
 /* ---------- 12. Filtros del lote ---------- */
 const PRIMARY_FILTERS = Object.freeze({
-  todos: 'Todos', ux_errores: 'Errores', ux_revisar: 'Revisar', ux_listos: 'Listos',
+  todos: 'Todos', ux_errores: 'Bloqueados', ux_revisar: 'Por revisar', ux_listos: 'Listos para aprobar', ux_aprobados: 'Aprobados'
+});
+/* Segundo nivel («Más filtros»): miradas por motor. */
+const MORE_FILTERS = Object.freeze({
   ux_seo: 'SEO', ux_contenido: 'Contenido', ux_magento: 'Magento', ux_health: 'Health', ux_critico: 'Score crítico'
 });
+/* Cada producto guardado cae en un solo estado de trabajo: aprobado, bloqueado (con errores), por revisar (sin errores, pero con datos de la IA sin confirmar o Score 360° crítico) o listo para aprobar (sin errores; los avisos no impiden aprobar). */
+function bucketOf(e) {
+  if (!e || !e.ux) return '';
+  const k = e.ux.key;
+  if (k === 'APROBADO') return 'aprobado';
+  if (k === 'BORRADOR') return '';
+  const c = summaryCounts(e);
+  if (k === 'BLOQUEADO' || c.errors > 0) return 'bloqueado';
+  if (k === 'EN_REVISION') return 'revisar';
+  return 'listo';
+}
 const bandIn = (b, list) => list.includes(b);
 const FILTER_TESTS = {
   todos: () => true,
-  ux_errores: e => !!e.ux && (e.ux.key === 'BLOQUEADO' || recsOf(e).some(r => r.severidad === 'error')),
-  ux_revisar: e => !!e.ux && e.ux.key === 'EN_REVISION',
-  ux_listos: e => !!e.ux && (e.ux.key === 'LISTO_PARA_APROBACION' || e.ux.key === 'APROBADO'),
+  ux_errores: e => bucketOf(e) === 'bloqueado',
+  ux_revisar: e => bucketOf(e) === 'revisar',
+  ux_listos: e => bucketOf(e) === 'listo',
+  ux_aprobados: e => bucketOf(e) === 'aprobado',
   ux_seo: e => !!e.seo && bandIn(e.seo.status, ['critico', 'revisar']),
   ux_contenido: e => !!e.content && bandIn(e.content.status, ['critico', 'revisar']),
   ux_magento: e => !!e.magento && e.magento.state !== 'READY',
@@ -396,7 +411,7 @@ const lum = hex => {
 function contrast(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100; }
 
 const api = {
-  SCHEMA, VERSION, STATUS, STEPS, CLASS_RANK, CLASS_LABEL, FIELD_STATE, SAVE, PRIMARY_FILTERS, ORIGIN_LABEL, RULE_FIELDS,
+  SCHEMA, VERSION, STATUS, STEPS, CLASS_RANK, CLASS_LABEL, FIELD_STATE, SAVE, PRIMARY_FILTERS, MORE_FILTERS, bucketOf, ORIGIN_LABEL, RULE_FIELDS,
   summaryCounts, attentionText, deriveStatus, stepOf, targetKeys, targetFor, nextBestAction, fieldStates,
   titleKeysOf, metaKeysOf, usageOf, usageText, originOf, effectiveSave, itemSig, isApproved, recordChange,
   contextAlerts, isUxFilter, passUx, safeText, friendlyError, makeMemo, contrast, hash

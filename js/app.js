@@ -32,6 +32,7 @@ const {
 } = window.Fichas;
 const Catalog = window.FichasCatalog;
 const Clasif = window.FichasClasif;
+const Bulk = window.FichasBulk || null;
 const Anomalies = window.FichasAnomalies || { provenanceFor: () => ({}), detectBatch: () => [], summarize: () => ({ total:0,error:0,warning:0,info:0,byType:{} }), event: () => ({}) };
 const Normalization = window.FichasNormalization || {};
 const Canonical = window.FichasCanonical || { canonicalize: () => ({ schema: 'fichas.canonical.v1', version: '1.0', identity: {}, fields: {}, derived: {}, quality: {}, provenance: {}, anomalyTypes: [] }) };
@@ -60,7 +61,7 @@ const UX = window.FichasUX || {
   attentionText: () => '', nextBestAction: () => ({ kind: 'listo', texto: '', button: null }), fieldStates: () => ({}), usageOf: () => ({ items: [], used: [] }), usageText: () => '',
   originOf: () => ({ text: 'captura manual', source: 'manual', normalized: null }), titleKeysOf: () => [], metaKeysOf: () => [], effectiveSave: () => ({ key: 'sin_cambios', icon: '○', label: 'Sin cambios pendientes' }),
   itemSig: () => '', isApproved: () => false, recordChange: l => l, contextAlerts: () => [], isUxFilter: () => false, passUx: () => true, targetFor: () => null,
-  PRIMARY_FILTERS: { todos: 'Todos' }, CLASS_LABEL: {}, STATUS: {}, hash: () => '0'
+  PRIMARY_FILTERS: { todos: 'Todos' }, MORE_FILTERS: {}, bucketOf: () => '', CLASS_LABEL: {}, STATUS: {}, hash: () => '0'
 };
 const Rules = window.FichasRules || { buildRulesDoc: () => ({ html: '<p>El módulo de reglas (rules.js) no se cargó.</p>', hash: '', version: '', generated: '' }) };
 const Connector = window.FichasConnector || {
@@ -129,6 +130,7 @@ async function hydratePersistentState(){
   renderPersistenceStatus();
 }
 const state = {
+  sel: new Set(), bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
@@ -413,7 +415,7 @@ function setTab(t) {
 
 /* Lote */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const FILTERS = { todos: 'Todos', faltantes: 'Con datos faltantes', bloqueados: 'Descripción Magento bloqueada', lenguaje: 'Revisar lenguaje', calidad: 'Calidad por revisar', anomalías: 'Anomalías', ia: 'IA sin confirmar', seo_critico: 'SEO crítico', seo_revisar: 'SEO por revisar', seo_pendiente: 'SEO pendiente', seo_sin_evaluar: 'SEO sin evaluar', c360_critico: '360 crítico', contenido_critico: 'Contenido crítico', mag_bloqueado: 'Magento bloqueado', mag_listo: 'Magento listo', mag_advertencias: 'Magento listo con advertencias' };
+const FILTERS = { todos: 'Todos', completos: 'Datos completos', faltantes: 'Con datos faltantes', bloqueados: 'Descripción Magento bloqueada', lenguaje: 'Revisar lenguaje', calidad: 'Calidad por revisar', anomalías: 'Anomalías', ia: 'IA sin confirmar', seo_critico: 'SEO crítico', seo_revisar: 'SEO por revisar', seo_pendiente: 'SEO pendiente', seo_sin_evaluar: 'SEO sin evaluar', c360_critico: '360 crítico', contenido_critico: 'Contenido crítico', mag_bloqueado: 'Magento bloqueado', mag_listo: 'Magento listo', mag_advertencias: 'Magento listo con advertencias' };
 function statusOf(r) {
   if (r.mg.blocked) return ['bad', 'Magento bloqueado'];
   if (r.title.missing.length) return ['warn', `Faltan ${r.title.missing.length} datos`];
@@ -429,7 +431,7 @@ function evalItem(it, keep, resIn) {
   return { res, tag: statusOf(res), lang: langCount(L), ia: unconfirmed(it.ai), quality, canonical, health };
 }
 const tagsHTML = e => `<span class="tag tag--${e.tag[0]}">${esc(e.tag[1])}</span>` + (e.quality.status !== 'listo' ? ` <span class="tag tag--${e.quality.status === 'critico' ? 'bad' : 'warn'}">Calidad: ${e.quality.counts.error} errores / ${e.quality.counts.warning} avisos</span>` : '') + (e.lang ? ` <span class="tag tag--warn">Revisar lenguaje</span>` : '') + (e.ia ? ` <span class="tag tag--ai">IA sin confirmar</span>` : '') + (e.canonical?.schema ? ` <span class="tag tag--quiet" title="Modelo canónico ${esc(e.canonical.version || '')}">Modelo canónico</span>` : '');
-const passFilter = (e, f) => f === 'todos' || (UX.isUxFilter(f) && UX.passUx(e, f)) || (f === 'faltantes' && e.res.title.missing.length) || (f === 'bloqueados' && e.res.mg.blocked) || (f === 'lenguaje' && e.lang) || (f === 'calidad' && e.quality.status !== 'listo') || (f === 'anomalías' && state.anomalies.some(a => a.indexes.includes(e.__index))) || (f === 'ia' && e.ia) || (f === 'seo_critico' && e.seo && e.seo.status === 'critico') || (f === 'seo_revisar' && e.seo && e.seo.status === 'revisar') || (f === 'seo_pendiente' && e.seo && e.seo.status === 'pendiente') || (f === 'seo_sin_evaluar' && (!e.seo || e.seo.status === 'sin_evaluar')) || (f === 'c360_critico' && Score360.isCritical360(e.s360)) || (f === 'contenido_critico' && e.content && e.content.status === 'critico') || (f === 'mag_bloqueado' && e.magento && e.magento.state === 'BLOCKED') || (f === 'mag_listo' && e.magento && e.magento.state === 'READY') || (f === 'mag_advertencias' && e.magento && e.magento.state === 'READY_WITH_WARNINGS');
+const passFilter = (e, f) => f === 'todos' || (UX.isUxFilter(f) && UX.passUx(e, f)) || (f === 'completos' && !e.res.title.missing.length) || (f === 'faltantes' && e.res.title.missing.length) || (f === 'bloqueados' && e.res.mg.blocked) || (f === 'lenguaje' && e.lang) || (f === 'calidad' && e.quality.status !== 'listo') || (f === 'anomalías' && state.anomalies.some(a => a.indexes.includes(e.__index))) || (f === 'ia' && e.ia) || (f === 'seo_critico' && e.seo && e.seo.status === 'critico') || (f === 'seo_revisar' && e.seo && e.seo.status === 'revisar') || (f === 'seo_pendiente' && e.seo && e.seo.status === 'pendiente') || (f === 'seo_sin_evaluar' && (!e.seo || e.seo.status === 'sin_evaluar')) || (f === 'c360_critico' && Score360.isCritical360(e.s360)) || (f === 'contenido_critico' && e.content && e.content.status === 'critico') || (f === 'mag_bloqueado' && e.magento && e.magento.state === 'BLOCKED') || (f === 'mag_listo' && e.magento && e.magento.state === 'READY') || (f === 'mag_advertencias' && e.magento && e.magento.state === 'READY_WITH_WARNINGS');
 
 /* Fase 9: Content, Magento Readiness y Score 360. Solo combinan resultados; no vuelven a validar los datos. */
 const expForReadiness = () => (state.exp ? expOpts() : {});
@@ -564,6 +566,7 @@ function renderLote() {
     return;
   }
   const all = assessed.all;
+  if (state.sel.size) { const live = new Set(all.map(x => x.it.id)); [...state.sel].forEach(id => { if (!live.has(id)) state.sel.delete(id); }); }
   const relMap = relations(all.map(x => ({ sku: x.it.sku, cat: x.it.cat, v: { ...x.e.res.vt.v, compat: x.it.v.compat } })));
   state.anomalies = assessed.anomalies;
   renderExport(assessed);
@@ -571,16 +574,17 @@ function renderLote() {
   const healthSummary = Health.summarize(all.map(x => x.e));
   const seoSum = assessed.seoSum;
   const { contentSum, magSum, s360Sum } = assessed;
-  const cnt = {}; [...Object.keys(FILTERS), ...Object.keys(UX.PRIMARY_FILTERS)].forEach(k => { cnt[k] = all.filter(x => passFilter(x.e, k)).length; });
+  const cnt = {}; [...Object.keys(FILTERS), ...Object.keys(UX.PRIMARY_FILTERS), ...Object.keys(UX.MORE_FILTERS)].forEach(k => { cnt[k] = all.filter(x => passFilter(x.e, k)).length; });
   const rows = all.filter(x => passFilter(x.e, state.loteFilter));
   const shown = rows.slice(0, state.loteShown);
   const auditRows = state.audit.slice(-8).reverse().map(x => `<li><strong>${esc(String(x.action || '').replaceAll('_', ' '))}</strong> · ${esc(x.sku || 'sin SKU')} · ${esc(new Date(x.at).toLocaleString())}</li>`).join('');
-  const filterLabel = k => (UX.PRIMARY_FILTERS[k] || FILTERS[k] || '');
+  const filterLabel = k => (UX.PRIMARY_FILTERS[k] || UX.MORE_FILTERS[k] || FILTERS[k] || '');
   const primary = Object.entries(UX.PRIMARY_FILTERS).map(([k, l]) => {
     const n = cnt[k], off = k !== 'todos' && !n && state.loteFilter !== k;
     return `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.loteFilter === k}"${off ? ' disabled' : ''}>${esc(l)} (${n})</button>`;
   }).join('');
-  const legacy = Object.entries(FILTERS).filter(([k]) => k !== 'todos').map(([k, l]) =>
+  const more = Object.entries(UX.MORE_FILTERS).map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.loteFilter === k}"${!cnt[k] && state.loteFilter !== k ? ' disabled' : ''}>${esc(l)} (${cnt[k]})</button>`).join('');
+  const legacy = more + Object.entries(FILTERS).filter(([k]) => k !== 'todos').map(([k, l]) =>
     `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.loteFilter === k}">${esc(l)} (${k === 'anomalías' ? anomalySummary.total : cnt[k]})</button>`).join('');
   const legacyActive = !UX.PRIMARY_FILTERS[state.loteFilter] && state.loteFilter !== 'todos';
   const anomTags = e => state.anomalies.filter(a => a.indexes.includes(e.__index)).map(a => `<span class="tag tag--${a.severity === 'error' ? 'bad' : 'warn'}">${esc(a.type === 'duplicate-sku' ? 'SKU duplicado' : a.type === 'duplicate-title' ? 'Título duplicado' : a.type === 'near-duplicate-sku' ? 'SKU similar' : a.type === 'near-duplicate-title' ? 'Título similar' : 'Dato pendiente')}</span>`).join(' ') || '<span class="hint">—</span>';
@@ -607,7 +611,7 @@ function renderLote() {
   const waitTag = it => { const ce = it.sku ? Catalog.find(state.catalog, it.sku) : null; return ce && ce.elegible && Catalog.status(state.catalog, ce) === 'esperando' ? ' <span class="tag tag--warn" data-wait-parent title="Es un complemento y aún no tiene producto principal en el catálogo.">Espera producto principal</span>' : ''; };
   const rowHTML = x => {
     const { it, e } = x, open = state.loteOpen.has(it.id);
-    return `<tr data-id="${esc(it.id)}"><td data-label="SKU">${esc(it.sku || 'sin SKU')}</td><td data-label="Categoría">${e.res.c.emoji} ${esc(e.res.c.name)}</td><td class="t" data-label="Título">${esc(e.res.title.title)}</td>`
+    return `<tr data-id="${esc(it.id)}"><td data-label="SKU">${Bulk ? `<input type="checkbox" class="bk-sel" data-bksel="${esc(it.id)}" aria-label="Marcar ${esc(it.sku || 'producto sin SKU')} para un cambio masivo"${state.sel.has(it.id) ? ' checked' : ''}> ` : ''}${esc(it.sku || 'sin SKU')}</td><td data-label="Categoría">${e.res.c.emoji} ${esc(e.res.c.name)}</td><td class="t" data-label="Título">${esc(e.res.title.title)}</td>`
       + `<td data-label="Estado"><span class="status status--${e.ux.tone}" title="${esc(e.ux.why)}"><span aria-hidden="true">${e.ux.icon}</span> ${esc(e.ux.label)}</span> ${tagsHTML(e)}${waitTag(it)}</td>`
       + `<td data-label="Evaluación">${metrics(e)}</td><td data-label="Avisos">${anomTags(e)}</td>`
       + `<td class="ops">${e.ia ? `<button type="button" class="btn btn--ai" data-aiok="${it.id}">Confirmar IA</button>` : ''}`
@@ -632,9 +636,11 @@ function renderLote() {
   body.innerHTML =
     `<details class="plain audit-box"><summary>Trazabilidad del lote (${state.audit.length} eventos guardados)</summary><p class="hint">La trazabilidad registra cambios relevantes sin almacenar valores sensibles adicionales.</p>${auditRows ? `<ul>${auditRows}</ul>` : '<p class="hint">Todavía no hay eventos.</p>'}</details>` +
     summaryPanel +
+    bulkPanelHtml(all) +
     `<div class="filters" role="group" aria-label="Filtrar lote">${primary}</div>` +
     `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros del lote">${legacy}</div></details>` +
     `<p class="sr-only" id="lote-live" role="status" aria-live="polite">Mostrando ${rows.length} de ${all.length} producto(s)${state.loteFilter !== 'todos' ? `. Filtro: ${esc(filterLabel(state.loteFilter))}` : ''}.</p>` +
+    bulkBarHtml(rows) +
     (rows.length ? `<div class="tablewrap"><table class="lote-table">
       <thead><tr><th scope="col">SKU</th><th scope="col">Categoría</th><th scope="col">Título</th><th scope="col">Estado</th><th scope="col">Evaluación</th><th scope="col">Avisos</th><th scope="col">Acciones</th></tr></thead>
       <tbody>${shown.map(rowHTML).join('')}</tbody></table></div>`
@@ -1467,7 +1473,7 @@ function panelMeta(r) {
     + metaBlock('Alt de la imagen principal', m.alt, 'alt', true, 'Va en base_image_label.');
 }
 
-function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog), relOver: Catalog.relOver(state.catalog) }; }
+function expOpts() { return { attr: state.exp.attr, incFaltantes: state.exp.incF, excLenguaje: state.exp.excL, incIA: state.exp.incIA, relations: state.exp.incRel !== false, catalogCross: Catalog.crosssellMap(state.catalog), knownSkus: Catalog.knownSkus(state.catalog), relOver: Catalog.relOver(state.catalog), catalogRel: Catalog.relPool(state.catalog) }; }
 function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta, expOpts()); }
 function renderExport(assessed) {
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
@@ -2245,6 +2251,8 @@ async function runLoteKnowledge() {
       const a = await Knowledge.assess(it);
       const issues = Knowledge.qualityIssues(a, f => ((CATS[it.cat].fields.find(x => x.key === f)) || { label: f }).label);
       if (JSON.stringify(kIssues.get(it.id) || []) !== JSON.stringify(issues)) { kIssues.set(it.id, issues); changed = true; }
+      const sg = a.suggestions.map(x => ({ kind: x.kind, field: x.field, from: x.from, to: x.to, level: x.level, status: x.status, confidence: x.confidence, why: x.why }));
+      if (JSON.stringify(state.ksugById.get(it.id) || []) !== JSON.stringify(sg)) { state.ksugById.set(it.id, sg); changed = true; }
       kLoteSig.set(it.id, sig);
       if (++n % 20 === 0) await new Promise(r => setTimeout(r, 0));
     }
@@ -2619,11 +2627,14 @@ $('#cl-body').addEventListener('click', async e => {
  * principal queda «esperando» (estado interno, no se exporta). La IA solo propone; cada vínculo lo confirma una persona. */
 const saveCatalog = () => persist('fichas.catalog.v1', state.catalog);
 const catalogNow = () => new Date().toISOString();
-const catalogTitle = it => { try { return computeFor(it.cat, it.v, keepSet(), state.meta).title.title; } catch (e) { return (it.v && it.v.marca) || it.sku; } };
+const catalogRes = it => { try { return computeFor(it.cat, it.v, keepSet(), state.meta); } catch (e) { return null; } };
+const catalogTitle = it => { const r = catalogRes(it); return r ? r.title.title : ((it.v && it.v.marca) || it.sku); };
 function catalogSync(items) {
   const touched = [];
   items.forEach(it => {
-    const r = Catalog.upsert(state.catalog, it, catalogTitle(it), catalogNow());
+    const res = catalogRes(it);
+    /* Los datos para relacionar se guardan ya normalizados (igual que en el CSV), para comparar manzanas con manzanas. */
+    const r = Catalog.upsert(state.catalog, res ? { ...it, vt: res.vt.v } : it, res ? res.title.title : ((it.v && it.v.marca) || it.sku), catalogNow());
     if (!r.entry) return;
     touched.push(r.entry.sku);
     if (r.removed.length) {
@@ -2856,6 +2867,172 @@ document.addEventListener('click', async e => {
     const ok = await confirmDialog({ title: '¿Quitar del catálogo?', message: `Se quitará «${x.nombre}» del catálogo interno y sus vínculos. El producto del lote no se borra.`, confirmLabel: 'Quitar', danger: true });
     if (ok) { Catalog.remove(c, x.sku); saveCatalog(); renderCatalog(); toast('Quitado del catálogo.'); }
   }
+});
+
+
+/* ---------- Cambios masivos del lote ----------
+ * Panel de resumen con correcciones sugeridas (Conocimiento y el propio lote) y cambios que elige la persona.
+ * Lo regulatorio (vía y receta) nunca se aplica sin que la persona marque producto por producto y confirme. */
+function bulkGroups() {
+  if (!Bulk) return [];
+  return [...Bulk.groupSuggestions(state.lote, state.ksugById, CATS), ...Bulk.inferFromLote(state.lote)].filter(g => !state.bulkDismissed.has(g.id));
+}
+function bulkPanelHtml(all) {
+  if (!Bulk || !all.length) return '';
+  const n = { bloqueado: 0, revisar: 0, listo: 0, aprobado: 0 };
+  all.forEach(x => { const b = UX.bucketOf(x.e); if (b) n[b]++; });
+  const falta = all.filter(x => x.e.res.title.missing.length).length;
+  const groups = bulkGroups();
+  const rows = groups.map(g => {
+    const def = Bulk.byKey(g.key), k = g.ids.length;
+    const what = g.from ? `<b>${k} producto(s)</b> dicen <code>${esc(g.from)}</code> → <code>${esc(Bulk.show(def, g.to))}</code>` : `<b>${k} producto(s)</b> sin ${esc(def.label.toLowerCase())} → <code>${esc(Bulk.show(def, g.to))}</code>`;
+    const ev = g.evidence ? g.evidence.join('. ') + '.' : (g.why || '');
+    const reg = g.reg || def.reg;
+    return `<div class="fix" data-g="${esc(g.id)}"><span class="tag tag--${reg ? 'warn' : 'info'}">${esc(def.label)}</span><div>${what}<div class="hint">${esc(ev)}${reg ? ' Dato regulatorio: se revisa producto por producto y se confirma.' : ''}</div></div>`
+      + `<div class="ops"><button type="button" class="btn btn--quiet" data-bk="list" data-g="${esc(g.id)}">${reg ? `Revisar ${k}` : 'Ver lista'}</button>${reg ? '' : `<button type="button" class="btn btn--primary" data-bk="apply" data-g="${esc(g.id)}">Aplicar a ${k}</button>`}<button type="button" class="btn btn--quiet" data-bk="dismiss" data-g="${esc(g.id)}">Descartar</button></div></div>`;
+  }).join('');
+  const undo = state.bulkUndo ? `<p class="hint">Último cambio masivo: ${esc(state.bulkUndo.label)}. <button type="button" class="linkbtn" data-bk="undo">Deshacer</button></p>` : '';
+  return `<details class="plain bulk-box" open><summary>Resumen del lote y correcciones</summary>`
+    + `<p class="mag-line"><strong>${n.bloqueado}</strong> bloqueado(s) · <strong>${n.revisar}</strong> por revisar · <strong>${n.listo}</strong> listos para aprobar · <strong>${n.aprobado}</strong> aprobado(s) · <strong>${falta}</strong> con datos faltantes</p>`
+    + (groups.length ? `<h3>Correcciones sugeridas (${groups.length})</h3><p class="hint">Salen de lo que Conocimiento sabe y de los demás productos de este lote. Nada se aplica solo: tú eliges.</p><div class="fixes">${rows}</div>` : '<p class="hint">Conocimiento no tiene correcciones sugeridas para este lote.</p>')
+    + undo + `</details>`;
+}
+function bulkBarHtml(rows) {
+  if (!Bulk || !state.lote.length) return '';
+  const k = state.sel.size;
+  return `<div class="bk-bar" role="group" aria-label="Cambios masivos"><span id="bk-count" role="status">${k} marcado(s)</span>`
+    + `<button type="button" class="btn btn--quiet" data-bk="selfilt">Marcar los ${rows.length} filtrados</button>`
+    + `<button type="button" class="btn btn--quiet" data-bk="clearsel"${k ? '' : ' disabled'}>Quitar marcas</button>`
+    + `<button type="button" class="btn" data-bk="change"${k ? '' : ' disabled'}>Cambiar un campo…</button>`
+    + `<button type="button" class="btn" data-bk="replace">Buscar y reemplazar…</button></div>`;
+}
+const bulkValues = key => {
+  const def = Bulk.byKey(key), out = new Set();
+  state.lote.forEach(it => { const f = Bulk.targetField(def, it, CATS); const v = f && String((it.v || {})[f] || '').trim(); if (v) out.add(v); });
+  return [...out].sort((a, b) => a.localeCompare(b));
+};
+async function commitBulk(key, ids, value, source) {
+  const def = Bulk.byKey(key);
+  const olds = new Map();
+  state.lote.filter(x => ids.includes(x.id)).forEach(it => { const f = Bulk.targetField(def, it, CATS); if (f) olds.set(it.id, String((it.v || {})[f] || '').trim()); });
+  const undo = Bulk.apply(state.lote, ids, key, value, CATS);
+  if (!undo.length) return 0;
+  const changed = new Set(undo.map(u => u.id));
+  state.lote.forEach(it => { if (changed.has(it.id)) it.provenance = Anomalies.provenanceFor(it, it.provenance); });
+  state.audit.push(Anomalies.event('cambio_masivo', null, { campo: key, valor: value, productos: undo.length, origen: source }));
+  state.audit = state.audit.slice(-500);
+  persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
+  state.bulkUndo = { undo, label: `${def.label} → «${Bulk.show(def, value)}» en ${undo.length} producto(s)` };
+  try { saveQualitySnapshot('cambio_masivo'); } catch (err) { if (window.console) console.error(err); }
+  if (Knowledge) (async () => {
+    try {
+      await Knowledge.init();
+      const seen = new Set();
+      for (const u of undo) {
+        const it = state.lote.find(x => x.id === u.id); if (!it) continue;
+        const from = olds.get(u.id);
+        if (def.type && from && !seen.has(from)) { seen.add(from); await Knowledge.recordManualCorrection({ field: u.field, original: from, corrected: value, item: it }); }
+      }
+      await Knowledge.observeMany(state.lote.filter(x => changed.has(x.id)).slice(0, 300), { source: 'manual', replace: true });
+      state.kRev++; kLoteSig.clear(); renderLote();
+    } catch (e) { if (window.console) console.error(e); }
+  })();
+  renderLote();
+  return undo.length;
+}
+function undoBulk() {
+  const u = state.bulkUndo; if (!u) return;
+  const n = Bulk.undo(state.lote, u.undo);
+  const ids = new Set(u.undo.map(x => x.id));
+  state.lote.forEach(it => { if (ids.has(it.id)) it.provenance = Anomalies.provenanceFor(it, it.provenance); });
+  state.audit.push(Anomalies.event('cambio_masivo_deshecho', null, { productos: n })); state.audit = state.audit.slice(-500);
+  persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
+  state.bulkUndo = null; state.kRev++; kLoteSig.clear();
+  renderLote(); toast(`Cambio deshecho en ${n} producto(s).`);
+}
+function openBulk(o) {
+  o = o || {};
+  const prev = document.activeElement, id = 'bk' + Math.random().toString(36).slice(2, 7);
+  let key = o.key || 'laboratorio', ids = o.ids || [];
+  const checked = new Set(o.preChecked === false ? [] : ids);
+  const scrim = document.createElement('div'); scrim.className = 'cdlg-scrim'; scrim.id = 'bulk-dlg';
+  scrim.innerHTML = `<div class="cdlg bulk-dlg" role="dialog" aria-modal="true" aria-labelledby="${id}-t"><h3 id="${id}-t">${esc(o.title || 'Cambio masivo')}</h3><p>${esc(o.intro || '')}</p>`
+    + `<div class="bulk-form"><div class="field"><label for="${id}-k">Campo</label><select id="${id}-k"${o.locked ? ' disabled' : ''}>${Bulk.FIELDS.map(d => `<option value="${d.key}"${d.key === key ? ' selected' : ''}>${esc(d.label)}</option>`).join('')}</select></div>`
+    + (o.mode === 'replace' ? `<div class="field"><label for="${id}-f">Valor actual</label><input type="text" id="${id}-f" autocomplete="off" list="${id}-fl"><datalist id="${id}-fl"></datalist></div>` : '')
+    + `<div class="field" id="${id}-vb"></div></div><p class="hint" id="${id}-n"></p>`
+    + `<div class="tablewrap bulk-prev"><table class="lote-table"><thead><tr><th scope="col"></th><th scope="col">SKU</th><th scope="col">Antes</th><th scope="col">Después</th><th scope="col">Conocimiento</th></tr></thead><tbody id="${id}-b"></tbody></table></div>`
+    + `<label class="bulk-reg" id="${id}-r" hidden><input type="checkbox" id="${id}-c"> Revisé estos productos contra su ficha. Es un dato regulatorio.</label>`
+    + `<p class="status bad" id="${id}-e" role="alert"></p><div class="actions"><button type="button" class="btn" data-id="no">Cancelar</button><button type="button" class="btn btn--primary" data-id="yes">Aplicar</button></div></div>`;
+  document.body.appendChild(scrim);
+  const q = sfx => scrim.querySelector(`#${id}-${sfx}`);
+  const val = () => { const el = q('v'); return el ? el.value.trim() : ''; };
+  const def = () => Bulk.byKey(key);
+  const close = () => { document.removeEventListener('keydown', onKey, true); scrim.remove(); if (prev && prev.focus) { try { prev.focus(); } catch (_) {} } };
+  function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(); } }
+  document.addEventListener('keydown', onKey, true);
+  const buildValue = () => {
+    const d = def(), box = q('vb'), cur = o.value && key === o.key ? o.value : '';
+    box.innerHTML = d.options
+      ? `<label for="${id}-v">Nuevo valor</label><select id="${id}-v">${d.options.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`
+      : `<label for="${id}-v">Nuevo valor</label><input type="text" id="${id}-v" autocomplete="off" list="${id}-vl" value="${esc(cur)}"><datalist id="${id}-vl">${bulkValues(key).map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
+    if (!d.options && d.type && Knowledge) Knowledge.search({ type: d.type, limit: 30 }).then(rows => { const dl = q('vl'); if (dl) dl.innerHTML = [...new Set([...rows.map(r => r.canonicalValue), ...bulkValues(key)])].map(x => `<option value="${esc(x)}">`).join(''); }).catch(() => {});
+    box.querySelector('#' + id + '-v').addEventListener('input', refresh); box.querySelector('#' + id + '-v').addEventListener('change', refresh);
+  };
+  const idsNow = () => {
+    if (o.mode !== 'replace') return ids;
+    const f = q('f'), from = f ? f.value.trim() : ''; if (!from) return [];
+    const d = def(), norm = x => String(x || '').trim().toLowerCase();
+    return state.lote.filter(it => { const fld = Bulk.targetField(d, it, CATS); return fld && norm((it.v || {})[fld]) === norm(from); }).map(it => it.id);
+  };
+  let noteSeq = 0;
+  function refresh() {
+    ids = idsNow(); const v = val(), d = def();
+    const rows = v ? Bulk.preview(state.lote, ids, key, v, CATS) : [];
+    const conf = Bulk.conflicts(state.lote, ids, key, v);
+    [...checked].forEach(x => { if (!ids.includes(x)) checked.delete(x); });
+    if (o.mode === 'replace') ids.forEach(x => checked.add(x));
+    q('b').innerHTML = rows.length ? rows.map(r => `<tr><td><input type="checkbox" data-pid="${esc(r.id)}"${checked.has(r.id) && !r.na && !r.same ? ' checked' : ''}${r.na || r.same ? ' disabled' : ''} aria-label="Cambiar ${esc(r.sku || 'producto')}"></td><td data-label="SKU">${esc(r.sku || 'sin SKU')}</td><td data-label="Antes">${esc(Bulk.show(d, r.from))}</td><td data-label="Después">${r.na ? '<span class="hint">no aplica a esta categoría</span>' : r.same ? '<span class="hint">ya lo tiene</span>' : `<b>${esc(Bulk.show(d, r.to))}</b>`}</td><td data-label="Conocimiento">${esc(conf.get(r.id) || '')}</td></tr>`).join('')
+      : `<tr><td colspan="5" class="hint">${ids.length || o.mode !== 'replace' ? 'Escribe el nuevo valor para ver el antes y el después.' : 'Escribe el valor actual para encontrar productos.'}</td></tr>`;
+    q('r').hidden = !d.reg;
+    const my = ++noteSeq;
+    if (v && d.type && Knowledge) Knowledge.search({ type: d.type, text: v, limit: 5 }).then(rs => { if (my !== noteSeq) return; const hit = rs[0]; const exact = rs.find(r => String(r.canonicalValue).toLowerCase() === v.toLowerCase()); q('n').textContent = exact ? `Conocimiento: «${exact.canonicalValue}» · ${window.FichasKnowledge.STATUS_LABEL[exact.status]}.` : hit ? `Conocimiento conoce algo parecido: «${hit.canonicalValue}». Verifica que no sea el mismo.` : 'Conocimiento no conoce este valor: se aprenderá como observado.'; }).catch(() => {});
+    else q('n').textContent = d.reg ? 'Dato regulatorio: se pide confirmación antes de aplicar.' : '';
+  }
+  scrim.addEventListener('change', e => { const c = e.target.closest && e.target.closest('input[data-pid]'); if (c) { c.checked ? checked.add(c.dataset.pid) : checked.delete(c.dataset.pid); } });
+  q('k').addEventListener('change', () => { key = q('k').value; checked.clear(); buildValue(); refresh(); });
+  if (o.mode === 'replace') { q('f').addEventListener('input', refresh); }
+  scrim.addEventListener('click', async e => {
+    const b = e.target.closest && e.target.closest('[data-id]'); if (!b) return;
+    if (b.dataset.id === 'no') return close();
+    const d = def(), v = val(), err = q('e');
+    if (!v) { err.textContent = 'Escribe el nuevo valor.'; return; }
+    const pick = [...checked].filter(x => ids.includes(x));
+    if (!pick.length) { err.textContent = 'Marca al menos un producto.'; return; }
+    if (d.reg && !q('c').checked) { err.textContent = 'Confirma que revisaste los productos contra su ficha.'; return; }
+    const n = await commitBulk(key, pick, v, o.source || 'manual');
+    close();
+    toast(n ? `Cambiado en ${n} producto(s). Puedes deshacerlo desde el resumen del lote.` : 'No había nada que cambiar.');
+  });
+  buildValue(); refresh();
+  const first = scrim.querySelector(o.mode === 'replace' ? `#${id}-f` : `#${id}-v`); if (first) first.focus();
+}
+$('#lote-body').addEventListener('change', e => {
+  const c = e.target.closest && e.target.closest('input[data-bksel]'); if (!c) return;
+  c.checked ? state.sel.add(c.dataset.bksel) : state.sel.delete(c.dataset.bksel);
+  const n = $('#bk-count'); if (n) n.textContent = `${state.sel.size} marcado(s)`;
+  document.querySelectorAll('#lote-body [data-bk="clearsel"],#lote-body [data-bk="change"]').forEach(b => { b.disabled = !state.sel.size; });
+});
+$('#lote-body').addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-bk]'); if (!t || !Bulk) return;
+  const act = t.dataset.bk, g = t.dataset.g ? bulkGroups().find(x => x.id === t.dataset.g) : null;
+  if (act === 'undo') return undoBulk();
+  if (act === 'clearsel') { state.sel.clear(); return renderLote(); }
+  if (act === 'selfilt') { const a = assessLote(); a.all.filter(x => passFilter(x.e, state.loteFilter)).forEach(x => state.sel.add(x.it.id)); return renderLote(); }
+  if (act === 'change') return openBulk({ ids: [...state.sel], title: 'Cambiar un campo', intro: `Se aplica a los ${state.sel.size} producto(s) marcados. Verás el antes y el después antes de aplicar.` });
+  if (act === 'replace') return openBulk({ mode: 'replace', ids: [], title: 'Buscar y reemplazar', intro: 'Cambia un valor exacto en todo el lote.' });
+  if (act === 'dismiss' && g) { state.bulkDismissed.add(g.id); return renderLote(); }
+  if (act === 'list' && g) { const def = Bulk.byKey(g.key); return openBulk({ key: g.key, value: g.to, locked: true, ids: g.ids, preChecked: !def.reg, title: `${def.label}: ${g.ids.length} producto(s)`, intro: (g.evidence ? g.evidence.join('. ') + '.' : g.why) || '', source: 'sugerencia' }); }
+  if (act === 'apply' && g) { commitBulk(g.key, g.ids, g.to, 'sugerencia').then(n => toast(`Aplicado a ${n} producto(s). Puedes deshacerlo desde el resumen del lote.`)); }
 });
 
 /* Inicio */

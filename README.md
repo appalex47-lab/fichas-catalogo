@@ -209,6 +209,18 @@ Título de suplementos: el sabor va antes de la presentación, la presentación 
 
 Tablas en Magento (información nutrimental, especificaciones técnicas, guía de tallas): llevan estilos en línea (`style="..."`) para verse como tabla —bordes, columnas alineadas, subfilas con sangría— aunque la plantilla de la tienda no les dé formato. También llevan los atributos clásicos de tabla (`border`, `cellpadding`, `align`) por si el editor quita el `style`. No usan un bloque `<style>`, porque el editor de Magento puede quitarlo. En suplementos la información nutrimental va al final, antes de las preguntas frecuentes.
 
+Filtros del lote: los principales son **Bloqueados** (con errores), **Por revisar** (sin errores, pero con datos de la IA sin confirmar o Score 360° crítico), **Listos para aprobar** (sin errores; los avisos no impiden aprobar) y **Aprobados**. Cada producto guardado cae en uno solo. SEO, Contenido, Magento, Health, Score crítico, «Datos completos» y «Datos faltantes» están en «Más filtros».
+
+Resumen del lote y cambios masivos: arriba de la tabla hay un resumen con los conteos por estado y las **correcciones sugeridas** (laboratorio, marca, categoría de la tienda y forma salen de Conocimiento; vía y receta salen de los demás productos del lote con el mismo principio activo, concentración y forma, solo si todos coinciden). Laboratorio, marca, categoría y forma se aplican a todos con un clic. **Vía y receta son datos regulatorios**: «Revisar» abre la lista sin marcar, se marca producto por producto y se confirma. También puedes marcar productos con su casilla y usar «Cambiar un campo…», o «Buscar y reemplazar…» un valor exacto; en los dos ves el antes y el después. Cada cambio queda en la trazabilidad, se puede deshacer y se registra como evidencia tuya en Conocimiento (lo aprendido no se revierte). Sustancia activa, concentración y textos de indicaciones no admiten cambios en bloque.
+
+Categoría de la tienda en Conocimiento: el campo «Categoría» se aprende como un tipo propio, con sugerencias, variantes y corrección de mayúsculas y alias confirmados.
+
+Cómo se relacionan los productos (alternativas, relacionados y complementos):
+- **Alternativas** (`upsell_skus`): regla fija, sin IA. Solo medicamentos: mismo principio activo, concentración, forma, presentación y condición de receta, de otra marca.
+- **Relacionados** (`related_skus`): regla fija, sin IA. Misma categoría y misma marca, o mismo laboratorio o fabricante, que no sean alternativas. Primero la misma marca y luego por SKU. Máximo 4 por tipo.
+- **Complementos** (`crosssell_skus`): los decides tú. Salen de «Compatible con», de los vínculos que confirmas en el catálogo y de lo que agregas a mano; la IA solo propone. Un medicamento solo puede ser complemento si no requiere receta ni es de alta especialidad.
+- Se calculan con **el archivo y todo el catálogo**, pero en el CSV solo entran SKU que van en el mismo archivo o que ya se cargaron a Magento. Los demás se avisan en la campana cuando se carguen.
+
 Mejoras del catálogo:
 - **Lote**: un complemento sin producto principal muestra la etiqueta «Espera producto principal» en su fila.
 - **Alternativas y relacionados a mano**: en la tabla del catálogo, cada producto muestra sus alternativas y relacionados (los de las reglas y los tuyos, marcados «a mano»). «×» quita uno (si lo proponía la regla queda como «Quitado» con «Deshacer»); «Agregar» pide el SKU de otro producto del catálogo. Vale para los dos productos y también se aplica en el CSV de Magento y en la campana. Igual que antes, solo salen los SKU que van en el archivo o que ya se cargaron.
