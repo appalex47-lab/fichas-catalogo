@@ -2877,9 +2877,10 @@ function renderBell() {
   const pop = $('#bell-pop'), n = $('#bell-n'); if (!pop) return;
   if (Catalog.baseline(state.catalog)) saveCatalog();
   const all = Catalog.alerts(state.catalog), rel = all.filter(x => x.type === 'rel'), nuevo = all.filter(x => x.type === 'nuevo');
-  const pend = pendingLinks(state.catalog), total = rel.length + (nuevo.length ? 1 : 0) + (pend.length ? 1 : 0);
-  n.textContent = total; n.hidden = !total;
-  $('#bell').setAttribute('aria-label', total ? `Notificaciones: ${total} pendientes` : 'Notificaciones: ninguna pendiente');
+  /* El globo cuenta solo lo que pide una acción tuya; los productos nuevos sin cargar viven en su pestaña y no lo encienden. */
+  const pend = pendingLinks(state.catalog), act = rel.length + (pend.length ? 1 : 0), total = act + nuevo.length;
+  n.textContent = act; n.hidden = !act;
+  $('#bell').setAttribute('aria-label', act ? `Notificaciones: ${act} pendientes` : nuevo.length ? `Notificaciones: ${nuevo.length} productos nuevos sin cargar` : 'Notificaciones: ninguna pendiente');
   const li = (a, body, chk) => `<li><label>${chk ? `<input type="checkbox" data-bell-sel="${esc(a.sku)}" checked>` : ''}<span><b>${esc(a.sku)}</b> ${esc(a.name)}<span class="bell-d">${body}</span></span></label> <button type="button" class="linkbtn" data-bell-dismiss="${esc(a.sku)}">Descartar</button></li>`;
   /* Tres pestañas para no mezclar lo que pide acción con los productos nuevos. Solo la lista se desplaza; la página de atrás no se mueve. */
   const tabs = [['rel', 'Vínculos', rel.length], ['pend', 'Complementos', pend.length], ['new', 'Sin cargar', nuevo.length]];
