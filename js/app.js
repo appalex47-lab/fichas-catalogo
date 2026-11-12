@@ -130,7 +130,7 @@ async function hydratePersistentState(){
   renderPersistenceStatus();
 }
 const state = {
-  sel: new Set(), kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
+  sel: new Set(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
@@ -2817,16 +2817,25 @@ function renderBell() {
   n.textContent = total; n.hidden = !total;
   $('#bell').setAttribute('aria-label', total ? `Notificaciones: ${total} pendientes` : 'Notificaciones: ninguna pendiente');
   const li = (a, body, chk) => `<li><label>${chk ? `<input type="checkbox" data-bell-sel="${esc(a.sku)}" checked>` : ''}<span><b>${esc(a.sku)}</b> ${esc(a.name)}<span class="bell-d">${body}</span></span></label> <button type="button" class="linkbtn" data-bell-dismiss="${esc(a.sku)}">Descartar</button></li>`;
+  /* Tres pestañas para no mezclar lo que pide acción con los productos nuevos. Solo la lista se desplaza; la página de atrás no se mueve. */
+  const tabs = [['rel', 'Vínculos', rel.length], ['pend', 'Complementos', pend.length], ['new', 'Sin cargar', nuevo.length]];
+  const first = (tabs.find(t => t[2]) || tabs[0])[0];
+  if (!tabs.some(t => t[0] === state.bellTab && t[2])) state.bellTab = first;
+  const panes = {
+    rel: `<h3>Actualizar vínculos en Magento (${rel.length})</h3><ul>${rel.map(a => li(a, [bellList(a.add, '+'), bellList(a.rem, '−')].filter(Boolean).join(' · '), true)).join('')}</ul>`
+      + '<div class="actions"><button type="button" class="btn" id="bell-dl">Descargar CSV de actualización</button></div><p class="hint">Lleva solo el SKU y las columnas de vínculos al día. Quitar un vínculo en Magento se hace a mano: una columna vacía puede no borrarlo. No lo he probado con una importación real.</p>',
+    pend: `<h3>Posibles complementos por revisar (${pend.length})</h3><p class="hint">Productos que pueden ser cross sell de otro o que esperan a su producto principal. Tú confirmas cada vínculo.</p><div class="actions"><button type="button" class="btn" id="bell-review">Revisar complementos</button></div>`,
+    new: `<h3>Productos nuevos sin cargar (${nuevo.length})</h3><p class="hint">Aún no se exportan. Se cargan con el CSV normal en Exportar.</p><ul>${nuevo.map(a => `<li><b>${esc(a.sku)}</b> ${esc(a.name)}</li>`).join('')}</ul><div class="actions"><button type="button" class="btn btn--quiet" id="bell-dismiss-new">Descartar todos</button></div>`
+  };
   pop.innerHTML = !total ? '<p class="hint">No hay notificaciones. Aquí aparecerán los productos que ya cargaste a Magento y recibieron vínculos nuevos, y los productos nuevos que aún no cargas.</p>'
-    : (rel.length ? `<h3>Actualizar vínculos en Magento (${rel.length})</h3><ul>${rel.map(a => li(a, [bellList(a.add, '+'), bellList(a.rem, '−')].filter(Boolean).join(' · '), true)).join('')}</ul>`
-      + '<div class="actions"><button type="button" class="btn" id="bell-dl">Descargar CSV de actualización</button></div><p class="hint">Lleva solo el SKU y las columnas de vínculos al día. Quitar un vínculo en Magento se hace a mano: una columna vacía puede no borrarlo. No lo he probado con una importación real.</p>' : '')
-    + (pend.length ? `<h3>Posibles complementos por revisar (${pend.length})</h3><p class="hint">Productos que pueden ser cross sell de otro o que esperan a su producto principal. Tú confirmas cada vínculo.</p><div class="actions"><button type="button" class="btn" id="bell-review">Revisar complementos</button></div>` : '')
-    + (nuevo.length ? `<h3>Productos nuevos sin cargar (${nuevo.length})</h3><p class="hint">Aún no se exportan. Se cargan con el CSV normal en Exportar.</p><details><summary>Ver los ${nuevo.length}</summary><ul>${nuevo.map(a => `<li><b>${esc(a.sku)}</b> ${esc(a.name)}</li>`).join('')}</ul></details><div class="actions"><button type="button" class="btn btn--quiet" id="bell-dismiss-new">Descartar todos</button></div>` : '');
+    : `<div class="bell-tabs" role="group" aria-label="Tipo de notificación">${tabs.map(t => `<button type="button" class="bell-tab" data-bell-tab="${t[0]}" aria-pressed="${state.bellTab === t[0]}"${t[2] ? '' : ' disabled'}>${t[1]} <span class="bell-c">${t[2]}</span></button>`).join('')}</div><div class="bell-body">${panes[state.bellTab]}</div>`;
 }
 $('#bell').addEventListener('click', () => { const pop = $('#bell-pop'); pop.hidden = !pop.hidden; $('#bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) renderBell(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#bell-pop').hidden) { $('#bell-pop').hidden = true; $('#bell').setAttribute('aria-expanded', 'false'); $('#bell').focus(); } });
 document.addEventListener('click', e => { const w = e.target.closest && e.target.closest('.bell-wrap'); if (!w && $('#bell-pop') && !$('#bell-pop').hidden) { $('#bell-pop').hidden = true; $('#bell').setAttribute('aria-expanded', 'false'); } });
 $('#bell-pop').addEventListener('click', e => {
+  const bt = e.target.closest('[data-bell-tab]');
+  if (bt) { state.bellTab = bt.dataset.bellTab; renderBell(); return; }
   const d = e.target.closest('[data-bell-dismiss]');
   if (d) { if (Catalog.dismiss(state.catalog, d.dataset.bellDismiss)) { saveCatalog(); renderBell(); } return; }
   if (e.target.closest('#bell-dismiss-new')) { Catalog.alerts(state.catalog).filter(x => x.type === 'nuevo').forEach(x => Catalog.dismiss(state.catalog, x.sku)); saveCatalog(); renderBell(); return; }

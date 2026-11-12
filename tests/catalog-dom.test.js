@@ -159,3 +159,16 @@ test('compartir: unir un catálogo de otra persona suma productos y avisa el res
   assert.match(a.text('#cat-share-status'), /no es un catálogo/);
   assert.deepEqual(a.errors, []);
 });
+
+test('campana: tres pestañas, solo se muestra una lista y las vacías no se pueden abrir', { skip }, async () => {
+  const a = boot();
+  await addBeb(a, 'FRE-200', 'Fresubin');
+  a.d.getElementById('bell').click();
+  const tabs = [...a.d.querySelectorAll('#bell-pop [data-bell-tab]')];
+  assert.deepEqual(tabs.map(t => t.dataset.bellTab), ['rel', 'pend', 'new']);
+  assert.equal(a.d.querySelector('#bell-pop [data-bell-tab="new"]').getAttribute('aria-pressed'), 'true', 'abre en la primera que tiene algo');
+  assert.equal(a.d.querySelector('#bell-pop [data-bell-tab="rel"]').disabled, true);
+  assert.match(a.text('#bell-pop .bell-body'), /Productos nuevos sin cargar \(1\)/);
+  assert.doesNotMatch(a.text('#bell-pop .bell-body'), /Posibles complementos/);
+  assert.deepEqual(a.errors, []);
+});
