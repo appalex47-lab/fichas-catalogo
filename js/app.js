@@ -130,7 +130,7 @@ async function hydratePersistentState(){
   renderPersistenceStatus();
 }
 const state = {
-  sel: new Set(), bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
+  sel: new Set(), kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
@@ -2256,6 +2256,11 @@ async function runLoteKnowledge() {
       kLoteSig.set(it.id, sig);
       if (++n % 20 === 0) await new Promise(r => setTimeout(r, 0));
     }
+    /* Correcciones que la aplicación hizo sola (reglas seguras o equivalencias confirmadas) en los productos de este lote. */
+    const ids = new Set(state.lote.map(x => x.id));
+    const auto = (await Knowledge.listCorrections({ limit: 300 })).filter(c => c.kind === 'auto' && c.status === 'applied' && ids.has(c.itemId));
+    const asig = JSON.stringify(auto.map(c => c.id));
+    if (asig !== state.kAutoSig) { state.kAutoSig = asig; state.kAuto = auto; changed = true; }
     if (changed) { state.kRev++; kLoteSig.clear(); renderLote(); }
   } catch (e) { if (window.console) console.error(e); }
 }
@@ -2875,7 +2880,7 @@ document.addEventListener('click', async e => {
  * Lo regulatorio (vía y receta) nunca se aplica sin que la persona marque producto por producto y confirme. */
 function bulkGroups() {
   if (!Bulk) return [];
-  return [...Bulk.groupSuggestions(state.lote, state.ksugById, CATS), ...Bulk.inferFromLote(state.lote)].filter(g => !state.bulkDismissed.has(g.id));
+  return Bulk.mergeGroups([...Bulk.groupSuggestions(state.lote, state.ksugById, CATS), ...Bulk.inferFromLote(state.lote)]).filter(g => !state.bulkDismissed.has(g.id));
 }
 function bulkPanelHtml(all) {
   if (!Bulk || !all.length) return '';
@@ -2886,16 +2891,18 @@ function bulkPanelHtml(all) {
   const rows = groups.map(g => {
     const def = Bulk.byKey(g.key), k = g.ids.length;
     const what = g.from ? `<b>${k} producto(s)</b> dicen <code>${esc(g.from)}</code> → <code>${esc(Bulk.show(def, g.to))}</code>` : `<b>${k} producto(s)</b> sin ${esc(def.label.toLowerCase())} → <code>${esc(Bulk.show(def, g.to))}</code>`;
-    const ev = g.evidence ? g.evidence.join('. ') + '.' : (g.why || '');
+    const ev = g.evidence && g.evidence.length ? g.evidence.join('. ') + '.' : (g.why || '');
     const reg = g.reg || def.reg;
     return `<div class="fix" data-g="${esc(g.id)}"><span class="tag tag--${reg ? 'warn' : 'info'}">${esc(def.label)}</span><div>${what}<div class="hint">${esc(ev)}${reg ? ' Dato regulatorio: se revisa producto por producto y se confirma.' : ''}</div></div>`
       + `<div class="ops"><button type="button" class="btn btn--quiet" data-bk="list" data-g="${esc(g.id)}">${reg ? `Revisar ${k}` : 'Ver lista'}</button>${reg ? '' : `<button type="button" class="btn btn--primary" data-bk="apply" data-g="${esc(g.id)}">Aplicar a ${k}</button>`}<button type="button" class="btn btn--quiet" data-bk="dismiss" data-g="${esc(g.id)}">Descartar</button></div></div>`;
   }).join('');
+  const autoRows = (() => { const m = new Map(); state.kAuto.forEach(c => { const k = `${c.field}|${c.original}|${c.corrected}`; m.set(k, (m.get(k) || { c, n: 0 })); m.get(k).n++; }); return [...m.values()]; })();
+  const autoHtml = autoRows.length ? `<details class="plain"><summary>Se corrigieron solas (${state.kAuto.length})</summary><div class="tablewrap"><table class="lote-table"><thead><tr><th scope="col">Campo</th><th scope="col">Antes</th><th scope="col">Después</th><th scope="col">Productos</th></tr></thead><tbody>${autoRows.slice(0, 15).map(r => `<tr><td data-label="Campo">${esc(((Object.values(CATS).map(c => c.fields.find(x => x.key === r.c.field)).find(Boolean)) || { label: r.c.field }).label)}</td><td data-label="Antes"><code>${esc(r.c.original)}</code></td><td data-label="Después"><code>${esc(r.c.corrected)}</code></td><td data-label="Productos">${r.n}</td></tr>`).join('')}</tbody></table></div><p class="hint">Reglas seguras y equivalencias que ya confirmaste. Se pueden revertir desde la pestaña Conocimiento.</p></details>` : '';
   const undo = state.bulkUndo ? `<p class="hint">Último cambio masivo: ${esc(state.bulkUndo.label)}. <button type="button" class="linkbtn" data-bk="undo">Deshacer</button></p>` : '';
   return `<details class="plain bulk-box" open><summary>Resumen del lote y correcciones</summary>`
     + `<p class="mag-line"><strong>${n.bloqueado}</strong> bloqueado(s) · <strong>${n.revisar}</strong> por revisar · <strong>${n.listo}</strong> listos para aprobar · <strong>${n.aprobado}</strong> aprobado(s) · <strong>${falta}</strong> con datos faltantes</p>`
     + (groups.length ? `<h3>Correcciones sugeridas (${groups.length})</h3><p class="hint">Salen de lo que Conocimiento sabe y de los demás productos de este lote. Nada se aplica solo: tú eliges.</p><div class="fixes">${rows}</div>` : '<p class="hint">Conocimiento no tiene correcciones sugeridas para este lote.</p>')
-    + undo + `</details>`;
+    + autoHtml + undo + `</details>`;
 }
 function bulkBarHtml(rows) {
   if (!Bulk || !state.lote.length) return '';
@@ -3031,7 +3038,7 @@ $('#lote-body').addEventListener('click', e => {
   if (act === 'change') return openBulk({ ids: [...state.sel], title: 'Cambiar un campo', intro: `Se aplica a los ${state.sel.size} producto(s) marcados. Verás el antes y el después antes de aplicar.` });
   if (act === 'replace') return openBulk({ mode: 'replace', ids: [], title: 'Buscar y reemplazar', intro: 'Cambia un valor exacto en todo el lote.' });
   if (act === 'dismiss' && g) { state.bulkDismissed.add(g.id); return renderLote(); }
-  if (act === 'list' && g) { const def = Bulk.byKey(g.key); return openBulk({ key: g.key, value: g.to, locked: true, ids: g.ids, preChecked: !def.reg, title: `${def.label}: ${g.ids.length} producto(s)`, intro: (g.evidence ? g.evidence.join('. ') + '.' : g.why) || '', source: 'sugerencia' }); }
+  if (act === 'list' && g) { const def = Bulk.byKey(g.key); return openBulk({ key: g.key, value: g.to, locked: true, ids: g.ids, preChecked: !def.reg, title: `${def.label}: ${g.ids.length} producto(s)`, intro: (g.evidence && g.evidence.length ? g.evidence.join('. ') + '.' : g.why) || '', source: 'sugerencia' }); }
   if (act === 'apply' && g) { commitBulk(g.key, g.ids, g.to, 'sugerencia').then(n => toast(`Aplicado a ${n} producto(s). Puedes deshacerlo desde el resumen del lote.`)); }
 });
 

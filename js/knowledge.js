@@ -26,8 +26,8 @@ const SCHEMA = 'fichas.knowledge.v1';
 const VERSION = '1.0';
 
 /* ---------- vocabulario ---------- */
-const TYPES = Object.freeze(['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory', 'product']);
-const TYPE_LABEL = Object.freeze({ substance: 'Sustancia activa', laboratory: 'Laboratorio', brand: 'Marca', manufacturer: 'Fabricante', pharmaceuticalForm: 'Forma farmacéutica', concentration: 'Concentración', unit: 'Unidad', presentation: 'Presentación', category: 'Categoría', subcategory: 'Subcategoría', storeCategory: 'Categoría de la tienda', product: 'Producto' });
+const TYPES = Object.freeze(['substance', 'laboratory', 'brand', 'manufacturer', 'pharmaceuticalForm', 'concentration', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory', 'route', 'prescription', 'product']);
+const TYPE_LABEL = Object.freeze({ substance: 'Sustancia activa', laboratory: 'Laboratorio', brand: 'Marca', manufacturer: 'Fabricante', pharmaceuticalForm: 'Forma farmacéutica', concentration: 'Concentración', unit: 'Unidad', presentation: 'Presentación', category: 'Categoría', subcategory: 'Subcategoría', storeCategory: 'Categoría de la tienda', route: 'Vía de administración', prescription: 'Condición de receta', product: 'Producto' });
 const STATUS = Object.freeze({ OBSERVED: 'observed', NORMALIZED: 'normalized', SUGGESTED: 'suggested', CONFIRMED: 'confirmed', INFERRED: 'inferred', TRUSTED: 'trusted', REJECTED: 'rejected', CONFLICTED: 'conflicted' });
 const STATUS_LABEL = Object.freeze({ observed: 'Observado', normalized: 'Normalizado', suggested: 'Sugerido', confirmed: 'Confirmado', inferred: 'Inferido', trusted: 'De confianza', rejected: 'Rechazado', conflicted: 'En conflicto' });
 const AUDIT = Object.freeze({ CREATED: 'KNOWLEDGE_CREATED', UPDATED: 'KNOWLEDGE_UPDATED', CONFIRMED: 'KNOWLEDGE_CONFIRMED', REJECTED: 'KNOWLEDGE_REJECTED', CONFLICT: 'KNOWLEDGE_CONFLICT', SUGGESTION: 'KNOWLEDGE_SUGGESTION', AUTO: 'AUTO_CORRECTION', MANUAL: 'MANUAL_CORRECTION' });
@@ -35,10 +35,13 @@ const LEVELS = Object.freeze({ SUGGEST: 1, ASSISTED: 2, AUTO_SAFE: 3, REVIEW: 4 
 const LEVEL_LABEL = Object.freeze({ 1: 'Sugerir', 2: 'Corrección asistida', 3: 'Autocorrección segura', 4: 'Revisión obligatoria' });
 
 /* Qué campo del formulario alimenta qué tipo de entidad (independiente de la categoría). */
-const FIELD_TYPE = Object.freeze({ marca: 'brand', principio: 'substance', componente: 'substance', laboratorio: 'laboratory', fabricante: 'manufacturer', forma: 'pharmaceuticalForm', concentracion: 'concentration', contenido: 'presentation', paquete: 'presentation', presentacion: 'presentation', tipo: 'subcategory', categoria: 'storeCategory' });
+const FIELD_TYPE = Object.freeze({ marca: 'brand', principio: 'substance', componente: 'substance', laboratorio: 'laboratory', fabricante: 'manufacturer', forma: 'pharmaceuticalForm', concentracion: 'concentration', contenido: 'presentation', paquete: 'presentation', presentacion: 'presentation', tipo: 'subcategory', categoria: 'storeCategory', via: 'route', receta: 'prescription' });
+/* La receta se guarda como «si» o «no»; en Conocimiento se llama como la lee una persona. */
+const RX_LABEL = Object.freeze({ si: 'Requiere receta', no: 'No requiere receta' });
+const RX_RAW = Object.freeze({ 'requiere receta': 'si', 'no requiere receta': 'no' });
 const PRESENTATION_FIELDS = Object.freeze(['contenido', 'paquete', 'presentacion']);
 /* Tipos y campos críticos: nunca se autocorrigen (sustancias, concentraciones, relación marca/laboratorio, claims, datos regulatorios). */
-const CRITICAL_TYPES = Object.freeze(['substance', 'concentration', 'laboratory', 'brand', 'manufacturer']);
+const CRITICAL_TYPES = Object.freeze(['substance', 'concentration', 'laboratory', 'brand', 'manufacturer', 'route', 'prescription']);
 const CRITICAL_FIELDS = Object.freeze(['principio', 'componente', 'concentracion', 'laboratorio', 'marca', 'fabricante', 'receta', 'leyenda', 'precauciones', 'modo', 'nutrimental', 'ingredientes', 'alergenos', 'advertencias', 'indicaciones', 'posologia', 'poblacion', 'contraindicaciones', 'inci', 'fps', 'nivel', 'via']);
 const AUTO_TYPES = Object.freeze(['pharmaceuticalForm', 'unit', 'presentation', 'category', 'subcategory', 'storeCategory']);
 /* Predicados cuyo objeto debe ser único para un sujeto: dos objetos distintos son un conflicto, no una elección. */
@@ -344,7 +347,7 @@ function create(opts) {
     Object.keys(FIELD_TYPE).forEach(field => {
       const type = FIELD_TYPE[field]; if (!(field in v)) return;
       if (type === 'concentration' && !parseConcentration(v[field])) return;      // «lo que no es valor + unidad» no es una concentración
-      const f = E(type, type === 'presentation' ? normalizePresentation(v[field]).canonical : v[field]); if (f) { f.field = field; f.original = str(v[field]).trim(); (by[type] = by[type] || []).push(f); }
+      const f = E(type, type === 'presentation' ? normalizePresentation(v[field]).canonical : type === 'prescription' ? (RX_LABEL[str(v[field]).trim()] || '') : v[field]); if (f) { f.field = field; f.original = str(v[field]).trim(); (by[type] = by[type] || []).push(f); }
     });
     if (v.volumen && /\d/.test(str(v.volumen))) { const c = parseConcentration(v.volumen); if (c) facts.entities.push({ type: 'unit', value: c.unit, field: 'volumen' }); }
     const cn = item.cat ? E('category', catName(item.cat)) : null;
@@ -360,6 +363,8 @@ function create(opts) {
     (by.substance || []).forEach(s => rel(first('brand'), 'brand→substance', s));
     if (cn) rel(first('brand'), 'brand→category', cn);
     (by.concentration || []).forEach(c => (by.substance || []).forEach(s => rel(s, 'substance→concentration', c)));
+    (by.route || []).forEach(r => (by.substance || []).forEach(s => rel(s, 'substance→route', r)));
+    (by.prescription || []).forEach(r => (by.substance || []).forEach(s => rel(s, 'substance→prescription', r)));
     return facts;
   }
 
@@ -485,12 +490,14 @@ function create(opts) {
   async function matureFor(type) { return (await db.countByIndex('entities', 'type', type)) >= (state.settings.matureThreshold || CONF.MATURE); }
 
   /* Evalúa un producto contra el conocimiento. Devuelve estado por campo, verificaciones de relaciones y sugerencias con su nivel. */
+  const CATS_HAS = (item, field) => { const c = F && F.CATS && F.CATS[item && item.cat]; return !c || c.fields.some(f => f.key === field); };
   async function assess(item) {
     await init();
     const v = (item && item.v) || {}; const fields = {}, checks = [], suggestions = [];
     const resolved = {};
     for (const field of Object.keys(FIELD_TYPE)) {
       const type = FIELD_TYPE[field]; const raw = str(v[field]).trim(); if (!raw) continue;
+      if (type === 'route' || type === 'prescription') continue;   // se proponen solo cuando faltan, con evidencia repetida
       if (type === 'concentration' && !parseConcentration(raw)) { fields[field] = { field, type, state: 'unknown', typed: raw, note: 'No tiene el formato valor + unidad.' }; continue; }
       const typedValue = type === 'presentation' ? normalizePresentation(raw).canonical : raw;
       const f = await findEntity(type, typedValue);
@@ -544,6 +551,19 @@ function create(opts) {
       const subs = await relationsOf(brand.id, 'brand→substance');
       const strong = subs.filter(x => x.rel.confidence >= CONF.ASSIST_MIN);
       if (strong.length === 1) suggestions.push({ kind: 'fill', field: 'principio', type: 'substance', from: '', to: strong[0].object.canonicalValue, relationId: strong[0].rel.id, confidence: strong[0].rel.confidence, status: strong[0].rel.status, level: LEVELS.SUGGEST, levelName: LEVEL_LABEL[1], critical: true, reasons: ['las sustancias son datos críticos: se sugiere, nunca se completa sola'], why: `${brand.canonicalValue} se relaciona con ${strong[0].object.canonicalValue}.` });
+    }
+    /* Vía y receta que faltan: solo si esta sustancia siempre se vio con el mismo valor y al menos dos veces. Son datos regulatorios: nunca se autocorrigen. */
+    const sub = resolved.principio || resolved.componente;
+    if (sub) {
+      for (const [field, pred] of [['via', 'substance→route'], ['receta', 'substance→prescription']]) {
+        if (str(v[field]).trim() || !(field in FIELD_TYPE) || !CATS_HAS(item, field)) continue;
+        const rels = await relationsOf(sub.id, pred);
+        if (rels.length !== 1) continue;
+        const top = rels[0], seenN = ((top.rel.evidenceBy && (top.rel.evidenceBy.observed || 0)) || 0) + ((top.rel.evidenceBy && (top.rel.evidenceBy.confirmed || 0)) || 0);
+        if (seenN < 2) continue;
+        const to = field === 'receta' ? (RX_RAW[normalize(top.object.canonicalValue)] || '') : top.object.canonicalValue; if (!to) continue;
+        suggestions.push({ kind: 'fill', field, type: FIELD_TYPE[field], from: '', to, relationId: top.rel.id, confidence: top.rel.confidence, status: top.rel.status, level: LEVELS.REVIEW, levelName: LEVEL_LABEL[LEVELS.REVIEW], critical: true, reasons: ['Dato regulatorio'], why: `La aplicación ha visto ${seenN} veces ${str(sub.canonicalValue)} con «${top.object.canonicalValue}». Confírmalo con la ficha.` });
+      }
     }
     return { schema: SCHEMA, fields, checks, suggestions };
   }

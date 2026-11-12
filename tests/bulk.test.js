@@ -74,3 +74,14 @@ test('masivo: la receta se propone igual que la vía y un cambio que contradice 
   assert.equal(B.conflicts(items, ['c'], 'receta', 'no').size, 0);
   assert.equal(B.conflicts(items, ['c'], 'laboratorio', 'X').size, 0);
 });
+
+test('masivo: la misma propuesta desde Conocimiento y desde el lote se junta en un solo grupo', () => {
+  const items = [med('a', { via: 'Oral' }), med('b', { via: 'Oral' }), med('c', { via: '' }), med('d', { via: '' })];
+  const sug = new Map([['c', [{ field: 'via', from: '', to: 'Oral', level: 4, kind: 'fill', why: 'La aplicación ha visto 3 veces Omeprazol con «Oral».' }]], ['d', [{ field: 'via', from: '', to: 'oral', level: 4, kind: 'fill' }]]]);
+  const g = B.mergeGroups([...B.groupSuggestions(items, sug, C), ...B.inferFromLote(items)]);
+  const via = g.filter(x => x.field === 'via');
+  assert.equal(via.length, 1, 'un solo grupo');
+  assert.deepEqual([...via[0].ids].sort(), ['c', 'd']);
+  assert.ok(via[0].reg);
+  assert.ok(via[0].evidence.length >= 2, 'junta la evidencia de las dos fuentes');
+});

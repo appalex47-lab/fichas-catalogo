@@ -68,7 +68,7 @@ function undo(items, list) {
 /* ---------- Sugerencias de Conocimiento agrupadas ----------
  * sugById: id del producto → sugerencias de Knowledge.assess. Se agrupan por campo y cambio para aplicar a todos de una vez.
  * Nunca entran la sustancia activa ni la concentración. */
-const SUG_FIELDS = Object.freeze({ laboratorio: 'laboratorio', fabricante: 'laboratorio', marca: 'marca', categoria: 'categoria', forma: 'forma' });
+const SUG_FIELDS = Object.freeze({ laboratorio: 'laboratorio', fabricante: 'laboratorio', marca: 'marca', categoria: 'categoria', forma: 'forma', via: 'via', receta: 'receta' });
 function groupSuggestions(items, sugById, CATS) {
   const groups = new Map();
   items.forEach(it => {
@@ -76,11 +76,25 @@ function groupSuggestions(items, sugById, CATS) {
       const key = SUG_FIELDS[s.field]; if (!key || !str(s.to) || str(s.to) === str(s.from)) return;
       if (!targetField(byKey(key), it, CATS)) return;
       const gk = `${s.field}|${str(s.from)}|${str(s.to)}`;
-      if (!groups.has(gk)) groups.set(gk, { id: gk, key, field: s.field, label: byKey(key).label, from: str(s.from), to: str(s.to), ids: [], confidence: s.confidence, status: s.status, level: s.level, why: s.why || '', kind: s.kind });
+      if (!groups.has(gk)) groups.set(gk, { id: gk, key, field: s.field, label: byKey(key).label, from: str(s.from), to: str(s.to), ids: [], confidence: s.confidence, status: s.status, level: s.level, why: s.why || '', kind: s.kind, reg: !!byKey(key).reg, evidence: [] });
       const g = groups.get(gk); if (!g.ids.includes(it.id)) g.ids.push(it.id);
     });
   });
   return [...groups.values()].sort((a, b) => b.ids.length - a.ids.length || a.label.localeCompare(b.label));
+}
+
+/* Une los grupos que proponen lo mismo (por ejemplo, la misma vía desde Conocimiento y desde el lote). */
+function mergeGroups(list) {
+  const out = new Map();
+  list.forEach(g => {
+    const k = `${g.key}|${fold(g.from)}|${fold(g.to)}`;
+    if (!out.has(k)) { out.set(k, { ...g, ids: [...g.ids], evidence: [...(g.evidence || []), ...(g.why ? [g.why.replace(/\.$/, '')] : [])] }); return; }
+    const m = out.get(k);
+    g.ids.forEach(id => { if (!m.ids.includes(id)) m.ids.push(id); });
+    (g.evidence || []).concat(g.why ? [g.why.replace(/\.$/, '')] : []).forEach(x => { if (!m.evidence.includes(x)) m.evidence.push(x); });
+    m.reg = m.reg || g.reg;
+  });
+  return [...out.values()].sort((a, b) => b.ids.length - a.ids.length || a.label.localeCompare(b.label));
 }
 
 /* ---------- Vía y receta con evidencia del propio lote ----------
@@ -132,6 +146,6 @@ function conflicts(items, ids, key, value) {
   return out;
 }
 
-const api = { FIELDS, byKey, show, targetField, preview, apply, undo, groupSuggestions, inferFromLote, conflicts };
+const api = { FIELDS, byKey, show, targetField, preview, apply, undo, groupSuggestions, mergeGroups, inferFromLote, conflicts };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FichasBulk = api;
 })(typeof self !== 'undefined' ? self : this);
