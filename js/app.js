@@ -60,7 +60,7 @@ const UX = window.FichasUX || {
   attentionText: () => '', nextBestAction: () => ({ kind: 'listo', texto: '', button: null }), fieldStates: () => ({}), usageOf: () => ({ items: [], used: [] }), usageText: () => '',
   originOf: () => ({ text: 'captura manual', source: 'manual', normalized: null }), titleKeysOf: () => [], metaKeysOf: () => [], effectiveSave: () => ({ key: 'sin_cambios', icon: '○', label: 'Sin cambios pendientes' }),
   itemSig: () => '', isApproved: () => false, recordChange: l => l, contextAlerts: () => [], isUxFilter: () => false, passUx: () => true, targetFor: () => null,
-  PRIMARY_FILTERS: { todos: 'Todos' }, CLASS_LABEL: {}, STATUS: {}, hash: () => '0'
+  PRIMARY_FILTERS: { todos: 'Todos' }, MORE_FILTERS: {}, bucketOf: () => '', CLASS_LABEL: {}, STATUS: {}, hash: () => '0'
 };
 const Rules = window.FichasRules || { buildRulesDoc: () => ({ html: '<p>El módulo de reglas (rules.js) no se cargó.</p>', hash: '', version: '', generated: '' }) };
 const Connector = window.FichasConnector || {
@@ -413,7 +413,7 @@ function setTab(t) {
 
 /* Lote */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const FILTERS = { todos: 'Todos', faltantes: 'Con datos faltantes', bloqueados: 'Descripción Magento bloqueada', lenguaje: 'Revisar lenguaje', calidad: 'Calidad por revisar', anomalías: 'Anomalías', ia: 'IA sin confirmar', seo_critico: 'SEO crítico', seo_revisar: 'SEO por revisar', seo_pendiente: 'SEO pendiente', seo_sin_evaluar: 'SEO sin evaluar', c360_critico: '360 crítico', contenido_critico: 'Contenido crítico', mag_bloqueado: 'Magento bloqueado', mag_listo: 'Magento listo', mag_advertencias: 'Magento listo con advertencias' };
+const FILTERS = { todos: 'Todos', completos: 'Datos completos', faltantes: 'Con datos faltantes', bloqueados: 'Descripción Magento bloqueada', lenguaje: 'Revisar lenguaje', calidad: 'Calidad por revisar', anomalías: 'Anomalías', ia: 'IA sin confirmar', seo_critico: 'SEO crítico', seo_revisar: 'SEO por revisar', seo_pendiente: 'SEO pendiente', seo_sin_evaluar: 'SEO sin evaluar', c360_critico: '360 crítico', contenido_critico: 'Contenido crítico', mag_bloqueado: 'Magento bloqueado', mag_listo: 'Magento listo', mag_advertencias: 'Magento listo con advertencias' };
 function statusOf(r) {
   if (r.mg.blocked) return ['bad', 'Magento bloqueado'];
   if (r.title.missing.length) return ['warn', `Faltan ${r.title.missing.length} datos`];
@@ -429,7 +429,7 @@ function evalItem(it, keep, resIn) {
   return { res, tag: statusOf(res), lang: langCount(L), ia: unconfirmed(it.ai), quality, canonical, health };
 }
 const tagsHTML = e => `<span class="tag tag--${e.tag[0]}">${esc(e.tag[1])}</span>` + (e.quality.status !== 'listo' ? ` <span class="tag tag--${e.quality.status === 'critico' ? 'bad' : 'warn'}">Calidad: ${e.quality.counts.error} errores / ${e.quality.counts.warning} avisos</span>` : '') + (e.lang ? ` <span class="tag tag--warn">Revisar lenguaje</span>` : '') + (e.ia ? ` <span class="tag tag--ai">IA sin confirmar</span>` : '') + (e.canonical?.schema ? ` <span class="tag tag--quiet" title="Modelo canónico ${esc(e.canonical.version || '')}">Modelo canónico</span>` : '');
-const passFilter = (e, f) => f === 'todos' || (UX.isUxFilter(f) && UX.passUx(e, f)) || (f === 'faltantes' && e.res.title.missing.length) || (f === 'bloqueados' && e.res.mg.blocked) || (f === 'lenguaje' && e.lang) || (f === 'calidad' && e.quality.status !== 'listo') || (f === 'anomalías' && state.anomalies.some(a => a.indexes.includes(e.__index))) || (f === 'ia' && e.ia) || (f === 'seo_critico' && e.seo && e.seo.status === 'critico') || (f === 'seo_revisar' && e.seo && e.seo.status === 'revisar') || (f === 'seo_pendiente' && e.seo && e.seo.status === 'pendiente') || (f === 'seo_sin_evaluar' && (!e.seo || e.seo.status === 'sin_evaluar')) || (f === 'c360_critico' && Score360.isCritical360(e.s360)) || (f === 'contenido_critico' && e.content && e.content.status === 'critico') || (f === 'mag_bloqueado' && e.magento && e.magento.state === 'BLOCKED') || (f === 'mag_listo' && e.magento && e.magento.state === 'READY') || (f === 'mag_advertencias' && e.magento && e.magento.state === 'READY_WITH_WARNINGS');
+const passFilter = (e, f) => f === 'todos' || (UX.isUxFilter(f) && UX.passUx(e, f)) || (f === 'completos' && !e.res.title.missing.length) || (f === 'faltantes' && e.res.title.missing.length) || (f === 'bloqueados' && e.res.mg.blocked) || (f === 'lenguaje' && e.lang) || (f === 'calidad' && e.quality.status !== 'listo') || (f === 'anomalías' && state.anomalies.some(a => a.indexes.includes(e.__index))) || (f === 'ia' && e.ia) || (f === 'seo_critico' && e.seo && e.seo.status === 'critico') || (f === 'seo_revisar' && e.seo && e.seo.status === 'revisar') || (f === 'seo_pendiente' && e.seo && e.seo.status === 'pendiente') || (f === 'seo_sin_evaluar' && (!e.seo || e.seo.status === 'sin_evaluar')) || (f === 'c360_critico' && Score360.isCritical360(e.s360)) || (f === 'contenido_critico' && e.content && e.content.status === 'critico') || (f === 'mag_bloqueado' && e.magento && e.magento.state === 'BLOCKED') || (f === 'mag_listo' && e.magento && e.magento.state === 'READY') || (f === 'mag_advertencias' && e.magento && e.magento.state === 'READY_WITH_WARNINGS');
 
 /* Fase 9: Content, Magento Readiness y Score 360. Solo combinan resultados; no vuelven a validar los datos. */
 const expForReadiness = () => (state.exp ? expOpts() : {});
@@ -571,16 +571,17 @@ function renderLote() {
   const healthSummary = Health.summarize(all.map(x => x.e));
   const seoSum = assessed.seoSum;
   const { contentSum, magSum, s360Sum } = assessed;
-  const cnt = {}; [...Object.keys(FILTERS), ...Object.keys(UX.PRIMARY_FILTERS)].forEach(k => { cnt[k] = all.filter(x => passFilter(x.e, k)).length; });
+  const cnt = {}; [...Object.keys(FILTERS), ...Object.keys(UX.PRIMARY_FILTERS), ...Object.keys(UX.MORE_FILTERS)].forEach(k => { cnt[k] = all.filter(x => passFilter(x.e, k)).length; });
   const rows = all.filter(x => passFilter(x.e, state.loteFilter));
   const shown = rows.slice(0, state.loteShown);
   const auditRows = state.audit.slice(-8).reverse().map(x => `<li><strong>${esc(String(x.action || '').replaceAll('_', ' '))}</strong> · ${esc(x.sku || 'sin SKU')} · ${esc(new Date(x.at).toLocaleString())}</li>`).join('');
-  const filterLabel = k => (UX.PRIMARY_FILTERS[k] || FILTERS[k] || '');
+  const filterLabel = k => (UX.PRIMARY_FILTERS[k] || UX.MORE_FILTERS[k] || FILTERS[k] || '');
   const primary = Object.entries(UX.PRIMARY_FILTERS).map(([k, l]) => {
     const n = cnt[k], off = k !== 'todos' && !n && state.loteFilter !== k;
     return `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.loteFilter === k}"${off ? ' disabled' : ''}>${esc(l)} (${n})</button>`;
   }).join('');
-  const legacy = Object.entries(FILTERS).filter(([k]) => k !== 'todos').map(([k, l]) =>
+  const more = Object.entries(UX.MORE_FILTERS).map(([k, l]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.loteFilter === k}"${!cnt[k] && state.loteFilter !== k ? ' disabled' : ''}>${esc(l)} (${cnt[k]})</button>`).join('');
+  const legacy = more + Object.entries(FILTERS).filter(([k]) => k !== 'todos').map(([k, l]) =>
     `<button type="button" class="chip" data-filter="${k}" aria-pressed="${state.loteFilter === k}">${esc(l)} (${k === 'anomalías' ? anomalySummary.total : cnt[k]})</button>`).join('');
   const legacyActive = !UX.PRIMARY_FILTERS[state.loteFilter] && state.loteFilter !== 'todos';
   const anomTags = e => state.anomalies.filter(a => a.indexes.includes(e.__index)).map(a => `<span class="tag tag--${a.severity === 'error' ? 'bad' : 'warn'}">${esc(a.type === 'duplicate-sku' ? 'SKU duplicado' : a.type === 'duplicate-title' ? 'Título duplicado' : a.type === 'near-duplicate-sku' ? 'SKU similar' : a.type === 'near-duplicate-title' ? 'Título similar' : 'Dato pendiente')}</span>`).join(' ') || '<span class="hint">—</span>';
