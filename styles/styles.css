@@ -552,3 +552,51 @@ input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)
 .bk-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}.bk-sel{margin-right:6px;vertical-align:middle}
 .bulk-dlg{max-width:760px;max-height:92vh;overflow:auto}.bulk-form{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px}.bulk-form .field{min-width:200px;flex:1}
 .bulk-form select,.bulk-form input[type=text]{width:100%;margin:0}.bulk-prev{max-height:38vh;overflow:auto;margin:0 0 10px}.bulk-reg{display:block;margin:0 0 10px}
+
+/* Campana fija: se queda arriba al bajar; solo su lista se desplaza */
+.bell-wrap{position:fixed;top:12px;right:calc(116px + 16px);z-index:55}
+.bell-wrap #bell{background:var(--surface);box-shadow:var(--shadow-tile,0 2px 10px rgba(20,32,43,.15))}
+.bell-pop{max-height:min(70vh,calc(100vh - 84px));overscroll-behavior:contain;padding:0}
+.bell-pop>p.hint{padding:12px 14px;margin:0}
+.bell-tabs{position:sticky;top:0;z-index:1;display:flex;gap:4px;padding:8px 10px;background:var(--surface,#fff);border-bottom:1px solid var(--line,#e4e7ec)}
+.bell-tab{font:600 12px var(--font,inherit);border:0;border-radius:6px;padding:5px 9px;background:var(--surface-2,rgba(127,127,127,.12));color:var(--muted,#555);cursor:pointer}
+.bell-tab[aria-pressed=true]{background:var(--accent);color:#fff}.bell-tab[disabled]{opacity:.45;cursor:default}
+.bell-c{opacity:.85}.bell-body{padding:10px 14px 12px}
+@media (max-width:720px){.bell-wrap{right:calc(64px + 10px);top:8px}.bell-t{display:none}}
+@media (min-width:721px){.pbar{padding-right:190px}}
+@media (max-width:720px){.pbar{padding-right:84px}}
+
+/* Lote compacto y panel de detalle */
+.pager{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}.pager .spacer,.bk-bar .spacer{flex:1}.pager select{margin:0 4px}
+.lote-table--compact td,.lote-table--compact th{padding-top:6px;padding-bottom:6px}
+.lote-table--compact td.t{max-width:34ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lote-table--compact .lmetrics{display:flex;gap:8px;flex-wrap:wrap;white-space:nowrap;font-size:12px}
+.lote-table--compact .tag--quiet{display:none}
+.lote-drawer{position:fixed;top:0;bottom:0;right:116px;width:min(460px,calc(100vw - 140px));z-index:58;background:var(--surface,#fff);border-left:1px solid var(--line,#d0d5dd);box-shadow:-8px 0 30px rgba(20,32,43,.18);display:flex;flex-direction:column}
+.lote-drawer[hidden]{display:none}
+.ld-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--line,#e4e7ec)}
+.ld-body{padding:12px 16px 24px;overflow:auto;overscroll-behavior:contain}
+@media (max-width:720px){.lote-drawer{display:none}}
+
+.lote-table--compact td{white-space:nowrap;vertical-align:middle}.lote-table--compact td.ops{white-space:nowrap}.lote-table--compact td.ops>*{vertical-align:middle}
+.lote-table--compact td.cat{text-align:center;font-size:16px}
+.lote-table--compact .status{padding:2px 8px;font-size:11px}.lote-table--compact td[data-label="Estado"] .tag{margin:0 2px;font-size:11px;padding:1px 6px}
+.lote-table--compact .lmetrics{flex-wrap:nowrap}
+.rowmenu{position:relative}.rowmenu summary{list-style:none;cursor:pointer}.rowmenu summary::-webkit-details-marker{display:none}
+.rowmenu-pop{position:absolute;right:0;top:100%;z-index:20;display:flex;flex-direction:column;gap:2px;min-width:130px;padding:6px;background:var(--surface,#fff);border:1px solid var(--line,#d0d5dd);border-radius:8px;box-shadow:0 8px 24px rgba(20,32,43,.18)}
+@media (max-width:720px){.lote-table--compact td{white-space:normal}.rowmenu-pop{position:static;box-shadow:none;border:0;padding:0;flex-direction:row;flex-wrap:wrap}}
+.lote-table--compact td[data-label="Estado"]{white-space:normal;max-width:210px;line-height:1.5}
+.lote-table--compact td.t{max-width:24ch}
+.lote-table--compact td[data-label="Avisos"]{white-space:normal;max-width:110px}
+@media (max-width:720px){.lote-table--compact td[data-label="Estado"],.lote-table--compact td[data-label="Avisos"]{max-width:none}}
+
+/* Catálogo: bandeja, herramientas y detalle */
+.cat-inbox{border:1px solid var(--line,#d0d5dd);border-radius:10px;padding:12px 14px;margin:0 0 12px;background:var(--surface,#fff)}.cat-inbox h3{margin:0 0 2px}
+.cat-ask{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line,#e4e7ec)}.cat-ask .ops{display:flex;gap:6px;flex-wrap:wrap}
+.cat-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}.cat-tools input[type=search]{min-width:220px;margin:0}
+.cat-d>div{margin:6px 0}.cat-d .ops{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+tr.cat-detail td{background:var(--surface-2,#f4f6f6);white-space:normal}
+
+.lgroup{border:1px solid var(--line,#d0d5dd);border-radius:10px;margin:0 0 10px;background:var(--surface,#fff)}
+.lgroup>summary{cursor:pointer;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.lgroup .tablewrap{padding:0 6px 6px}

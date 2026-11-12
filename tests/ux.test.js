@@ -417,7 +417,7 @@ test('botones: todo botón del HTML tiene un handler y todo data-* generado tien
     else if (!id && data && !['tab', 'nav'].includes(data) && !new RegExp(`dataset\\.${camel(data)}\\b|data-${data}`).test(src)) dead.push('data:' + data);
   }
   assert.deepEqual(dead, []);
-  for (const k of ['goto', 'evalgo', 'approve', 'revoke', 'toggle', 'fix', 'navGo', 'del', 'edit', 'filter', 'more']) assert.match(app, new RegExp(`dataset\\.${k}\\b`), k);
+  for (const k of ['goto', 'evalgo', 'approve', 'revoke', 'toggle', 'fix', 'navGo', 'del', 'edit', 'filter', 'page']) assert.match(app, new RegExp(`dataset\\.${k}\\b`), k);
 });
 
 test('botones: copiar y descargar usan protección de doble clic y confirmación en acciones destructivas', () => {

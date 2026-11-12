@@ -184,7 +184,7 @@ test('SEO: lote con promedio, mínimo, máximo y filtros por estado', { skip }, 
   assert.match(a.d.querySelector('.seo-health').textContent, /Mínimo \d+, máximo \d+/);
   const chips = [...a.d.querySelectorAll('.chip')].map(c => c.textContent);
   for (const t of ['SEO crítico', 'SEO por revisar', 'SEO pendiente', 'SEO sin evaluar']) assert.ok(chips.some(c => c.startsWith(t)), t);
-  assert.ok(a.rows().every(r => /SEO \d+/.test(r.textContent)), 'cada fila lleva su SEO');
+  assert.ok(a.rows().every(r => /\d+/.test((r.querySelector('.lmetrics span[title="SEO"]') || {}).textContent || '')), 'cada fila lleva su SEO');
   const chip = a.d.querySelector('[data-filter="seo_revisar"]');
   const n = Number(chip.textContent.match(/\((\d+)\)/)[1]);
   chip.click();
