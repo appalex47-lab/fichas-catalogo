@@ -53,23 +53,23 @@ test('lote: al agregar un producto la tabla se pinta y no hay errores de ejecuci
   const a = boot();
   a.addMed('A1', 'Tempra', '30');
   assert.equal(a.count(), '1');
-  assert.equal(a.rows().length, 1, 'la tabla del lote debe mostrar la fila');
+  assert.equal(a.rows().length, 1, 'la tabla de Productos debe mostrar la fila');
   assert.match(a.titles()[0], /Tempra 500 mg/);
   assert.deepEqual(a.errors, []);
 });
 
 test('lote: el estado de persistencia se actualiza al agregar y al vaciar', { skip }, async () => {
   const a = boot();
-  assert.match(a.status(), /vacío/);
+  assert.match(a.status(), /No hay productos/);
   a.addMed('A1', 'Tempra', '30');
   assert.match(a.status(), /1 producto\(s\)/);
-  assert.doesNotMatch(a.status(), /vacío/);
+  assert.doesNotMatch(a.status(), /No hay productos/);
   // Fase 10: eliminar un producto pide confirmación (antes se borraba al primer clic).
   const del = a.d.querySelector('[data-del]'); del.click();
   assert.match(a.status(), /1 producto\(s\)/, 'sin confirmar no se borra nada');
   a.d.querySelector('#confirm-dlg [data-cd="yes"]').click();
   await new Promise(r => setTimeout(r, 20));
-  assert.match(a.status(), /vacío/);
+  assert.match(a.status(), /No hay productos/);
 });
 
 test('lote: sobrevive a una recarga (localStorage)', { skip }, () => {
@@ -89,7 +89,7 @@ test('presentación: 1 va en singular y 30 en plural en título y lote', { skip 
   assert.match(t[1], /\| 30 tabletas \|/);
 });
 
-test('editar: el producto no sale del lote hasta guardar y no se pierde al recargar o limpiar', { skip }, () => {
+test('editar: el producto no sale de Productos hasta guardar y no se pierde al recargar o limpiar', { skip }, () => {
   const a = boot();
   a.addMed('E1', 'Tempra', '30'); a.addMed('E2', 'Dolofin', '20');
   a.d.querySelector('[data-edit]').click();
@@ -101,7 +101,7 @@ test('editar: el producto no sale del lote hasta guardar y no se pierde al recar
   // limpiar el formulario cancela la edición y conserva la versión anterior
   a.d.getElementById('clear').click();
   assert.equal(a.count(), '2');
-  assert.equal(a.d.getElementById('add').textContent, 'Agregar al lote');
+  assert.equal(a.d.getElementById('add').textContent, 'Agregar a Productos');
 });
 
 test('editar: guardar cambios reemplaza el producto en su misma posición, sin duplicarlo', { skip }, () => {
@@ -113,7 +113,7 @@ test('editar: guardar cambios reemplaza el producto en su misma posición, sin d
   assert.equal(a.count(), '2');
   assert.match(a.titles()[0], /Tempra Forte/);
   assert.match(a.titles()[1], /Dolofin/);
-  assert.equal(a.d.getElementById('add').textContent, 'Agregar al lote');
+  assert.equal(a.d.getElementById('add').textContent, 'Agregar a Productos');
   assert.deepEqual(a.errors, []);
 });
 
@@ -141,7 +141,7 @@ test('exportación Magento: descarga un CSV con la cabecera de 104 columnas', { 
   assert.equal(txt.split('\r\n')[0].split(',').length, 104);
 });
 
-test('carga masiva: agregar desde CSV pinta la tabla del lote', { skip }, async () => {
+test('carga masiva: agregar desde CSV pinta la tabla de Productos', { skip }, async () => {
   const a = boot();
   const hdr = a.w.Fichas.templateRows('med')[0];
   const base = { 'Categoría': 'Medicamentos', 'Concentración': '500 mg', 'Principio activo': 'Paracetamol', 'Forma farmacéutica': 'Tabletas', 'Laboratorio': 'Genomma', 'Vía de administración': 'Oral', '¿Requiere receta médica?': 'No' };

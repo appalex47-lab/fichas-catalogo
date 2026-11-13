@@ -612,3 +612,9 @@ tr.cat-detail td{background:var(--surface-2,#f4f6f6);white-space:normal}
 .cg-pre{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:10px;border-radius:8px;background:var(--surface-2,rgba(127,127,127,.1));font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto}
 .cg-prev{padding:8px 4px}.cg-prev h2{font-size:17px;margin:10px 0 4px}.cg-prev h3{font-size:14px;margin:8px 0 2px}.cg-prev ul{margin:4px 0 8px;padding-left:20px}
 .hint.over{color:var(--bad,#b3261e);font-weight:600}
+
+.cg-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px}.cg-bar .spacer{flex:1}
+.cg-editor{border:1px solid var(--line,#d0d5dd);border-radius:10px;background:var(--surface,#fff);margin:12px 0}
+.cg-editor[hidden]{display:none}
+.cg-editor.lote-drawer{margin:0;border-radius:0}
+.cg-editor .ld-body{padding-bottom:40px}

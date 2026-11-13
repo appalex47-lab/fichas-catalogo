@@ -3,7 +3,7 @@
  *
  * Este módulo NO es un segundo motor de reglas. Consume lo que ya existe en logic.js
  * (computeFor, lint, scanRed, COMERCIAL_RE, ALT_BAD_START_RE, TITLE_MAX, dupBrand, defMetaCat, CATS)
- * y en anomalies.js (duplicados del lote). Las reglas confirmadas se leen de esas fuentes; aquí solo se
+ * y en anomalies.js (duplicados de Productos). Las reglas confirmadas se leen de esas fuentes; aquí solo se
  * REGISTRAN (inventario), se VALIDAN contra los datos del producto y se PUNTÚAN.
  * Orden de la fase: primero existe la regla, después la validación, después el diagnóstico, después el score.
  *
@@ -121,7 +121,7 @@ const FAIL = (detalle, datos) => ({ estado: 'incumple', detalle, datos: datos ||
 const NA = motivo => ({ estado: 'no_aplica', motivo });
 const NO_TEXT = 'No hay texto que evaluar.';
 const NO_IMAGE = 'No evaluable — no hay imagen.';
-const NO_BATCH = 'Solo se evalúa dentro de un lote.';
+const NO_BATCH = 'Solo se evalúa dentro de un conjunto de productos.';
 const imageGate = c => (c.hasImage ? null : NA(NO_IMAGE));
 
 /* Evaluadores reutilizados por los tres bloques de meta/alt (misma regla, distinto campo). */
@@ -162,10 +162,10 @@ R('TIT-003', 'title', 'longitud', { descripcion: 'El título no supera el límit
   evaluar: c => !c.title.title ? NA(NO_TEXT) : c.title.title.length > F.TITLE_MAX ? FAIL(`${c.title.title.length} caracteres; el límite es ${F.TITLE_MAX}.`, { len: c.title.title.length, max: F.TITLE_MAX }) : OK(`${c.title.title.length} de ${F.TITLE_MAX} caracteres.`) });
 R('TIT-004', 'title', 'duplicacion', { descripcion: 'La marca no se repite dentro del título.', explicacion: 'No se duplica información en el título (se ignoran los segmentos de fabricante o laboratorio).', accion: 'Quita la marca repetida del nombre del producto.', fuente: 'logic.js: dupBrand', origen: ORIGEN.pTit + '; ' + ORIGEN.pMg, campo: 'title', peso: 3,
   evaluar: c => !c.title.title ? NA(NO_TEXT) : F.dupBrand(c.res) ? FAIL('La marca aparece más de una vez en el título.') : OK() });
-R('TIT-005', 'title', 'duplicacion', { descripcion: 'El título es único dentro del lote.', explicacion: 'Dos fichas con el mismo título normalizado son difíciles de distinguir.', accion: 'Diferencia los productos (presentación, concentración, variante) o elimina el duplicado.', fuente: 'anomalies.js: detectBatch (duplicate-title)', origen: ORIGEN.herr, campo: 'title', peso: 3,
-  evaluar: c => !c.batch ? NA(NO_BATCH) : !c.title.title ? NA(NO_TEXT) : c.anomalyTypes.has('duplicate-title') ? FAIL('Título normalizado repetido dentro del lote.') : OK() });
-R('TIT-006', 'title', 'duplicacion', { descripcion: 'El título no es casi idéntico a otro del lote.', explicacion: 'Informativo: títulos muy parecidos pueden ser variantes o un error de captura.', accion: 'Revisa si son productos distintos o variantes.', fuente: 'anomalies.js: detectBatch (near-duplicate-title)', origen: ORIGEN.herr, campo: 'title', severidad: 'info', peso: 0,
-  evaluar: c => !c.batch ? NA(NO_BATCH) : !c.title.title ? NA(NO_TEXT) : c.anomalyTypes.has('near-duplicate-title') ? FAIL('Hay un título muy similar en el lote.') : OK() });
+R('TIT-005', 'title', 'duplicacion', { descripcion: 'El título es único dentro de Productos.', explicacion: 'Dos fichas con el mismo título normalizado son difíciles de distinguir.', accion: 'Diferencia los productos (presentación, concentración, variante) o elimina el duplicado.', fuente: 'anomalies.js: detectBatch (duplicate-title)', origen: ORIGEN.herr, campo: 'title', peso: 3,
+  evaluar: c => !c.batch ? NA(NO_BATCH) : !c.title.title ? NA(NO_TEXT) : c.anomalyTypes.has('duplicate-title') ? FAIL('Título normalizado repetido dentro de Productos.') : OK() });
+R('TIT-006', 'title', 'duplicacion', { descripcion: 'El título no es casi idéntico a otro de Productos.', explicacion: 'Informativo: títulos muy parecidos pueden ser variantes o un error de captura.', accion: 'Revisa si son productos distintos o variantes.', fuente: 'anomalies.js: detectBatch (near-duplicate-title)', origen: ORIGEN.herr, campo: 'title', severidad: 'info', peso: 0,
+  evaluar: c => !c.batch ? NA(NO_BATCH) : !c.title.title ? NA(NO_TEXT) : c.anomalyTypes.has('near-duplicate-title') ? FAIL('Hay un título muy similar en Productos.') : OK() });
 R('TIT-007', 'title', 'duplicacion', { descripcion: 'No se repite el tipo que ya está en el nombre del producto (corrección automática).', explicacion: 'La herramienta omite el dato repetido; el valor original no se modifica.', accion: 'Ninguna: es una corrección automática.', fuente: 'logic.js: dedupeFields', origen: ORIGEN.pTit + '; ' + ORIGEN.pMg, campo: 'title', efecto: 'corrige', severidad: 'info',
   evaluar: c => { const om = c.res.title.segs.flatMap(s => s.omitted || []); return OK(om.length ? `Se omitió por repetirse: ${om.join(', ')}.` : ''); } });
 R('TIT-008', 'title', 'estructura', { descripcion: 'Unidades, mayúsculas y abreviaturas se normalizan (corrección automática).', explicacion: 'Las unidades no se convierten: se respeta la que trae el dato.', accion: 'Ninguna: es una corrección automática.', fuente: 'logic.js: values, normUnits, fixCaps, expandPres', origen: ORIGEN.pTit + '; ' + ORIGEN.pMc + '; ' + ORIGEN.pMg, campo: 'title', efecto: 'corrige', severidad: 'info',
@@ -189,8 +189,8 @@ for (const [comp, k, clase, P, label, what] of [['metaTitle', 'mt', 'meta_title'
   R(`${P}-005`, comp, 'estructura', { descripcion: `La estructura de ${label} no usa tokens desconocidos.`, explicacion: 'Un token desconocido se imprime vacío.', accion: 'Corrige la estructura en Ajustes, pestaña Magento.', fuente: 'logic.js: buildMeta (unknown)', origen: ORIGEN.seo, campo: comp, confirmacion: 'por-categoria', peso: 1, evaluar: c => !o(c).text && !(o(c).unknown || []).length ? NA(NO_TEXT) : unknownCheck(o(c)) });
   R(`${P}-006`, comp, 'claims', { descripcion: `${label[0].toUpperCase() + label.slice(1)} no contiene claims ni lenguaje subjetivo (solo en categorías sin estructura confirmada).`, explicacion: 'Se conserva el comportamiento actual: con estructura confirmada no se escanea la meta.', accion: 'Reescribe el texto sin el término señalado.', fuente: 'logic.js: scanRed, RED, COS_CLAIM; buildMeta', origen: ORIGEN.herr, campo: comp, confirmacion: 'por-categoria', peso: 2, evaluar: c => redCheck(c, o(c), true) });
   R(`${P}-007`, comp, 'claims', { descripcion: `${label[0].toUpperCase() + label.slice(1)} de medicamentos no usa lenguaje comercial (solo con estructura sin confirmar).`, explicacion: 'Los términos comerciales de la estructura de la agencia no se marcan cuando está confirmada.', accion: 'Confirma con Regulatorio que el término sea aceptable o quítalo.', fuente: 'logic.js: COMERCIAL_RE; buildMeta', origen: ORIGEN.reg, campo: comp, categorias: ['med'], confirmacion: 'por-categoria', peso: 1, evaluar: c => commercialCheck(c, o(c)) });
-  R(`${P}-008`, comp, 'duplicacion', { descripcion: `${label[0].toUpperCase() + label.slice(1)} es único dentro del lote.`, explicacion: 'Textos de meta idénticos en productos distintos no los diferencian.', accion: 'Diferencia los productos en los datos que alimentan la meta.', fuente: 'seo.js: evaluateBatch', origen: ORIGEN.tec, tipo: 'tecnica', campo: comp, confirmacion: 'por-categoria', peso: 2,
-    evaluar: c => !c.batch ? NA(NO_BATCH) : !o(c).text ? NA(NO_TEXT) : c.dupMeta[k] ? FAIL(`El mismo texto aparece en ${c.dupMeta[k]} producto(s) más del lote.`, { otros: c.dupMeta[k] }) : OK() });
+  R(`${P}-008`, comp, 'duplicacion', { descripcion: `${label[0].toUpperCase() + label.slice(1)} es único dentro de Productos.`, explicacion: 'Textos de meta idénticos en productos distintos no los diferencian.', accion: 'Diferencia los productos en los datos que alimentan la meta.', fuente: 'seo.js: evaluateBatch', origen: ORIGEN.tec, tipo: 'tecnica', campo: comp, confirmacion: 'por-categoria', peso: 2,
+    evaluar: c => !c.batch ? NA(NO_BATCH) : !o(c).text ? NA(NO_TEXT) : c.dupMeta[k] ? FAIL(`El mismo texto aparece en ${c.dupMeta[k]} producto(s) más de Productos.`, { otros: c.dupMeta[k] }) : OK() });
   R(`${P}-010`, comp, 'estructura', { descripcion: `${label[0].toUpperCase() + label.slice(1)} no tiene espacios, separadores ni caracteres problemáticos.`, explicacion: 'Defectos de formato objetivos.', accion: 'Corrige el dato de origen que produce el defecto.', fuente: 'seo.js: hygiene', origen: ORIGEN.tec, tipo: 'tecnica', campo: comp, peso: 2, evaluar: c => hygieneCheck(o(c)) });
 }
 
@@ -261,10 +261,10 @@ R('MAG-001', 'magento', 'magento', { descripcion: 'El producto tiene SKU.', expl
 R('MAG-002', 'magento', 'magento', { descripcion: 'Las comas internas de los textos se reemplazan por «;» al exportar (corrección automática).', explicacion: 'El contrato CSV de Magento no admite comas internas en los campos de texto.', accion: 'Ninguna: se aplica al exportar. Revisa el resultado en la prueba de carga.', fuente: 'logic.js: sanitizeMagentoCell, MAG_CONTRACT', origen: ORIGEN.batch, campo: 'metaDescription', efecto: 'corrige', severidad: 'info',
   evaluar: c => { const f = [['título (additional_attributes)', c.title.title], ['meta title', c.confirmed ? c.meta.mt.text : ''], ['meta description', c.confirmed ? c.meta.md.text : ''], ['alt', c.meta.alt.text]].filter(x => /,/.test(x[1])).map(x => x[0]); return OK(f.length ? `Se reemplazarán comas por «;» en: ${f.join(', ')}.` : ''); } });
 R('MAG-003', 'magento', 'magento', { descripcion: 'short_description lleva el mismo texto que la meta description.', explicacion: 'Igual que en el archivo de referencia; solo si la estructura de la categoría está confirmada.', accion: 'Ninguna.', fuente: 'logic.js: magentoBatch', origen: ORIGEN.seo, campo: 'metaDescription', efecto: 'documenta', severidad: 'info', evaluar: c => OK(c.confirmed ? '' : 'Sin estructura confirmada, short_description sale vacía.') });
-R('MAG-004', 'magento', 'magento', { descripcion: 'Los datos de IA sin confirmar están confirmados antes de exportar.', explicacion: 'Todo dato generado por IA queda marcado para confirmación humana y no se exporta hasta confirmarlo.', accion: 'Confirma o corrige los datos de IA en el lote.', fuente: 'logic.js: magentoBatch (ia); app.js: unconfirmed', origen: ORIGEN.herr, campo: 'ai', severidad: 'info', efecto: 'bloquea',
+R('MAG-004', 'magento', 'magento', { descripcion: 'Los datos de IA sin confirmar están confirmados antes de exportar.', explicacion: 'Todo dato generado por IA queda marcado para confirmación humana y no se exporta hasta confirmarlo.', accion: 'Confirma o corrige los datos de IA en Productos.', fuente: 'logic.js: magentoBatch (ia); app.js: unconfirmed', origen: ORIGEN.herr, campo: 'ai', severidad: 'info', efecto: 'bloquea',
   evaluar: c => Object.values(c.item.ai || {}).some(v => v === 'sugerido' || v === 'imagen') ? FAIL('Hay datos de IA sin confirmar: no se exporta hasta confirmarlos.') : OK() });
-R('MAG-005', 'magento', 'duplicacion', { descripcion: 'El SKU es único dentro del lote.', explicacion: 'Con SKU repetido, Magento conserva solo el último.', accion: 'Corrige el SKU repetido.', fuente: 'anomalies.js: detectBatch (duplicate-sku)', origen: ORIGEN.herr, campo: 'sku', severidad: 'error',
-  evaluar: c => !c.batch ? NA(NO_BATCH) : !c.sku ? NA('Sin SKU.') : c.anomalyTypes.has('duplicate-sku') ? FAIL('SKU repetido dentro del lote.') : OK() });
+R('MAG-005', 'magento', 'duplicacion', { descripcion: 'El SKU es único dentro de Productos.', explicacion: 'Con SKU repetido, Magento conserva solo el último.', accion: 'Corrige el SKU repetido.', fuente: 'anomalies.js: detectBatch (duplicate-sku)', origen: ORIGEN.herr, campo: 'sku', severidad: 'error',
+  evaluar: c => !c.batch ? NA(NO_BATCH) : !c.sku ? NA('Sin SKU.') : c.anomalyTypes.has('duplicate-sku') ? FAIL('SKU repetido dentro de Productos.') : OK() });
 R('MAG-006', 'magento', 'magento', { descripcion: 'El CSV mantiene las 104 columnas del formato Batch y el contrato de comas y saltos de línea.', explicacion: 'Se valida antes de descargar.', accion: 'Ninguna.', fuente: 'logic.js: MAG_HEADER, MAG_CONTRACT, validateMagentoExport', origen: ORIGEN.batch, campo: 'csv', efecto: 'bloquea', severidad: 'info' });
 R('CAT-001', 'metaTitle', 'confirmacion', { descripcion: 'Solo medicamentos viene con la estructura de meta confirmada; las demás categorías son provisionales hasta que se confirmen.', explicacion: 'Estado inicial documentado; se cambia con la casilla de confirmación por categoría.', accion: 'Confirma cada categoría con la agencia de SEO.', fuente: 'logic.js: defMetaCat (confirmed: id === "med")', origen: ORIGEN.seo, campo: 'metaTitle', efecto: 'documenta', severidad: 'info' });
 
@@ -385,7 +385,7 @@ function evaluate(item, o) {
   };
 }
 
-/* Evalúa un lote. Opciones: keep, metaCfg, resList (computeFor por producto, opcional), anomalies (opcional). */
+/* Evalúa un conjunto de productos. Opciones: keep, metaCfg, resList (computeFor por producto, opcional), anomalies (opcional). */
 function evaluateBatch(items, o) {
   o = o || {};
   const list = Array.isArray(items) ? items : [];

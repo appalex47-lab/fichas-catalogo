@@ -81,3 +81,61 @@ test('categorías: avisa si se parece mucho a otra guardada y viaja en el respal
   await b.restore(file);
   assert.match(b.text('#bk-status'), /categorías: 0 agregadas, 2 ya estaban/);
 });
+
+test('categorías: la lista muestra el estado de cada una y los filtros cuentan', { skip }, async () => {
+  const a = boot();
+  type(a, 'cg-nombre', 'Analgésicos'); a.d.getElementById('cg-save').click();
+  a.d.getElementById('cg-new').click();
+  type(a, 'cg-nombre', 'Gastroenterología'); type(a, 'cg-incluye', 'medicamentos para el aparato digestivo y la digestión de adultos en distintas presentaciones de uso común en farmacia');
+  a.d.getElementById('cg-save').click();
+  const estado = nombre => a.text(`#cg-list tr:has(b)`) && [...a.d.querySelectorAll('#cg-list tbody tr')].find(r => r.textContent.includes(nombre)).querySelector('.status').textContent;
+  assert.equal(estado('Analgésicos'), 'Con avisos', 'sin «Qué incluye» hay avisos');
+  assert.match(a.text('#cg-filters'), /Todas \(2\)/);
+  assert.match(a.text('#cg-filters'), /Con avisos \(1\)/, 'un texto corto solo informa y no deja la categoría con avisos');
+  assert.match(a.text('#cg-filters'), /Listas \(1\)/);
+  a.d.querySelector('#cg-filters [data-cgfilter="c"]').click();
+  assert.match(a.text('#cg-list'), /Ninguna categoría coincide/);
+  a.d.querySelector('#cg-filters [data-cgfilter="todas"]').click();
+  assert.equal(a.d.querySelectorAll('#cg-list tbody tr').length, 2);
+});
+
+test('categorías: «Ya la cargué a Magento» marca la categoría y avisa si cambia después', { skip }, async () => {
+  const a = boot();
+  type(a, 'cg-nombre', 'Gastroenterología'); type(a, 'cg-incluye', 'medicamentos para el aparato digestivo');
+  const done = a.d.getElementById('cg-done');
+  done.checked = true; done.dispatchEvent(new a.w.Event('change', { bubbles: true }));
+  assert.equal(saved(a).length, 1, 'marcar guarda la categoría');
+  assert.equal(a.d.querySelector('#cg-list .status').textContent, 'Cargada a Magento');
+  assert.ok(saved(a)[0].cargada);
+  type(a, 'cg-incluye', 'medicamentos del aparato digestivo y la digestión');
+  a.d.getElementById('cg-save').click();
+  assert.equal(a.d.querySelector('#cg-list .status').textContent, 'Cambió después de cargar');
+  assert.equal(a.d.getElementById('cg-done').checked, false);
+  done.checked = true; done.dispatchEvent(new a.w.Event('change', { bubbles: true }));
+  assert.equal(a.d.querySelector('#cg-list .status').textContent, 'Cargada a Magento');
+  done.checked = false; done.dispatchEvent(new a.w.Event('change', { bubbles: true }));
+  assert.notEqual(a.d.querySelector('#cg-list .status').textContent, 'Cargada a Magento');
+  assert.deepEqual(a.errors, []);
+});
+
+test('categorías: el editor se abre con «Nueva categoría» o al abrir una, y se cierra', { skip }, async () => {
+  const a = boot();
+  assert.equal(a.d.getElementById('cg-editor').hidden, false, 'sin categorías guardadas el editor está abierto');
+  type(a, 'cg-nombre', 'Analgésicos'); a.d.getElementById('cg-save').click();
+  a.d.getElementById('cg-close').click();
+  assert.equal(a.d.getElementById('cg-editor').hidden, true);
+  a.d.getElementById('cg-new').click();
+  assert.equal(a.d.getElementById('cg-editor').hidden, false);
+  assert.equal(a.d.getElementById('cg-nombre').value, '');
+  a.d.getElementById('cg-close').click();
+  a.d.querySelector('#cg-list [data-cgopen]').click();
+  assert.equal(a.d.getElementById('cg-nombre').value, 'Analgésicos');
+  assert.match(a.text('#cg-title'), /Analgésicos/);
+});
+
+test('categorías: en pantallas anchas el editor es un panel a la derecha', { skip }, async () => {
+  const a = boot();
+  a.w.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+  type(a, 'cg-nombre', 'Analgésicos'); a.d.getElementById('cg-save').click();
+  assert.equal(a.d.getElementById('cg-editor').classList.contains('lote-drawer'), true);
+});

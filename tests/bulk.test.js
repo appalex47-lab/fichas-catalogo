@@ -55,7 +55,7 @@ test('masivo: las sugerencias de Conocimiento se agrupan por cambio y no incluye
   assert.deepEqual([g[0].key, g[0].to, g[0].ids], ['laboratorio', 'Pisa', ['a', 'b']]);
 });
 
-test('masivo: vía y receta se proponen con la evidencia del lote solo si todos coinciden', () => {
+test('masivo: vía y receta se proponen con la evidencia de Productos solo si todos coinciden', () => {
   const items = [med('a', { via: 'Oral' }), med('b', { via: 'oral' }), med('c', { via: '' }), med('d', { via: '', principio: 'Loratadina' })];
   const g = B.inferFromLote(items);
   const via = g.find(x => x.field === 'via');
@@ -65,7 +65,7 @@ test('masivo: vía y receta se proponen con la evidencia del lote solo si todos 
   assert.ok(!dis.some(x => x.field === 'via'), 'si el lote no coincide, no se propone');
 });
 
-test('masivo: la receta se propone igual que la vía y un cambio que contradice al lote se marca', () => {
+test('masivo: la receta se propone igual que la vía y un cambio que contradice a Productos se marca', () => {
   const items = [med('a', { receta: 'no' }), med('b', { receta: 'no' }), med('c', { receta: '' })];
   const g = B.inferFromLote(items).find(x => x.field === 'receta');
   assert.deepEqual([g.to, g.ids], ['no', ['c']]);

@@ -1,5 +1,5 @@
 /*
- * Cambios masivos del lote: correcciones sugeridas por Conocimiento y cambios que elige la persona.
+ * Cambios masivos de Productos: correcciones sugeridas por Conocimiento y cambios que elige la persona.
  * - Solo campos de una lista corta (laboratorio, marca, categoría de la tienda, forma, vía y receta). Sustancia activa,
  *   concentración y los textos de indicaciones nunca entran: se capturan producto por producto.
  * - Vía y receta son datos regulatorios: se proponen con la evidencia del propio lote, pero la interfaz exige confirmarlos.
@@ -131,7 +131,7 @@ function inferFromLote(items) {
   return out;
 }
 
-/* Al cambiar vía o receta a mano: los productos marcados que contradicen lo que dicen los demás del lote con el mismo principio, concentración y forma. */
+/* Al cambiar vía o receta a mano: los productos marcados que contradicen lo que dicen los demás de Productos con el mismo principio, concentración y forma. */
 function conflicts(items, ids, key, value) {
   if (key !== 'via' && key !== 'receta') return new Map();
   const set = new Set(ids), out = new Map();

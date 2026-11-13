@@ -11,7 +11,7 @@ test('respaldo: hay una sola sección para respaldar y ya no hay botones sueltos
   for (const id of ['lote-backup', 'lote-restore', 'k-backup', 'k-restore', 'cat-export', 'cat-import', 'cat-import-btn']) assert.equal(a.d.getElementById(id), null, id);
   assert.ok(a.d.getElementById('respaldo'));
   assert.equal(a.text('[data-nav="respaldo"] .mnav-t'), 'Respaldo');
-  assert.ok(a.d.getElementById('lote-clear'), '«Vaciar lote» se queda en el lote');
+  assert.ok(a.d.getElementById('lote-clear'), '«Vaciar productos» se queda en Productos');
   a.d.querySelector('[data-nav="respaldo"]').click(); await wait(200);
   assert.deepEqual([...a.d.querySelectorAll('#bk-parts input')].map(c => c.dataset.bkpart), ['lote', 'catalogo', 'conocimiento', 'clasif', 'categorias', 'ajustes']);
 });
@@ -73,6 +73,6 @@ test('respaldo: el diccionario ATC se une sin bajar filas verificadas y los arch
   await a.restore(viejo);
   assert.match(a.text('#bk-status'), /catálogo: 1 nuevos/);
   await a.restore({ schema: 'fichas.lote-backup.v1', createdAt: 'x', lote: [], audit: [] });
-  assert.match(a.text('#bk-status'), /lote: 0 agregados/);
+  assert.match(a.text('#bk-status'), /productos: 0 agregados/);
 });
 function B_(clasif) { return { schema: 'fichas.backup.v2', createdAt: new Date().toISOString(), parts: { clasif } }; }

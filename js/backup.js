@@ -8,10 +8,10 @@
 
 const SCHEMA = 'fichas.backup.v2';
 const PARTS = Object.freeze(['lote', 'catalogo', 'conocimiento', 'clasif', 'categorias', 'ajustes']);
-const LABEL = Object.freeze({ lote: 'Lote', catalogo: 'Catálogo interno', conocimiento: 'Conocimiento aprendido', clasif: 'Diccionario ATC', categorias: 'Categorías de la tienda', ajustes: 'Ajustes' });
+const LABEL = Object.freeze({ lote: 'Productos', catalogo: 'Vínculos', conocimiento: 'Conocimiento aprendido', clasif: 'Diccionario ATC', categorias: 'Categorías de la tienda', ajustes: 'Ajustes' });
 const HINT = Object.freeze({
-  lote: 'Productos, trazabilidad y aprobaciones',
-  catalogo: 'Productos, vínculos y alternativas a mano',
+  lote: 'Productos guardados, trazabilidad y aprobaciones',
+  catalogo: 'Catálogo interno: productos con SKU, vínculos y alternativas a mano',
   conocimiento: 'Marcas, laboratorios, alias, relaciones y correcciones',
   clasif: 'Principios activos con su código y verificación',
   categorias: 'Las categorías que has optimizado, con sus datos',
@@ -27,7 +27,7 @@ function build(parts, info) {
   return out;
 }
 
-/* Reconoce el archivo. Acepta el formato nuevo y los tres anteriores: respaldo del lote, catálogo para compartir y respaldo de conocimiento. */
+/* Reconoce el archivo. Acepta el formato nuevo y los tres anteriores: respaldo de Productos, catálogo para compartir y respaldo de conocimiento. */
 function detect(data) {
   if (!isObj(data)) return null;
   const parts = {};

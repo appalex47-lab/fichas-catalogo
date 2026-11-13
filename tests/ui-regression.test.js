@@ -6,7 +6,7 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 
-test('UI: controles de copia, descarga y respaldo del lote existen', () => {
+test('UI: controles de copia, descarga y respaldo de Productos existen', () => {
   for (const id of ['lote-copy','lote-dl','bk-dl','bk-pick','bk-file','exp-copy','exp-dl','mc-dl','mc-copy','doc-dl']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(app, /function manualCopyDialog/);
   assert.match(app, /function saveFile\(filename, data, mime\)/);
@@ -37,7 +37,7 @@ test('UI: documenta la limitación de almacenamiento al abrir ZIP como file', ()
 });
 
 
-test('UI: render del lote tiene disponible el Health Score y la presentación entra al título', () => {
+test('UI: render de Productos tiene disponible el Health Score y la presentación entra al título', () => {
   assert.match(app, /const Health = window\.FichasHealth/);
   assert.match(app, /Health\.scoreReport/);
   const logic = fs.readFileSync(path.join(root, 'js', 'logic.js'), 'utf8');
@@ -46,7 +46,7 @@ test('UI: render del lote tiene disponible el Health Score y la presentación en
 });
 
 test('UI: app.js no usa constantes de logic.js sin importarlas (regresión MAG_HEADER)', () => {
-  // renderExport() se ejecuta dentro de renderLote(); una referencia no definida impedía pintar la tabla del lote.
+  // renderExport() se ejecuta dentro de renderLote(); una referencia no definida impedía pintar la tabla de Productos.
   assert.doesNotMatch(app, /(?<![.\w])MAG_HEADER\b/);
   assert.match(app, /ex\.header\.length/);
 });

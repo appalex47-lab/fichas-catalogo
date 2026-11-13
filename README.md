@@ -34,14 +34,14 @@ Luego arma el CSV que se carga en Magento. No inventa información y no cambia l
 1. Elige la categoría.
 2. Captura los campos, o extrae desde datos crudos y revisa lo que se llenó.
 3. Revisa las pestañas Título, Merchant Center, Magento y Meta y alt. Los avisos te dicen qué falta o qué palabras revisar.
-4. Pulsa "Agregar al lote".
+4. Pulsa "Agregar a Productos".
 
 ### Cómo se usa, muchos productos a la vez
 
 1. En "Carga masiva" descarga la plantilla de la categoría.
 2. Llénala con una fila por producto y súbela.
 3. La herramienta muestra qué filas están completas, cuáles tienen faltantes y cuáles no se pueden generar.
-4. Agrega las filas al lote.
+4. Agrega las filas a Productos.
 
 ### Cómo obtener el archivo para Magento
 
@@ -54,15 +54,15 @@ Luego arma el CSV que se carga en Magento. No inventa información y no cambia l
 La herramienta funciona completa sin IA. Si agregas tu llave de Cohere en Ajustes (engrane), pestaña IA, suma cuatro cosas. Sin llave, los botones de IA avisan que falta agregarla:
 
 1. **Completar datos crudos.** Primero corren las reglas. Luego la IA completa marca, principio activo (solo si aparece en el texto), laboratorio, producto, tipo y similares. La herramienta verifica cada dato contra el texto original y descarta el que no pueda comprobar. Concentración, volumen, forma, presentación, vía y receta los procesan siempre las reglas.
-2. **Sugerencias.** Si la marca, el laboratorio o el tipo no aparecen en el texto, la IA puede sugerirlos. Se muestran aparte, los aplicas tú y quedan marcados como «IA sugerido». En el lote aparecen como «IA sin confirmar» y no se exportan a Magento hasta que pulses «Confirmar IA» (o actives la opción en Exportar). La IA nunca sugiere principio activo, receta ni concentración.
+2. **Sugerencias.** Si la marca, el laboratorio o el tipo no aparecen en el texto, la IA puede sugerirlos. Se muestran aparte, los aplicas tú y quedan marcados como «IA sugerido». En Productos aparecen como «IA sin confirmar» y no se exportan a Magento hasta que pulses «Confirmar IA» (o actives la opción en Exportar). La IA nunca sugiere principio activo, receta ni concentración.
 3. **Fotos del empaque.** En «Rellenar desde datos crudos» puedes agregar hasta 3 fotos del producto. Un modelo de Cohere con visión lee marca, producto, tipo, contenido, fabricante y, en cosméticos, ingredientes, beneficios, características declaradas, modo de uso, precauciones y FPS.
    - **Revisión:** ves lo leído junto a la transcripción exacta que hizo la IA, corriges lo que haga falta y aplicas solo lo que coincide con la foto. Los datos con números se señalan para revisarlos con más cuidado.
    - **Comprobaciones:** cada valor debe ser coherente con la transcripción, y ingredientes, modo de uso y precauciones deben ser una copia literal de ella. Lo ilegible se descarta y nunca se completa. La IA no puede indicar si un producto requiere receta.
-   - **Sin confirmar:** lo aplicado queda marcado como «IA foto» y «IA sin confirmar», y no se exporta a Magento hasta que lo confirmes en el lote.
+   - **Sin confirmar:** lo aplicado queda marcado como «IA foto» y «IA sin confirmar», y no se exporta a Magento hasta que lo confirmes en Productos.
    - **Privacidad:** las fotos se reducen en el navegador (máximo 1600 px), se envían solo a Cohere y no se guardan.
 4. **Asistente de uso.** Un chat que resuelve dudas de dos maneras:
    - **Sin IA:** lo que depende de tu pantalla (por qué se bloquea Magento, qué falta para el título o para exportar, por qué no se exportan algunas filas, qué significa cada aviso, cuánta cuota llevas) se calcula con los datos de la herramienta. Es instantáneo, siempre coincide con lo que ves y no gasta llamadas. Junto a cada aviso, bloqueo o motivo de exclusión hay un botón **¿Por qué?** que abre el asistente con esa explicación.
-   - **Con IA:** las preguntas abiertas se consultan al manual con Cohere, con un modelo más ligero que el de extracción (configurable). Recibe tu pregunta y un resumen del estado de la pantalla (categoría, claves de campos, faltantes, avisos y conteos del lote), sin los valores de los productos.
+   - **Con IA:** las preguntas abiertas se consultan al manual con Cohere, con un modelo más ligero que el de extracción (configurable). Recibe tu pregunta y un resumen del estado de la pantalla (categoría, claves de campos, faltantes, avisos y conteos de Productos), sin los valores de los productos.
    - **Botones de acción:** las respuestas pueden traer botones para ir a un campo, abrir una pestaña de Ajustes, filtrar el lote o ir a una sección. Solo existen las acciones de una lista cerrada, y solo se ejecutan cuando las pulsas. Si la IA propone una acción fuera de la lista o un campo que no existe, se descarta.
    - **Conteo de llamadas:** en Ajustes, pestaña IA, se muestran las llamadas a Cohere de este mes desde este navegador, cuántas respuestas se resolvieron sin IA y el porcentaje de tu límite mensual, con aviso al llegar al 80%. El conteo es solo de este navegador: la cuota real depende de tu llave.
 
@@ -195,11 +195,11 @@ Con la opción «Llenar productos relacionados, alternativas y compatibles» (Ex
 - **Alternativas** (`upsell_skus`): medicamentos con el mismo principio activo, la misma concentración, la misma forma y presentación y la misma condición de receta, de otra marca. Una concentración o presentación distinta nunca es alternativa. Se aplica también a medicamentos con receta.
 - **Relacionados** (`related_skus`): de la misma categoría y la misma marca, o el mismo laboratorio o fabricante, que no sean alternativas. Primero los de la misma marca.
 - **Compatibles** (`crosssell_skus`): los SKU que captures en «Insumos compatibles (SKU)» de dispositivos médicos y accesorios, separados por coma. Nunca se deducen.
-- Máximo 4 alternativas y 4 relacionados por producto. En el lote, el detalle de cada producto muestra lo que se exportaría.
+- Máximo 4 alternativas y 4 relacionados por producto. En Productos, el detalle de cada producto muestra lo que se exportaría.
 
 ## Catálogo interno y complementos
 
-Los productos con SKU que guardas quedan también en un **catálogo interno**, aparte del lote: vaciar el lote no lo borra. Se ve en la sección «Catálogo» (botón del riel). Se guarda en este navegador y viaja dentro del respaldo del lote.
+Los productos con SKU que guardas quedan también en un **catálogo interno**, aparte de Productos: vaciar el lote no lo borra. Se ve en la sección «Catálogo» (botón del riel). Se guarda en este navegador y viaja dentro del respaldo de Productos.
 
 Título de medicamentos: si la forma es de pieza (cápsulas, tabletas, comprimidos, grageas, parches, supositorios…) y la presentación trae solo el conteo («Caja con 28 piezas» o «28»), el título dice «28 cápsulas». Líquidos, inyectables y presentaciones con varios blísteres siguen como «Forma, Presentación».
 
@@ -209,22 +209,24 @@ Título de suplementos: el sabor va antes de la presentación, la presentación 
 
 Tablas en Magento (información nutrimental, especificaciones técnicas, guía de tallas): llevan estilos en línea (`style="..."`) para verse como tabla —bordes, columnas alineadas, subfilas con sangría— aunque la plantilla de la tienda no les dé formato. También llevan los atributos clásicos de tabla (`border`, `cellpadding`, `align`) por si el editor quita el `style`. No usan un bloque `<style>`, porque el editor de Magento puede quitarlo. En suplementos la información nutrimental va al final, antes de las preguntas frecuentes.
 
-**Categorías de la tienda** (menú lateral): una categoría o subcategoría a la vez, sin árbol ni base de catálogo. Escribes el nombre, la categoría padre (opcional), el tipo (se sugiere por el nombre y lo puedes cambiar), «Qué incluye» y las subcategorías (una por línea; con «Nombre | enlace» salen enlazadas). Salen cinco piezas, cada una con su botón para copiar: meta title (hasta 60 caracteres), meta description (hasta 155), texto corto (va arriba, después del título de la categoría), texto largo con subcategorías y preguntas frecuentes sin JSON-LD (van hasta abajo). Todo con reglas fijas y sin IA; el nombre de la tienda sale de Ajustes. Revisa lenguaje de promesas, avisa si faltan datos o si el texto se parece mucho al de otra categoría guardada, y deja la nota de cada tipo («Consulte a su médico…», aviso de suplementos, etc.). «Medicamentos con receta» queda como tipo opcional, con texto neutro y provisional, y no se sugiere solo. Las categorías que guardas forman «Mis categorías» y viajan en el Respaldo. Los límites de longitud y la estructura vienen de guías de SEO de agencias, no de requisitos oficiales de Google.
+**Categorías de la tienda** (menú lateral): una categoría o subcategoría a la vez, sin árbol ni base de catálogo. Escribes el nombre, la categoría padre (opcional), el tipo (se sugiere por el nombre y lo puedes cambiar), «Qué incluye» y las subcategorías (una por línea; con «Nombre | enlace» salen enlazadas). Salen cinco piezas, cada una con su botón para copiar: meta title (hasta 60 caracteres), meta description (hasta 155), texto corto (va arriba, después del título de la categoría), texto largo con subcategorías y preguntas frecuentes sin JSON-LD (van hasta abajo). Todo con reglas fijas y sin IA; el nombre de la tienda sale de Ajustes. Revisa lenguaje de promesas, avisa si faltan datos o si el texto se parece mucho al de otra categoría guardada, y deja la nota de cada tipo («Consulte a su médico…», aviso de suplementos, etc.). «Medicamentos con receta» queda como tipo opcional, con texto neutro y provisional, y no se sugiere solo. Las categorías que guardas forman una **lista con su estado** —Con avisos, Lista, Cargada a Magento o Cambió después de cargar— con filtros que cuentan. «Nueva categoría» o «Abrir» muestran el editor (a la derecha en pantallas anchas, debajo de la lista en las angostas). «Ya la cargué a Magento» es una marca tuya, porque la herramienta no se conecta a Magento: si después cambias los datos, la categoría pasa a «Cambió después de cargar». La lista y las marcas viajan en el Respaldo. Los límites de longitud y la estructura vienen de guías de SEO de agencias, no de requisitos oficiales de Google.
 
-**Respaldo** (menú lateral): un solo lugar y un solo método para guardar, trasladar y compartir. «Descargar respaldo» genera un archivo con las partes que elijas: lote, catálogo interno, conocimiento aprendido, diccionario ATC y ajustes (estructuras de meta, marcas protegidas y opciones de exportación; nunca llaves de IA). «Cargar respaldo» reconoce lo que trae el archivo —también los archivos de versiones anteriores: respaldo del lote, catálogo para compartir y respaldo de conocimiento— y deja elegir, parte por parte, **unir** (suma sin borrar, por defecto), **reemplazar** (descarga antes un respaldo automático de lo actual) o no cargar. Los ajustes llegan como «No cargar». Unir el diccionario ATC nunca baja una fila verificada. Aquí también están «Descargar CSV» y «Copiar para hoja de cálculo» del lote. «Vaciar lote» se queda en el Lote. El CSV del diccionario ATC en Ajustes se queda porque sirve para editarlo en una hoja de cálculo.
+**Nombres de las secciones**: «Lote» se llama ahora **Productos** y «Catálogo» se llama **Vínculos** (el catálogo interno: productos con SKU, complementos, alternativas y relacionados). En el código y en los archivos de respaldo los nombres internos no cambian, así que los respaldos anteriores siguen funcionando. Donde esta documentación dice «lote», léase «Productos».
+
+**Respaldo** (menú lateral): un solo lugar y un solo método para guardar, trasladar y compartir. «Descargar respaldo» genera un archivo con las partes que elijas: lote, catálogo interno, conocimiento aprendido, diccionario ATC y ajustes (estructuras de meta, marcas protegidas y opciones de exportación; nunca llaves de IA). «Cargar respaldo» reconoce lo que trae el archivo —también los archivos de versiones anteriores: respaldo de Productos, catálogo para compartir y respaldo de conocimiento— y deja elegir, parte por parte, **unir** (suma sin borrar, por defecto), **reemplazar** (descarga antes un respaldo automático de lo actual) o no cargar. Los ajustes llegan como «No cargar». Unir el diccionario ATC nunca baja una fila verificada. Aquí también están «Descargar CSV» y «Copiar para hoja de cálculo» de Productos. «Vaciar productos» se queda en el Lote. El CSV del diccionario ATC en Ajustes se queda porque sirve para editarlo en una hoja de cálculo.
 
 **Exportar a otras plataformas** (menú «Exportar»): dos subsecciones. «Exportar a Magento» no cambió. «Exportar a Merchant Center» descarga un archivo con `id` (el SKU), `title` y `description`, en `.txt` con tabuladores (el formato que pide Google) o en CSV; la plataforma lo empareja por `id`, así que no lleva precio, disponibilidad ni enlace. Avisa de los títulos de más de 150 caracteres y de las descripciones de más de 5,000.
 
 Vistas resumidas (lote, catálogo y notificaciones):
 - **Campana de notificaciones fija**: se queda arriba al bajar; su panel tiene altura máxima y solo su lista se desplaza. Tres pestañas separan «Vínculos» (actualizar en Magento), «Complementos» (por revisar) y «Sin cargar».
-- **Lote compacto**: una línea por producto, con paginación de 25, 50 o 100 filas. «Densidad» cambia entre compacta y cómoda (se recuerda en el navegador). Los puntajes salen en una línea (H, S, C, M, 360° con el nombre al pasar el cursor) y «Aprobar» y «Eliminar» van en el menú «⋯». «Marcar los N filtrados» alcanza a todas las páginas.
+- **Productos compactos** (antes «Lote»): una línea por producto, con paginación de 25, 50 o 100 filas. «Densidad» cambia entre compacta y cómoda (se recuerda en el navegador). Los puntajes salen en una línea (H, S, C, M, 360° con el nombre al pasar el cursor) y «Aprobar» y «Eliminar» van en el menú «⋯». «Marcar los N filtrados» alcanza a todas las páginas.
 - **Detalle en panel lateral**: en pantallas anchas «Ver» abre el detalle a la derecha sin empujar la lista (se cierra con ✕ o Esc); en pantallas angostas se abre debajo de la fila.
 - **Agrupar por estado**: el interruptor arma un grupo por estado (Bloqueados, Por revisar, Listos para aprobar, Aprobados). Cada grupo dice cuántos hay y por qué; se abren solos los que requieren acción.
 - **Catálogo**: abre con la bandeja «Por decidir» (lo que espera tu confirmación, con los botones a la vista), filtros con conteo, búsqueda y una lista de una línea por producto. Complementos, alternativas y relacionados se ven y se editan en el detalle de cada producto.
 
-Filtros del lote: los principales son **Bloqueados** (con errores), **Por revisar** (sin errores, pero con datos de la IA sin confirmar o Score 360° crítico), **Listos para aprobar** (sin errores; los avisos no impiden aprobar) y **Aprobados**. Cada producto guardado cae en uno solo. SEO, Contenido, Magento, Health, Score crítico, «Datos completos» y «Datos faltantes» están en «Más filtros».
+Filtros de Productos: los principales son **Bloqueados** (con errores), **Por revisar** (sin errores, pero con datos de la IA sin confirmar o Score 360° crítico), **Listos para aprobar** (sin errores; los avisos no impiden aprobar) y **Aprobados**. Cada producto guardado cae en uno solo. SEO, Contenido, Magento, Health, Score crítico, «Datos completos» y «Datos faltantes» están en «Más filtros».
 
-Resumen del lote y cambios masivos: arriba de la tabla hay un resumen con los conteos por estado y las **correcciones sugeridas** (laboratorio, marca, categoría de la tienda y forma salen de Conocimiento; vía y receta salen de lo que Conocimiento aprendió de esa sustancia —solo si siempre se vio igual y al menos dos veces— y de los demás productos del lote con el mismo principio activo, concentración y forma, solo si todos coinciden; si las dos fuentes proponen lo mismo se juntan en un grupo). Debajo se listan las correcciones que la aplicación hizo sola. Laboratorio, marca, categoría y forma se aplican a todos con un clic. **Vía y receta son datos regulatorios**: «Revisar» abre la lista sin marcar, se marca producto por producto y se confirma. También puedes marcar productos con su casilla y usar «Cambiar un campo…», o «Buscar y reemplazar…» un valor exacto; en los dos ves el antes y el después. Cada cambio queda en la trazabilidad, se puede deshacer y se registra como evidencia tuya en Conocimiento (lo aprendido no se revierte). Sustancia activa, concentración y textos de indicaciones no admiten cambios en bloque.
+Resumen de productos y cambios masivos: arriba de la tabla hay un resumen con los conteos por estado y las **correcciones sugeridas** (laboratorio, marca, categoría de la tienda y forma salen de Conocimiento; vía y receta salen de lo que Conocimiento aprendió de esa sustancia —solo si siempre se vio igual y al menos dos veces— y de los demás productos de Productos con el mismo principio activo, concentración y forma, solo si todos coinciden; si las dos fuentes proponen lo mismo se juntan en un grupo). Debajo se listan las correcciones que la aplicación hizo sola. Laboratorio, marca, categoría y forma se aplican a todos con un clic. **Vía y receta son datos regulatorios**: «Revisar» abre la lista sin marcar, se marca producto por producto y se confirma. También puedes marcar productos con su casilla y usar «Cambiar un campo…», o «Buscar y reemplazar…» un valor exacto; en los dos ves el antes y el después. Cada cambio queda en la trazabilidad, se puede deshacer y se registra como evidencia tuya en Conocimiento (lo aprendido no se revierte). Sustancia activa, concentración y textos de indicaciones no admiten cambios en bloque.
 
 Categoría de la tienda en Conocimiento: el campo «Categoría» se aprende como un tipo propio, con sugerencias, variantes y corrección de mayúsculas y alias confirmados.
 
@@ -235,7 +237,7 @@ Cómo se relacionan los productos (alternativas, relacionados y complementos):
 - Se calculan con **el archivo y todo el catálogo**, pero en el CSV solo entran SKU que van en el mismo archivo o que ya se cargaron a Magento. Los demás se avisan en la campana cuando se carguen.
 
 Mejoras del catálogo:
-- **Lote**: un complemento sin producto principal muestra la etiqueta «Espera producto principal» en su fila.
+- **Productos**: un complemento sin producto principal muestra la etiqueta «Espera producto principal» en su fila.
 - **Alternativas y relacionados a mano**: en la tabla del catálogo, cada producto muestra sus alternativas y relacionados (los de las reglas y los tuyos, marcados «a mano»). «×» quita uno (si lo proponía la regla queda como «Quitado» con «Deshacer»); «Agregar» pide el SKU de otro producto del catálogo. Vale para los dos productos y también se aplica en el CSV de Magento y en la campana. Igual que antes, solo salen los SKU que van en el archivo o que ya se cargaron.
 - **Compartir el catálogo**: «Descargar catálogo para compartir» genera un `.json`; «Unir el catálogo de otra persona» lo suma al tuyo (productos, vínculos y alternativas a mano; en un producto repetido gana el dato más reciente y lo cargado a Magento toma lo más reciente). Lo que alguien quitó no se propaga a los demás. No hay sincronización en línea: se comparten archivos.
 - **SEO**: el puntaje de contenido ahora considera si hay al menos 3 preguntas frecuentes (CON-030), si se capturó la categoría (CON-031) y si las tablas capturadas salen con su identificador (CON-032). Se rebalancaron los pesos del componente para seguir sumando 15; las tres reglas son provisionales.
@@ -333,7 +335,7 @@ Relaciona cada **principio activo** con su **código ATC** y su área. Es un dat
 - **Qué significa verificar.** Comparar el código con la fuente oficial (el [índice ATC/DDD de la OMS](https://atcddd.fhi.no/atc_ddd_index/), de consulta gratuita) y anotar la fuente y quién lo verificó. La fecha se registra sola. Sin fuente, sin persona o con un ATC de formato inválido no se puede verificar, y una fila importada como «verificado» sin esos datos entra como «sin verificar». Si cambias el código de una fila verificada, vuelve a «sin verificar».
 - **El área sale del ATC** con una tabla fija (`ATC_AREAS` en `js/clasif.js`): por ejemplo A10 → Diabetes y metabolismo, N02 → Dolor e inflamación. Los nombres de los grupos son los de la OMS; el área es una agrupación propia. Una fila puede fijar su propia área o una segunda (por ejemplo Control de peso).
 - **Orden de uso:** diccionario primero (sin gastar llamadas) y, si el principio activo no está, la IA propone. Un ATC propuesto por la IA y aplicado queda en el diccionario como «sin verificar».
-- **Plantilla:** «Plantilla con mis principios activos» descarga los principios del lote que faltan. `docs/clasificacion-candidatos.csv` trae 13 candidatos comunes, todos **sin verificar**: los códigos los puse de memoria y hay que compararlos con la OMS antes de verificarlos.
+- **Plantilla:** «Plantilla con mis principios activos» descarga los principios de Productos que faltan. `docs/clasificacion-candidatos.csv` trae 13 candidatos comunes, todos **sin verificar**: los códigos los puse de memoria y hay que compararlos con la OMS antes de verificarlos.
 - **Alta especialidad y receta no se infieren.** No encontré un listado oficial de medicamentos de alta especialidad, así que es un dato que declara una persona. La receta sale del registro sanitario o del empaque.
 
 ## Datos crudos (extracción por reglas)
@@ -342,7 +344,7 @@ Toma un SKU sucio y llena el formulario, o las filas de una carga masiva con una
 
 - Concentración, volumen, forma farmacéutica, presentación, vía y receta, cuando aparecen de forma explícita.
 - Tipo de producto, sabor, atributo, modelo y activo cosmético en las categorías que los tienen.
-- Marca, laboratorio y principio activo solo si están en tus diccionarios (Ajustes, pestaña Diccionarios). El botón "Agregar al diccionario los valores del lote" los aprende del trabajo ya hecho.
+- Marca, laboratorio y principio activo solo si están en tus diccionarios (Ajustes, pestaña Diccionarios). El botón "Agregar al diccionario los valores de los productos" los aprende del trabajo ya hecho.
 - Lo que no se pudo asignar se muestra como "Sin asignar". Opcionalmente puede sugerir la marca por posición, siempre con aviso.
 
 La categoría se detecta por palabras clave y dosis. Es más confiable en medicamentos. Si es ambigua, la herramienta lo indica.
@@ -400,9 +402,9 @@ Se incorporó `js/normalization.js` para normalización segura, sugerencias de d
 
 ### Conectores de Fase 7
 
-La aplicación incorpora una pestaña **Conexiones** en Ajustes para leer Google Sheets y endpoints REST. Las fuentes externas se incorporan como propuestas al lote y pasan por las mismas validaciones antes de exportarse. No hay escritura automática sobre fichas existentes.
+La aplicación incorpora una pestaña **Conexiones** en Ajustes para leer Google Sheets y endpoints REST. Las fuentes externas se incorporan como propuestas a Productos y pasan por las mismas validaciones antes de exportarse. No hay escritura automática sobre fichas existentes.
 
-## Persistencia y respaldo del lote
+## Persistencia y respaldo de Productos
 
 La aplicación conserva el lote con `fichas.lote.v1`. Desde la Fase 7.1 también mantiene un espejo defensivo en IndexedDB cuando está disponible. En la sección **Lote** existen **Respaldar lote** y **Restaurar lote** para transportar productos entre versiones o navegadores.
 
@@ -410,15 +412,15 @@ Si la aplicación se abre directamente desde un ZIP (`file://`), algunos navegad
 
 ## Fase 7.4 — corrección de lote y presentación/piezas
 
-- Se corrigió el render del lote: `Health` queda disponible explícitamente en la UI antes de evaluar cada registro.
+- Se corrigió el render de Productos: `Health` queda disponible explícitamente en la UI antes de evaluar cada registro.
 - El lote ahora muestra inmediatamente sus filas después de agregar/restaurar productos.
 - En medicamentos, una cantidad aislada en `Presentación o piezas` se interpreta como piezas (`30` → `30 piezas`).
 - La presentación se incorpora al título y a la ficha técnica de Magento.
 - Una presentación explícita (`Caja con 4 plumas`, `Frasco 30 mL`, etc.) se conserva.
 
-## Fase 7.4.1 — corrección de render del lote y edición segura
+## Fase 7.4.1 — corrección de render de Productos y edición segura
 
-Corrige la tabla del lote que no se pintaba aunque el contador marcara productos (`MAG_HEADER` no definida en `app.js`), el estado de persistencia desactualizado, la edición que podía perder el producto, y la concordancia «1 pieza». Se agregan pruebas que ejecutan la app en jsdom: `npm install` y luego `npm test`. Detalle en `docs/phases/PHASE_7_4_1_LOTE_RENDER_AND_EDIT_FIX.md`.
+Corrige la tabla de Productos que no se pintaba aunque el contador marcara productos (`MAG_HEADER` no definida en `app.js`), el estado de persistencia desactualizado, la edición que podía perder el producto, y la concordancia «1 pieza». Se agregan pruebas que ejecutan la app en jsdom: `npm install` y luego `npm test`. Detalle en `docs/phases/PHASE_7_4_1_LOTE_RENDER_AND_EDIT_FIX.md`.
 
 ## Fase 8 — Motor SEO y SEO Score
 
@@ -426,11 +428,11 @@ Corrige la tabla del lote que no se pintaba aunque el contador marcara productos
 
 ## Fase 9 — Content Score, Magento Readiness y Score 360°
 
-Tres módulos nuevos que consumen los motores existentes sin duplicarlos: `js/content.js` (calidad editorial, `fichas.content.v1`), `js/magento-readiness.js` (estado `READY`, `READY_WITH_WARNINGS` o `BLOCKED` según el contrato Magento real, `fichas.magento.readiness.v1`) y `js/score360.js` (combina Health 30 %, SEO 25 %, Contenido 25 % y Magento 20 %, `fichas.score360.v1`). El estado de Magento tiene prioridad sobre cualquier score. En la ficha, la pestaña **Evaluación** explica cada eje y qué corregir; en el lote hay promedios y filtros; antes de exportar se muestra el resumen de bloqueados, advertencias y listos. Detalle completo en `docs/phases/PHASE_9_SCORE_360.md`.
+Tres módulos nuevos que consumen los motores existentes sin duplicarlos: `js/content.js` (calidad editorial, `fichas.content.v1`), `js/magento-readiness.js` (estado `READY`, `READY_WITH_WARNINGS` o `BLOCKED` según el contrato Magento real, `fichas.magento.readiness.v1`) y `js/score360.js` (combina Health 30 %, SEO 25 %, Contenido 25 % y Magento 20 %, `fichas.score360.v1`). El estado de Magento tiene prioridad sobre cualquier score. En la ficha, la pestaña **Evaluación** explica cada eje y qué corregir; en Productos hay promedios y filtros; antes de exportar se muestra el resumen de bloqueados, advertencias y listos. Detalle completo en `docs/phases/PHASE_9_SCORE_360.md`.
 
 ## Fase 10 — UX/UI avanzada y explicabilidad
 
-Experiencia guiada **Capturar → Validar → Corregir → Comprender → Aprobar → Exportar**. `js/ux.js` (`fichas.ux.v1`) interpreta los resultados de Health, SEO, Content, Magento Readiness y Score 360° sin recalcular nada: estado visual derivado del producto (Borrador, En revisión, Listo para aprobación, Aprobado, Bloqueado), barra persistente con scores, «Qué hacer ahora» con botón que lleva al campo, indicadores `✓ ⚠ ❌ ℹ ○` con explicación, uso y origen de cada dato, historial de cambios, confirmación antes de acciones destructivas, estado de guardado, filtros del lote, lote en tarjetas para móvil y accesibilidad (teclado, foco, contraste AA). El contrato Magento y la persistencia no cambian. Detalle en `docs/phases/PHASE_10_UX_UI.md`.
+Experiencia guiada **Capturar → Validar → Corregir → Comprender → Aprobar → Exportar**. `js/ux.js` (`fichas.ux.v1`) interpreta los resultados de Health, SEO, Content, Magento Readiness y Score 360° sin recalcular nada: estado visual derivado del producto (Borrador, En revisión, Listo para aprobación, Aprobado, Bloqueado), barra persistente con scores, «Qué hacer ahora» con botón que lleva al campo, indicadores `✓ ⚠ ❌ ℹ ○` con explicación, uso y origen de cada dato, historial de cambios, confirmación antes de acciones destructivas, estado de guardado, filtros de Productos, lote en tarjetas para móvil y accesibilidad (teclado, foco, contraste AA). El contrato Magento y la persistencia no cambian. Detalle en `docs/phases/PHASE_10_UX_UI.md`.
 
 ## Fase 11 — Motor de conocimiento y aprendizaje
 

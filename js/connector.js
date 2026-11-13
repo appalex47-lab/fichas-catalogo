@@ -1,5 +1,5 @@
 /* Fase 7: conectores operativos para Google Sheets y REST API.
- * Seguridad: solo lectura por defecto; la importación entra al lote y nunca sobrescribe productos automáticamente.
+ * Seguridad: solo lectura por defecto; la importación entra a Productos y nunca sobrescribe productos automáticamente.
  */
 (function(root){
 'use strict';
