@@ -37,6 +37,7 @@ const Catalog = window.FichasCatalog;
 const Clasif = window.FichasClasif;
 const Bulk = window.FichasBulk || null;
 const Backup = window.FichasBackup || null;
+const Cat = window.FichasCategorias || null;
 const Anomalies = window.FichasAnomalies || { provenanceFor: () => ({}), detectBatch: () => [], summarize: () => ({ total:0,error:0,warning:0,info:0,byType:{} }), event: () => ({}) };
 const Normalization = window.FichasNormalization || {};
 const Canonical = window.FichasCanonical || { canonicalize: () => ({ schema: 'fichas.canonical.v1', version: '1.0', identity: {}, fields: {}, derived: {}, quality: {}, provenance: {}, anomalyTypes: [] }) };
@@ -153,6 +154,9 @@ const state = {
   state.exp = { ...defExp(), ...(store.get('fichas.exp.v2', null) || {}) };
   state.mc = { incF: false, incIA: false, fmt: 'txt', ...(store.get('fichas.mc.v1', null) || {}) };
   state.plat = 'magento';
+  state.cats = store.get('fichas.categorias.v1', []);
+  if (!Array.isArray(state.cats)) state.cats = [];
+  state.cg = { id: '', nombre: '', padre: '', tipo: 'otro', incluye: '', subs: '' }; state.cgManual = false;
   state.dic = { marcas: '', principios: '', labs: '', pos: false, ...(store.get('fichas.dic.v1', null) || {}) };
 }
 Object.assign(state, { dirty: false, changes: [], fOpen: {}, histOpen: false, loteOpen: new Set(), gotos: [], metaRev: 0, _baseSig: '', _prevV: {}, _lastAssess: null, _assessKey: '' });
@@ -870,7 +874,7 @@ function navTo(name) {
   if (name === 'config') { openSettings(); return; }
   if (name === 'validacion') setTab('eval');
   if (name === 'contenido' && state.tab === 'eval') setTab('titulo');
-  const sel = { captura: '#h-prod', validacion: '#h-out', contenido: '#h-out', lote: '#lote', exportacion: '#exportar', conocimiento: '#conocimiento', catalogo: '#catalogo', respaldo: '#respaldo' }[name];
+  const sel = { captura: '#h-prod', validacion: '#h-out', contenido: '#h-out', lote: '#lote', exportacion: '#exportar', conocimiento: '#conocimiento', catalogo: '#catalogo', respaldo: '#respaldo', categorias: '#categorias' }[name];
   if (name === 'respaldo') renderBackup();
   if (name === 'conocimiento') renderKnowledge();
   scrollToEl(document.querySelector(sel));
@@ -2160,7 +2164,7 @@ if (typeof IntersectionObserver !== 'undefined') {
       captVisible = (ratios.captura || 0) > 0;
       if ($('#asst').hidden) $('#asst-open').hidden = !captVisible;
     }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
-    [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion'], ['#catalogo', 'catalogo'], ['#conocimiento', 'conocimiento'], ['#respaldo', 'respaldo']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
+    [['#h-prod', 'captura'], ['#h-out', 'contenido'], ['#lote', 'lote'], ['#exportar', 'exportacion'], ['#catalogo', 'catalogo'], ['#conocimiento', 'conocimiento'], ['#respaldo', 'respaldo'], ['#categorias', 'categorias']].forEach(([sel, name]) => { const el = document.querySelector(sel); const host = el && (el.closest('section') || el); if (host) { host.dataset.spy = name; spy.observe(host); } });
   } catch (_) { /* sin scroll-spy */ }
 }
 /* Ningún error se queda en silencio: se registra en consola y el usuario recibe un mensaje comprensible. */
@@ -2971,7 +2975,7 @@ document.addEventListener('change', e => { const z = e.target.closest && e.targe
  * y se elige, parte por parte, unir, reemplazar o no cargar. Unir nunca borra; reemplazar descarga antes un respaldo de lo actual. */
 const bkSel = new Set(Backup ? Backup.PARTS : []);
 async function bkCounts() {
-  const k = { lote: state.lote.length, catalogo: state.catalog.entries.length, clasif: state.clasif.rows.length, ajustes: 1, conocimiento: 0 };
+  const k = { lote: state.lote.length, catalogo: state.catalog.entries.length, clasif: state.clasif.rows.length, categorias: state.cats.length, ajustes: 1, conocimiento: 0 };
   if (Knowledge) { try { k.conocimiento = (await Knowledge.stats()).entities || 0; } catch (_) { /* sin conocimiento disponible */ } }
   return k;
 }
@@ -2980,7 +2984,7 @@ const scheduleBackup = () => { clearTimeout(bkTimer); bkTimer = setTimeout(rende
 async function renderBackup() {
   const box = $('#bk-parts'); if (!box || !Backup) return;
   const k = await bkCounts();
-  const unit = { lote: 'producto(s)', catalogo: 'producto(s)', conocimiento: 'dato(s)', clasif: 'fila(s)', ajustes: 'conjunto' };
+  const unit = { lote: 'producto(s)', catalogo: 'producto(s)', conocimiento: 'dato(s)', clasif: 'fila(s)', categorias: 'categoría(s)', ajustes: 'conjunto' };
   box.innerHTML = Backup.PARTS.map(p => `<label class="check"><input type="checkbox" data-bkpart="${p}"${bkSel.has(p) ? ' checked' : ''}${p === 'conocimiento' && !Knowledge ? ' disabled' : ''}><span><b>${esc(Backup.LABEL[p])}</b> <span class="hint">${esc(Backup.HINT[p])}</span></span><span class="tag tag--info">${k[p]} ${unit[p]}</span></label>`).join('');
   bkSum();
 }
@@ -2999,6 +3003,7 @@ async function bkBuild(parts) {
   if (parts.includes('lote')) out.lote = { items: state.lote, audit: state.audit };
   if (parts.includes('catalogo')) out.catalogo = state.catalog;
   if (parts.includes('clasif')) out.clasif = state.clasif;
+  if (parts.includes('categorias')) out.categorias = { items: state.cats };
   if (parts.includes('ajustes')) out.ajustes = bkSettings();
   if (parts.includes('conocimiento') && Knowledge) { try { const kb = await Knowledge.exportBackup(); if (kb && kb.counts && kb.counts.entities) out.conocimiento = kb; } catch (e) { if (window.console) console.error(e); } }
   return Backup.build(out);
@@ -3031,7 +3036,7 @@ function openRestore(d, name) {
   bkCounts().then(mine => {
     const rows = Backup.PARTS.filter(p => d.parts[p]).map(p => {
       const theirs = Backup.count(p, d.parts[p]);
-      const unir = { lote: 'Unir: agregar los que no tengo', catalogo: 'Unir: gana el dato más reciente', conocimiento: 'Unir', clasif: 'Unir: nunca baja una fila verificada' }[p];
+      const unir = { lote: 'Unir: agregar los que no tengo', catalogo: 'Unir: gana el dato más reciente', conocimiento: 'Unir', clasif: 'Unir: nunca baja una fila verificada', categorias: 'Unir: agregar las que no tengo' }[p];
       const opts = p === 'ajustes' ? [['no', 'No cargar'], ['reemplazar', 'Reemplazar lo mío']] : [['unir', unir], ['reemplazar', 'Reemplazar lo mío'], ['no', 'No cargar']];
       return `<div class="bk-pick"><b>${esc(Backup.LABEL[p])}</b><span class="hint">trae ${theirs}${p === 'ajustes' ? '' : ` · tienes ${mine[p]}`}</span><label class="sr-only" for="${id}-${p}">Qué hacer con ${esc(Backup.LABEL[p])}</label><select id="${id}-${p}" data-bkdo="${p}">${opts.map(o => `<option value="${o[0]}">${esc(o[1])}</option>`).join('')}</select></div>`;
     }).join('');
@@ -3088,6 +3093,12 @@ async function applyRestore(d, choice) {
     else { const r = Clasif.merge(state.clasif, d.parts.clasif); done.push(`diccionario ATC: ${r.added} nuevas, ${r.updated} actualizadas`); }
     saveClasif(); renderClasif();
   }
+  if (d.parts.categorias && choice.categorias !== 'no' && Cat) {
+    const inc = (d.parts.categorias.items || []).filter(c => c && c.nombre).map(c => ({ ...c, id: c.id || uid() }));
+    if (choice.categorias === 'reemplazar') { state.cats = inc; done.push(`categorías reemplazadas (${inc.length})`); }
+    else { const r = Backup.mergeCategorias(state.cats, inc, Cat.key); state.cats = r.items; done.push(`categorías: ${r.added} agregadas, ${r.skipped} ya estaban`); }
+    saveCats(); renderCgList(); renderCgOut();
+  }
   if (d.parts.ajustes && choice.ajustes === 'reemplazar') { applySettings(d.parts.ajustes); done.push('ajustes reemplazados'); }
   if (d.parts.conocimiento && choice.conocimiento !== 'no' && Knowledge) {
     await Knowledge.init();
@@ -3109,6 +3120,71 @@ function applySettings(a) {
   if (a.mc && typeof a.mc === 'object') { state.mc = { incF: false, incIA: false, fmt: 'txt', ...a.mc }; saveMc(); renderMc(); }
 }
 document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-navto]'); if (t) navTo(t.dataset.navto); });
+
+
+/* ---------- Categorías de la tienda ----------
+ * Una categoría a la vez: se escribe qué incluye, se elige el tipo y se copia cada pieza. Lo guardado forma «Mis categorías». */
+const saveCats = () => store.set('fichas.categorias.v1', state.cats);
+function cgInit() {
+  if (!Cat) return;
+  $('#cg-tipo').innerHTML = Object.entries(Cat.TIPOS).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join('');
+  cgFill(); renderCgList(); renderCgOut();
+}
+function cgFill() {
+  const c = state.cg;
+  $('#cg-nombre').value = c.nombre; $('#cg-padre').value = c.padre; $('#cg-tipo').value = c.tipo; $('#cg-incluye').value = c.incluye; $('#cg-subs').value = c.subs;
+}
+const cgData = () => ({ ...state.cg, tienda: state.meta.tienda });
+function renderCgOut() {
+  const box = $('#cg-out'); if (!box || !Cat) return;
+  $('#cg-tienda').innerHTML = state.meta.tienda ? `Tienda: <strong>${esc(state.meta.tienda)}</strong>. Se cambia en <button type="button" class="linkbtn" data-setopen="magento">Ajustes</button>.` : 'Escribe el nombre de la tienda en <button type="button" class="linkbtn" data-setopen="magento">Ajustes</button> para que salga en el meta title y la meta description.';
+  const o = Cat.build(cgData());
+  if (!state.cg.nombre.trim()) { box.innerHTML = '<div class="empty-state"><p><strong>Escribe el nombre de la categoría.</strong></p><p class="hint">Aquí verás las cinco piezas, cada una con su botón para copiar.</p></div>'; return; }
+  const k = Cat.key(state.cg), twin = state.cats.filter(c => Cat.key(c) !== k).map(c => ({ c, s: Cat.similarity(Cat.build({ ...c, tienda: state.meta.tienda }).textoLargo, o.textoLargo) })).sort((a, b) => b.s - a.s)[0];
+  const warns = o.warnings.slice();
+  if (twin && twin.s >= 0.8) warns.push({ level: 'warning', msg: `Se parece mucho a «${twin.c.nombre}» (${Math.round(twin.s * 100)} %). Las guías de SEO advierten de contenido repetido entre categorías.` });
+  const meter = (n, max) => `<span class="hint${n > max ? ' over' : ''}">${n} de ${max} caracteres</span>`;
+  const piece = (id, title, where, body, extra, html) => `<div class="cg-piece"><div class="cg-head"><div><h3>${esc(title)}</h3><div class="hint">${esc(where)}</div></div><button type="button" class="btn" data-cgcopy="${id}">Copiar</button></div>${extra || ''}<pre class="cg-pre" tabindex="0">${esc(body)}</pre>${html ? `<details class="plain"><summary>Vista previa</summary><div class="cg-prev">${body}</div></details>` : ''}</div>`;
+  box.innerHTML = (warns.length ? `<div class="note note--${warns.some(w => w.level === 'error') ? 'warn' : 'info'}"><ul>${warns.map(w => `<li>${esc(w.msg)}</li>`).join('')}</ul></div>` : '<div class="note note--ok"><p>Sin avisos.</p></div>')
+    + piece('metaTitle', 'Meta title', 'Meta title de la categoría', o.metaTitle, meter(o.metaTitle.length, Cat.META_TITLE_MAX))
+    + piece('metaDescription', 'Meta description', 'Meta description de la categoría', o.metaDescription, meter(o.metaDescription.length, Cat.META_DESC_MAX))
+    + piece('textoCorto', 'Texto corto', 'Va arriba, después del título de la categoría', o.textoCorto, `<span class="hint">${o.words} palabras</span>`, true)
+    + piece('textoLargo', 'Texto largo con subcategorías', 'Va hasta abajo, bajo los productos', o.textoLargo, '', true)
+    + piece('preguntas', 'Preguntas frecuentes', 'Hasta abajo, después del texto largo (sin JSON-LD)', o.preguntas, '', true);
+  state._cgOut = o;
+}
+function renderCgList() {
+  const box = $('#cg-list'); if (!box) return;
+  if (!state.cats.length) { box.innerHTML = '<p class="hint">Todavía no hay categorías guardadas. Las que guardes quedan aquí para reabrirlas y para detectar textos repetidos.</p>'; return; }
+  box.innerHTML = `<div class="tablewrap"><table class="lote-table lote-table--compact"><thead><tr><th>Categoría</th><th>Tipo</th><th>Guardada</th><th></th></tr></thead><tbody>${state.cats.slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))).map(c => `<tr data-cgid="${esc(c.id)}"><td data-label="Categoría">${esc(c.padre ? c.padre + ' › ' : '')}<b>${esc(c.nombre)}</b></td><td data-label="Tipo">${esc((Cat.TIPOS[c.tipo] || Cat.TIPOS.otro).label)}</td><td data-label="Guardada">${esc(c.at ? new Date(c.at).toLocaleDateString() : '')}</td><td class="ops"><button type="button" class="btn btn--quiet" data-cgopen="${esc(c.id)}">Abrir</button><button type="button" class="btn btn--quiet" data-cgdel="${esc(c.id)}">Quitar</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+document.addEventListener('input', e => {
+  const f = e.target.closest && e.target.closest('#cg-nombre,#cg-padre,#cg-tipo,#cg-incluye,#cg-subs'); if (!f || !Cat) return;
+  const k = { 'cg-nombre': 'nombre', 'cg-padre': 'padre', 'cg-tipo': 'tipo', 'cg-incluye': 'incluye', 'cg-subs': 'subs' }[f.id];
+  state.cg[k] = f.value;
+  if (k === 'tipo') state.cgManual = true;
+  if (k === 'nombre' && !state.cgManual) { state.cg.tipo = Cat.guessTipo(f.value); $('#cg-tipo').value = state.cg.tipo; }
+  renderCgOut();
+});
+document.addEventListener('click', async e => {
+  const t = e.target.closest && e.target.closest('#cg-save,#cg-new,[data-cgcopy],[data-cgopen],[data-cgdel]'); if (!t || !Cat) return;
+  if (t.dataset.cgcopy) { const o = state._cgOut; if (o && o[t.dataset.cgcopy]) await copyText(o[t.dataset.cgcopy], 'Copiado. Pégalo en Magento.'); return; }
+  if (t.id === 'cg-new') { state.cg = { id: '', nombre: '', padre: '', tipo: 'otro', incluye: '', subs: '' }; state.cgManual = false; cgFill(); renderCgOut(); $('#cg-nombre').focus(); return; }
+  if (t.id === 'cg-save') {
+    const c = state.cg; if (!c.nombre.trim()) { notify('Escribe el nombre de la categoría.', 'warn'); $('#cg-nombre').focus(); return; }
+    const key = Cat.key(c), i = state.cats.findIndex(x => (c.id && x.id === c.id) || Cat.key(x) === key);
+    const item = { id: i >= 0 ? state.cats[i].id : uid(), nombre: c.nombre.trim(), padre: c.padre.trim(), tipo: c.tipo, incluye: c.incluye, subs: c.subs, at: new Date().toISOString() };
+    if (i >= 0) state.cats[i] = item; else state.cats.push(item);
+    state.cg.id = item.id; saveCats(); renderCgList(); renderCgOut(); scheduleBackup();
+    notify(i >= 0 ? `«${item.nombre}» actualizada.` : `«${item.nombre}» guardada en tu lista.`, 'ok'); return;
+  }
+  if (t.dataset.cgopen) { const c = state.cats.find(x => x.id === t.dataset.cgopen); if (!c) return; state.cg = { id: c.id, nombre: c.nombre, padre: c.padre || '', tipo: c.tipo || 'otro', incluye: c.incluye || '', subs: c.subs || '' }; state.cgManual = true; cgFill(); renderCgOut(); scrollToEl($('#h-cg')); return; }
+  if (t.dataset.cgdel) {
+    const c = state.cats.find(x => x.id === t.dataset.cgdel); if (!c) return;
+    const ok = await confirmDialog({ title: '¿Quitar esta categoría de tu lista?', message: `Se quitará «${c.nombre}» de «Mis categorías». Los textos que ya copiaste a Magento no se tocan.`, confirmLabel: 'Quitar', danger: true });
+    if (ok) { state.cats = state.cats.filter(x => x.id !== c.id); if (state.cg.id === c.id) state.cg.id = ''; saveCats(); renderCgList(); renderCgOut(); scheduleBackup(); notify('Quitada de tu lista.', 'ok'); }
+  }
+});
 
 /* ---------- Cambios masivos del lote ----------
  * Panel de resumen con correcciones sugeridas (Conocimiento y el propio lote) y cambios que elige la persona.
@@ -3289,5 +3365,6 @@ document.querySelectorAll('button:not([type])').forEach(b => { b.type = 'button'
 renderConnectorCategories(); renderConnectorSource();
 $('#exp-ia').checked = !!state.exp.incIA; $('#exp-rel').checked = state.exp.incRel !== false; $('#exp-attr').value = state.exp.attr; $('#exp-enc').value = state.exp.enc; $('#exp-incf').checked = state.exp.incF; $('#exp-excl').checked = state.exp.excL;
 renderMetaCfg();
+cgInit();
 resetTracking(); connectorStatus('No hay conexiones configuradas. Elige una fuente, completa los datos y pulsa «Probar» para empezar.'); catalogSync(state.lote.filter(x => x.sku)); renderClasif(); renderCats(); renderForm(); renderOutputs(); renderLote(); renderBulk(); renderAiSuggest(); renderAsst(); renderCalls(); renderPhotos(); renderImgReview(); renderBrandLogo(); setTab('titulo'); renderPersistenceStatus(); void hydratePersistentState();
 })();

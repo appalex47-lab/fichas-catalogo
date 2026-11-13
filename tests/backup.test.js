@@ -60,3 +60,14 @@ test('diccionario ATC: unir nunca baja una fila verificada y toma la verificada 
   assert.equal(Clasif.find(mine, 'Loratadina').estado, 'verificado');
   assert.equal(Clasif.find(mine, 'Metformina').estado, 'sin_verificar');
 });
+
+test('respaldo: las categorías de la tienda viajan como una parte más y se unen sin pisar', () => {
+  assert.ok(B.PARTS.includes('categorias'));
+  const d = B.detect(B.build({ categorias: { items: [{ nombre: 'Analgésicos', padre: 'Medicamentos' }] } }));
+  assert.deepEqual(Object.keys(d.parts), ['categorias']);
+  assert.equal(B.count('categorias', d.parts.categorias), 1);
+  const key = c => (c.padre || '') + '>' + c.nombre;
+  const r = B.mergeCategorias([{ nombre: 'Analgésicos', padre: 'Medicamentos', incluye: 'mía' }], [{ nombre: 'Analgésicos', padre: 'Medicamentos', incluye: 'otra' }, { nombre: 'Vitaminas' }], key);
+  assert.equal(r.added, 1); assert.equal(r.skipped, 1);
+  assert.equal(r.items.find(c => c.nombre === 'Analgésicos').incluye, 'mía');
+});

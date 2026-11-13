@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/styles.css?v=33.0">
+<link rel="stylesheet" href="styles/styles.css?v=34.0">
 </head>
 <body>
 <a class="skip" href="#h-prod">Saltar al contenido</a>
@@ -40,6 +40,7 @@
     <nav class="railutil" aria-label="Utilidades">
       <a class="mnav" href="#masiva"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg></span><span class="mnav-t">Carga masiva</span></a>
       <button class="mnav" type="button" data-nav="catalogo"><span class="mnav-ico" aria-hidden="true">⌘</span><span class="mnav-t">Catálogo</span></button>
+      <button class="mnav" type="button" data-nav="categorias"><span class="mnav-ico" aria-hidden="true">▦</span><span class="mnav-t">Categorías</span></button>
       <button class="mnav" type="button" data-nav="conocimiento"><span class="mnav-ico" aria-hidden="true">✦</span><span class="mnav-t">Conocimiento</span></button>
       <button class="mnav" type="button" data-nav="respaldo"><span class="mnav-ico" aria-hidden="true">⛁</span><span class="mnav-t">Respaldo</span></button>
       <button class="mnav" type="button" id="rules-open" aria-haspopup="dialog" aria-label="Reglas de construcción de fichas"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span><span class="mnav-t">Reglas</span></button>
@@ -310,6 +311,26 @@
     </div>
   </section>
 
+  <section class="panel" id="categorias" aria-labelledby="h-cg">
+    <h2 id="h-cg"><span class="section-num">8</span> Categorías de la tienda</h2>
+    <p class="sub" style="margin:0 0 14px">Textos para una categoría o subcategoría a la vez, con reglas fijas y sin IA. Escribes qué incluye, eliges el tipo y copias cada pieza a Magento. El texto corto va arriba, después del título de la categoría; el texto largo y las preguntas frecuentes van hasta abajo.</p>
+    <div class="exp-grid">
+      <div>
+        <h3 style="margin-top:0">Datos de la categoría</h3>
+        <div class="field"><label for="cg-nombre">Nombre de la categoría <span class="req">*</span></label><input type="text" id="cg-nombre" autocomplete="off" placeholder="Gastroenterología"></div>
+        <div class="field"><label for="cg-padre">Categoría padre</label><input type="text" id="cg-padre" autocomplete="off" placeholder="Medicamentos Generales"><div class="hint">Opcional. Si cabe, aparece en el meta title.</div></div>
+        <div class="field"><label for="cg-tipo">Tipo de categoría</label><select id="cg-tipo"></select><div class="hint">Cambia la nota y las preguntas del texto. Se sugiere por el nombre y lo puedes cambiar.</div></div>
+        <div class="field"><label for="cg-incluye">Qué incluye</label><textarea id="cg-incluye" rows="3" placeholder="medicamentos para el aparato digestivo"></textarea><div class="hint">Una frase, tal como quieres que se lea. Sin promesas de efecto.</div></div>
+        <div class="field"><label for="cg-subs">Subcategorías</label><textarea id="cg-subs" rows="4" placeholder="Antiácidos&#10;Laxantes | https://tutienda.mx/laxantes"></textarea><div class="hint">Opcional. Una por línea; con «Nombre | enlace» el nombre sale enlazado.</div></div>
+        <p class="hint" id="cg-tienda"></p>
+        <div class="actions"><button class="btn btn--primary" id="cg-save">Guardar en mi lista</button><button class="btn" id="cg-new">Nueva categoría</button></div>
+      </div>
+      <div id="cg-out" aria-live="polite"></div>
+    </div>
+    <h3>Mis categorías</h3>
+    <div id="cg-list"></div>
+  </section>
+
 </div>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <div id="ux-live" class="sr-only" role="status" aria-live="polite"></div>
@@ -470,29 +491,30 @@
   <div class="asst-form"><textarea id="asst-in" placeholder="Pregunta cómo usar la herramienta" aria-label="Pregunta"></textarea><button class="btn btn--primary" id="asst-send">Enviar</button></div>
   <p class="asst-note">Las respuestas de IA pueden fallar. Para temas regulatorios, consulta a Regulatorio.</p>
 </aside>
-<script src="js/logic.js?v=33.0"></script>
-<script src="js/catalog.js?v=33.0"></script>
-<script src="js/clasif.js?v=33.0"></script>
-<script src="js/quality.js?v=33.0"></script>
-<script src="js/normalization.js?v=33.0"></script>
-<script src="js/anomalies.js?v=33.0"></script>
-<script src="js/canonical.js?v=33.0"></script>
-<script src="js/health.js?v=33.0"></script>
-<script src="js/integration.js?v=33.0"></script>
-<script src="js/sync.js?v=33.0"></script>
-<script src="js/connector.js?v=33.0"></script>
-<script src="js/assist.js?v=33.0"></script>
-<script src="js/ai.js?v=33.0"></script>
-<script src="js/rules.js?v=33.0"></script>
-<script src="js/seo.js?v=33.0"></script>
-<script src="js/content.js?v=33.0"></script>
-<script src="js/magento-readiness.js?v=33.0"></script>
-<script src="js/score360.js?v=33.0"></script>
-<script src="js/knowledge-db.js?v=33.0"></script>
-<script src="js/knowledge.js?v=33.0"></script>
-<script src="js/bulk.js?v=33.0"></script>
-<script src="js/backup.js?v=33.0"></script>
-<script src="js/ux.js?v=33.0"></script>
-<script src="js/app.js?v=33.0"></script>
+<script src="js/logic.js?v=34.0"></script>
+<script src="js/catalog.js?v=34.0"></script>
+<script src="js/clasif.js?v=34.0"></script>
+<script src="js/quality.js?v=34.0"></script>
+<script src="js/normalization.js?v=34.0"></script>
+<script src="js/anomalies.js?v=34.0"></script>
+<script src="js/canonical.js?v=34.0"></script>
+<script src="js/health.js?v=34.0"></script>
+<script src="js/integration.js?v=34.0"></script>
+<script src="js/sync.js?v=34.0"></script>
+<script src="js/connector.js?v=34.0"></script>
+<script src="js/assist.js?v=34.0"></script>
+<script src="js/ai.js?v=34.0"></script>
+<script src="js/rules.js?v=34.0"></script>
+<script src="js/seo.js?v=34.0"></script>
+<script src="js/content.js?v=34.0"></script>
+<script src="js/magento-readiness.js?v=34.0"></script>
+<script src="js/score360.js?v=34.0"></script>
+<script src="js/knowledge-db.js?v=34.0"></script>
+<script src="js/knowledge.js?v=34.0"></script>
+<script src="js/bulk.js?v=34.0"></script>
+<script src="js/backup.js?v=34.0"></script>
+<script src="js/categorias.js?v=34.0"></script>
+<script src="js/ux.js?v=34.0"></script>
+<script src="js/app.js?v=34.0"></script>
 </body>
 </html>
