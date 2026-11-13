@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/styles.css?v=35.0">
+<link rel="stylesheet" href="styles/styles.css?v=36.0">
 </head>
 <body>
 <a class="skip" href="#h-prod">Saltar al contenido</a>
@@ -298,7 +298,7 @@
         <div id="bk-parts" role="group" aria-label="Qué incluir en el respaldo"></div>
         <p class="hint" id="bk-sum" role="status"></p>
         <div class="actions"><button class="btn btn--primary" id="bk-dl">Descargar respaldo</button></div>
-        <p class="hint">Para trabajar en equipo, marca solo «Catálogo interno» y pasa el archivo: quien lo reciba lo une con el suyo. Las llaves de IA nunca van en el archivo.</p>
+        <p class="hint">Para trabajar en equipo, marca solo «Vínculos» y pasa el archivo: quien lo reciba lo une con el suyo. Las llaves de IA nunca van en el archivo.</p>
         <h3>Productos como hoja de cálculo</h3>
         <div class="actions"><button class="btn btn--primary" id="lote-dl">Descargar CSV</button><button class="btn btn--quiet" id="lote-copy">Copiar para hoja de cálculo</button></div>
       </div>
@@ -313,22 +313,24 @@
 
   <section class="panel" id="categorias" aria-labelledby="h-cg">
     <h2 id="h-cg"><span class="section-num">8</span> Categorías de la tienda</h2>
-    <p class="sub" style="margin:0 0 14px">Textos para una categoría o subcategoría a la vez, con reglas fijas y sin IA. Escribes qué incluye, eliges el tipo y copias cada pieza a Magento. El texto corto va arriba, después del título de la categoría; el texto largo y las preguntas frecuentes van hasta abajo.</p>
-    <div class="exp-grid">
-      <div>
-        <h3 style="margin-top:0">Datos de la categoría</h3>
+    <p class="sub" style="margin:0 0 14px">Textos para una categoría o subcategoría a la vez, con reglas fijas y sin IA. Abre o crea una categoría, escribe qué incluye, elige el tipo y copia cada pieza a Magento. El texto corto va arriba, después del título de la categoría; el texto largo y las preguntas frecuentes van hasta abajo.</p>
+    <div class="cg-bar" role="group" aria-label="Filtrar categorías"><div class="chips" id="cg-filters"></div><span class="spacer"></span><button class="btn btn--primary" id="cg-new">Nueva categoría</button></div>
+    <div id="cg-list"></div>
+    <aside class="cg-editor" id="cg-editor" aria-label="Editor de la categoría">
+      <div class="ld-head"><div><b id="cg-title">Nueva categoría</b></div><button type="button" class="btn btn--quiet" id="cg-close" aria-label="Cerrar el editor">✕</button></div>
+      <div class="ld-body">
         <div class="field"><label for="cg-nombre">Nombre de la categoría <span class="req">*</span></label><input type="text" id="cg-nombre" autocomplete="off" placeholder="Gastroenterología"></div>
         <div class="field"><label for="cg-padre">Categoría padre</label><input type="text" id="cg-padre" autocomplete="off" placeholder="Medicamentos Generales"><div class="hint">Opcional. Si cabe, aparece en el meta title.</div></div>
         <div class="field"><label for="cg-tipo">Tipo de categoría</label><select id="cg-tipo"></select><div class="hint">Cambia la nota y las preguntas del texto. Se sugiere por el nombre y lo puedes cambiar.</div></div>
         <div class="field"><label for="cg-incluye">Qué incluye</label><textarea id="cg-incluye" rows="3" placeholder="medicamentos para el aparato digestivo"></textarea><div class="hint">Una frase, tal como quieres que se lea. Sin promesas de efecto.</div></div>
         <div class="field"><label for="cg-subs">Subcategorías</label><textarea id="cg-subs" rows="4" placeholder="Antiácidos&#10;Laxantes | https://tutienda.mx/laxantes"></textarea><div class="hint">Opcional. Una por línea; con «Nombre | enlace» el nombre sale enlazado.</div></div>
         <p class="hint" id="cg-tienda"></p>
-        <div class="actions"><button class="btn btn--primary" id="cg-save">Guardar en mi lista</button><button class="btn" id="cg-new">Nueva categoría</button></div>
+        <div class="actions"><button class="btn btn--primary" id="cg-save">Guardar categoría</button></div>
+        <label class="check"><input type="checkbox" id="cg-done"><span>Ya la cargué a Magento</span></label>
+        <p class="hint" id="cg-done-hint">Es una marca tuya: la herramienta no se conecta a Magento. Si después cambias los datos, la categoría pasa a «Cambió después de cargar».</p>
+        <div id="cg-out" aria-live="polite"></div>
       </div>
-      <div id="cg-out" aria-live="polite"></div>
-    </div>
-    <h3>Mis categorías</h3>
-    <div id="cg-list"></div>
+    </aside>
   </section>
 
 </div>
@@ -491,30 +493,30 @@
   <div class="asst-form"><textarea id="asst-in" placeholder="Pregunta cómo usar la herramienta" aria-label="Pregunta"></textarea><button class="btn btn--primary" id="asst-send">Enviar</button></div>
   <p class="asst-note">Las respuestas de IA pueden fallar. Para temas regulatorios, consulta a Regulatorio.</p>
 </aside>
-<script src="js/logic.js?v=35.0"></script>
-<script src="js/catalog.js?v=35.0"></script>
-<script src="js/clasif.js?v=35.0"></script>
-<script src="js/quality.js?v=35.0"></script>
-<script src="js/normalization.js?v=35.0"></script>
-<script src="js/anomalies.js?v=35.0"></script>
-<script src="js/canonical.js?v=35.0"></script>
-<script src="js/health.js?v=35.0"></script>
-<script src="js/integration.js?v=35.0"></script>
-<script src="js/sync.js?v=35.0"></script>
-<script src="js/connector.js?v=35.0"></script>
-<script src="js/assist.js?v=35.0"></script>
-<script src="js/ai.js?v=35.0"></script>
-<script src="js/rules.js?v=35.0"></script>
-<script src="js/seo.js?v=35.0"></script>
-<script src="js/content.js?v=35.0"></script>
-<script src="js/magento-readiness.js?v=35.0"></script>
-<script src="js/score360.js?v=35.0"></script>
-<script src="js/knowledge-db.js?v=35.0"></script>
-<script src="js/knowledge.js?v=35.0"></script>
-<script src="js/bulk.js?v=35.0"></script>
-<script src="js/backup.js?v=35.0"></script>
-<script src="js/categorias.js?v=35.0"></script>
-<script src="js/ux.js?v=35.0"></script>
-<script src="js/app.js?v=35.0"></script>
+<script src="js/logic.js?v=36.0"></script>
+<script src="js/catalog.js?v=36.0"></script>
+<script src="js/clasif.js?v=36.0"></script>
+<script src="js/quality.js?v=36.0"></script>
+<script src="js/normalization.js?v=36.0"></script>
+<script src="js/anomalies.js?v=36.0"></script>
+<script src="js/canonical.js?v=36.0"></script>
+<script src="js/health.js?v=36.0"></script>
+<script src="js/integration.js?v=36.0"></script>
+<script src="js/sync.js?v=36.0"></script>
+<script src="js/connector.js?v=36.0"></script>
+<script src="js/assist.js?v=36.0"></script>
+<script src="js/ai.js?v=36.0"></script>
+<script src="js/rules.js?v=36.0"></script>
+<script src="js/seo.js?v=36.0"></script>
+<script src="js/content.js?v=36.0"></script>
+<script src="js/magento-readiness.js?v=36.0"></script>
+<script src="js/score360.js?v=36.0"></script>
+<script src="js/knowledge-db.js?v=36.0"></script>
+<script src="js/knowledge.js?v=36.0"></script>
+<script src="js/bulk.js?v=36.0"></script>
+<script src="js/backup.js?v=36.0"></script>
+<script src="js/categorias.js?v=36.0"></script>
+<script src="js/ux.js?v=36.0"></script>
+<script src="js/app.js?v=36.0"></script>
 </body>
 </html>
