@@ -66,7 +66,7 @@ function deriveStatus(a, ctx) {
   if (!ctx.hasData) { key = 'BORRADOR'; why = 'Todavía no hay datos del producto.'; }
   else if (!ctx.saved) {
     key = 'BORRADOR';
-    why = ctx.editing ? 'Tiene cambios sin guardar.' : 'Aún no está guardado en el lote.';
+    why = ctx.editing ? 'Tiene cambios sin guardar.' : 'Aún no está guardado en Productos.';
     if (c.blockers) why += ` Hoy tendría ${plural(c.blockers, 'bloqueo', 'bloqueos')}.`;
   } else if (mag === 'BLOCKED') { key = 'BLOQUEADO'; why = 'Magento no exportaría este producto hasta resolver los bloqueos.'; }
   else if (ctx.approved) { key = 'APROBADO'; why = 'Aprobado con los datos actuales. Si cambias algo, la aprobación se retira.'; }
@@ -322,7 +322,7 @@ function contextAlerts(a, ctx) {
   return out;
 }
 
-/* ---------- 12. Filtros del lote ---------- */
+/* ---------- 12. Filtros de Productos ---------- */
 const PRIMARY_FILTERS = Object.freeze({
   todos: 'Todos', ux_errores: 'Bloqueados', ux_revisar: 'Por revisar', ux_listos: 'Listos para aprobar', ux_aprobados: 'Aprobados'
 });

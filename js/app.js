@@ -500,7 +500,7 @@ function saveQualitySnapshot(context) {
     if (!state.lote.length) return;
     state.s360History = Score360.appendHistory(state.s360History, Score360.snapshot(a.all.map(x => x.e.s360), context), 100);
     store.set('fichas.score360.v1', state.s360History);
-  } catch (_) { /* un fallo del snapshot no debe interrumpir el guardado del lote */ }
+  } catch (_) { /* un fallo del snapshot no debe interrumpir el guardado de Productos */ }
 }
 
 function renderPersistenceStatus(){
@@ -509,9 +509,9 @@ function renderPersistenceStatus(){
   const isFile = location.protocol === 'file:';
   if (state.lote.length) {
     el.innerHTML = `Guardado local: <strong>${state.lote.length} producto(s)</strong>. ${localOk ? 'Persistencia del navegador activa.' : 'El navegador restringe el almacenamiento.'}` +
-      (isFile ? ' <strong>Importante:</strong> al abrir otro ZIP o mover el HTML, el navegador puede usar otro almacenamiento. Usa «Respaldar lote» para trasladarlo entre versiones.' : '');
+      (isFile ? ' <strong>Importante:</strong> al abrir otro ZIP o mover el HTML, el navegador puede usar otro almacenamiento. Usa «Respaldo» para trasladarlos entre versiones.' : '');
   } else {
-    el.innerHTML = 'El lote está vacío en este almacenamiento.' +
+    el.innerHTML = 'No hay productos en este almacenamiento.' +
       (isFile ? ' Si tenías productos en otra versión del ZIP, debes abrir aquella versión y trasladar el respaldo, porque los archivos locales no comparten un origen de almacenamiento garantizado.' : '');
   }
 }
@@ -523,7 +523,7 @@ function renderLote() {
   if (!state.lote.length) {
     renderExport();
     syncLoteButtons();
-    body.innerHTML = `<div class="empty-state"><p><strong>Todavía no hay productos en el lote.</strong></p><p class="hint">Agrega productos desde el formulario o sube un CSV en la carga masiva.</p><div class="actions"><button type="button" class="btn btn--primary" data-nav-go="captura">Agregar producto</button></div></div>`;
+    body.innerHTML = `<div class="empty-state"><p><strong>Todavía no hay productos.</strong></p><p class="hint">Agrega productos desde el formulario o sube un CSV en la carga masiva.</p><div class="actions"><button type="button" class="btn btn--primary" data-nav-go="captura">Agregar producto</button></div></div>`;
     return;
   }
   syncLoteButtons();
@@ -532,7 +532,7 @@ function renderLote() {
   try { assessed = assessLote(); }
   catch (err) {
     if (window.console) console.error(err);
-    body.innerHTML = `<div class="note note--warn"><p><strong>No se pudo calcular la evaluación del lote.</strong> Tus ${state.lote.length} producto(s) siguen guardados; descarga un respaldo si quieres conservarlos.</p></div><ul>${state.lote.map(it => `<li>${esc(it.sku || 'sin SKU')} · ${esc((CATS[it.cat] || {}).name || '')}</li>`).join('')}</ul>`;
+    body.innerHTML = `<div class="note note--warn"><p><strong>No se pudo calcular la evaluación de los productos.</strong> Tus ${state.lote.length} producto(s) siguen guardados; descarga un respaldo si quieres conservarlos.</p></div><ul>${state.lote.map(it => `<li>${esc(it.sku || 'sin SKU')} · ${esc((CATS[it.cat] || {}).name || '')}</li>`).join('')}</ul>`;
     return;
   }
   const all = assessed.all;
@@ -615,7 +615,7 @@ function renderLote() {
   };
   const kpi = (label, value) => `<div class="kpi"><span class="kpi-l">${esc(label)}</span><span class="kpi-v">${value == null ? '—' : value}</span></div>`;
   const summaryPanel =
-    `<div class="summary-panel" aria-label="Resumen de calidad del lote">` +
+    `<div class="summary-panel" aria-label="Resumen de calidad de los productos">` +
     `<div class="kpi-row">` +
       kpi('Health', healthSummary.average) +
       kpi('SEO', seoSum.average) +
@@ -623,25 +623,25 @@ function renderLote() {
       kpi('Score 360°', s360Sum.average) +
     `</div>` +
     `<p class="mag-line"><strong>Magento:</strong> ${magSum.ready} listo(s), ${magSum.readyWithWarnings} con advertencias, ${magSum.blocked} bloqueado(s)${s360Sum.magento == null ? '' : ` · promedio de diagnóstico ${s360Sum.magento}`}</p>` +
-    `<p class="hint seo-health" aria-label="SEO del lote">${healthSummary.total ? `Health: rango ${healthSummary.min}–${healthSummary.max}. ${healthSummary.bands.critica} crítica(s), ${healthSummary.bands.revisar} para revisar, ${healthSummary.bands.buena + healthSummary.bands.excelente} en buen estado. ` : 'Health: sin productos evaluados. '}SEO: ${seoSum.average == null ? '—' : `promedio ${seoSum.average}/100`}. ${seoSum.evaluados ? `Mínimo ${seoSum.min}, máximo ${seoSum.max}. ` : 'Sin productos evaluados. '}${seoSum.byStatus.critico} crítico(s), ${seoSum.byStatus.revisar} por revisar, ${seoSum.byStatus.pendiente} pendiente(s), ${seoSum.byStatus.sin_evaluar} sin evaluar.</p>` +
+    `<p class="hint seo-health" aria-label="SEO de los productos">${healthSummary.total ? `Health: rango ${healthSummary.min}–${healthSummary.max}. ${healthSummary.bands.critica} crítica(s), ${healthSummary.bands.revisar} para revisar, ${healthSummary.bands.buena + healthSummary.bands.excelente} en buen estado. ` : 'Health: sin productos evaluados. '}SEO: ${seoSum.average == null ? '—' : `promedio ${seoSum.average}/100`}. ${seoSum.evaluados ? `Mínimo ${seoSum.min}, máximo ${seoSum.max}. ` : 'Sin productos evaluados. '}${seoSum.byStatus.critico} crítico(s), ${seoSum.byStatus.revisar} por revisar, ${seoSum.byStatus.pendiente} pendiente(s), ${seoSum.byStatus.sin_evaluar} sin evaluar.</p>` +
     `<p class="hint">Contenido: ${contentSum.average == null ? '—' : `promedio ${contentSum.average}/100`}, ${contentSum.byStatus.critico} con contenido crítico. Score 360°: ${s360Sum.average == null ? '—' : `promedio ${s360Sum.average}/100`}, ${s360Sum.bands.critica || 0} con 360 crítico.</p>` +
     `</div>`;
   body.innerHTML =
-    `<details class="plain audit-box"><summary>Trazabilidad del lote (${state.audit.length} eventos guardados)</summary><p class="hint">La trazabilidad registra cambios relevantes sin almacenar valores sensibles adicionales.</p>${auditRows ? `<ul>${auditRows}</ul>` : '<p class="hint">Todavía no hay eventos.</p>'}</details>` +
+    `<details class="plain audit-box"><summary>Trazabilidad de los productos (${state.audit.length} eventos guardados)</summary><p class="hint">La trazabilidad registra cambios relevantes sin almacenar valores sensibles adicionales.</p>${auditRows ? `<ul>${auditRows}</ul>` : '<p class="hint">Todavía no hay eventos.</p>'}</details>` +
     summaryPanel +
     bulkPanelHtml(all) +
-    `<div class="filters" role="group" aria-label="Filtrar lote">${primary}</div>` +
-    `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros del lote">${legacy}</div></details>` +
+    `<div class="filters" role="group" aria-label="Filtrar productos">${primary}</div>` +
+    `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros de productos">${legacy}</div></details>` +
     `<p class="sr-only" id="lote-live" role="status" aria-live="polite">Mostrando ${rows.length} de ${all.length} producto(s)${state.loteFilter !== 'todos' ? `. Filtro: ${esc(filterLabel(state.loteFilter))}` : ''}.</p>` +
     bulkBarHtml(rows) +
     (!rows.length ? `<p class="empty-state">Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button></p>`
       : state.loteGroup ? groupedHTML(rows) : tableFor(shown)) +
-    (!state.loteGroup && (rows.length > state.lotePageSize || state.lotePage) ? `<div class="pager" role="navigation" aria-label="Páginas del lote"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
+    (!state.loteGroup && (rows.length > state.lotePageSize || state.lotePage) ? `<div class="pager" role="navigation" aria-label="Páginas de productos"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
   renderLoteDrawer(all); scheduleBackup();
 }
 function syncLoteButtons() {
   const empty = !state.lote.length;
-  ['lote-copy', 'lote-dl', 'lote-clear'].forEach(id => { const b = document.getElementById(id); if (b) { b.disabled = empty; b.title = empty ? 'Agrega productos al lote para usar esta acción.' : ''; } });
+  ['lote-copy', 'lote-dl', 'lote-clear'].forEach(id => { const b = document.getElementById(id); if (b) { b.disabled = empty; b.title = empty ? 'Agrega productos para usar esta acción.' : ''; } });
 }
 function exportRows() {
   const keep = keepSet();
@@ -769,7 +769,7 @@ function renderGuide() {
   const st = state.uxStatus || {};
   const approve = st.canApprove && state._editingId ? `<button type="button" class="btn btn--primary" data-approve="${esc(state._editingId)}">Aprobar producto</button>`
     : st.canRevoke && state._editingId ? `<button type="button" class="btn" data-revoke="${esc(state._editingId)}">Retirar aprobación</button>`
-    : !state._editingId ? '<span class="hint">Para aprobar, primero agrégalo al lote.</span>' : '';
+    : !state._editingId ? '<span class="hint">Para aprobar, primero agrégalo a Productos.</span>' : '';
   box.innerHTML = stepsHTML + `<p class="guide-counts">${esc(UX.attentionText(counts))}</p>` + nbaHTML + (alerts ? `<div class="ctx">${alerts}</div>` : '') + (approve ? `<div class="nba-row">${approve}</div>` : '') + historyHTML();
 }
 
@@ -859,7 +859,7 @@ function scrollToEl(el) {
 }
 function highlight(el, cls, ms) { if (!el) return; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), ms || 2400); }
 function setNav(name) { $$('#mainnav [data-nav]').forEach(b => b.setAttribute('aria-current', String(b.dataset.nav === name))); }
-/* Validación y Contenido solo tienen sentido con un producto capturado; Exportación, con algo en el lote.
+/* Validación y Contenido solo tienen sentido con un producto capturado; Exportación, con algo en Productos.
  * Se deshabilitan en el riel (no se ocultan) en vez de llevar a un estado vacío sin aviso previo. */
 function updateNavAvailability() {
   const hasProduct = hasAny(CATS[state.cat]);
@@ -867,7 +867,7 @@ function updateNavAvailability() {
   const gate = (name, on, why) => { const b = document.querySelector(`#mainnav [data-nav="${name}"]`); if (!b) return; b.disabled = !on; b.title = on ? '' : why; };
   gate('validacion', hasProduct, 'Captura un producto primero');
   gate('contenido', hasProduct, 'Captura un producto primero');
-  gate('exportacion', hasLote, 'Agrega productos al lote primero');
+  gate('exportacion', hasLote, 'Agrega productos primero');
 }
 function navTo(name) {
   setNav(name);
@@ -920,7 +920,7 @@ function goTo(t) {
 /* ---- Aprobación derivada (se registra en la auditoría existente; si los datos cambian deja de valer) ---- */
 function setApproval(id, on) {
   const it = state.lote.find(x => x.id === id);
-  if (!it) { notify('No encontré ese producto en el lote.', 'warn'); return; }
+  if (!it) { notify('No encontré ese producto en Productos.', 'warn'); return; }
   if (on) {
     const e = (state._lastAssess ? state._lastAssess.all.find(x => x.it.id === id) : null) || null;
     if (e && !e.e.ux.canApprove) { notify('Este producto todavía no está listo para aprobarse.', 'warn'); return; }
@@ -935,7 +935,7 @@ function setApproval(id, on) {
 /* ---- Eliminar con confirmación ---- */
 async function confirmDelete(id) {
   const it = state.lote.find(x => x.id === id); if (!it) return;
-  const ok = await confirmDialog({ title: '¿Eliminar este producto?', message: `Se quitará ${it.sku ? 'el SKU ' + it.sku : 'el producto'} del lote. Esta acción no se puede deshacer; si quieres conservar una copia, usa «Respaldar lote».`, confirmLabel: 'Eliminar', danger: true });
+  const ok = await confirmDialog({ title: '¿Eliminar este producto?', message: `Se quitará ${it.sku ? 'el SKU ' + it.sku : 'el producto'} de Productos. Esta acción no se puede deshacer; si quieres conservar una copia, usa «Respaldo».`, confirmLabel: 'Eliminar', danger: true });
   if (!ok) return;
   state.lote = state.lote.filter(x => x.id !== id);
   if (state._editingId === id) { state._editingId = null; state._editingProvenance = null; syncAddButton(); resetTracking(); }
@@ -943,7 +943,7 @@ async function confirmDelete(id) {
   state.audit.push(Anomalies.event('producto_eliminado', it, { itemId: id })); state.audit = state.audit.slice(-500);
   persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
   renderLote(); renderOutputs();
-  notify('Producto eliminado del lote.');
+  notify('Producto eliminado.');
 }
 
 /* Eventos */
@@ -1035,11 +1035,11 @@ document.addEventListener('click', e => {
 });
 function startEdit(id, then) {
   const it = state.lote.find(x => x.id === id);
-  if (!it) { notify('No encontré ese producto en el lote.', 'warn'); return false; }
+  if (!it) { notify('No encontré ese producto en Productos.', 'warn'); return false; }
   state.cat = it.cat; state.v = { ...it.v }; state.sku = it.sku || ''; state._editingProvenance = it.provenance || {}; state._editingId = it.id; state.img = it.img || ''; state.aiFlags = { ...(it.ai || {}) }; state.mtShort = !!it.mtShort; state.aiSuggest = [];
   catOpen = false;
   resetTracking();
-  // El producto permanece en el lote hasta que se guarden los cambios: si se cierra la página o se limpia el formulario no se pierde.
+  // El producto permanece en Productos hasta que se guarden los cambios: si se cierra la página o se limpia el formulario no se pierde.
   renderCats(); renderForm(); renderOutputs(); renderLote(); syncAddButton();
   window.scrollTo({ top: 0, behavior: 'smooth' });
   notify('Editando producto. Pulsa «Guardar cambios» al terminar; si limpias el formulario se conserva la versión anterior.', 'info');
@@ -1072,14 +1072,14 @@ $('#add').addEventListener('click', () => {
   renderForm(); renderOutputs(); renderLote(); renderAiSuggest(); resetPhotos(); syncAddButton();
   learnFromSave(newItem, prevItem, autoFix);
   const fixMsg = autoFix.length ? ` Corrección segura: ${autoFix.map(c => `«${c.original}» → «${c.corrected}»`).join(', ')} (reversible en Conocimiento).` : '';
-  if (saved) notify((wasEditing ? 'Cambios guardados en el lote.' : 'Producto guardado en el lote.') + fixMsg, 'ok');
-  else notify('El producto está en el lote, pero el navegador no pudo guardarlo. Descarga un respaldo para no perderlo.', 'error');
+  if (saved) notify((wasEditing ? 'Cambios guardados.' : 'Producto guardado.') + fixMsg, 'ok');
+  else notify('El producto está en Productos, pero el navegador no pudo guardarlo. Descarga un respaldo para no perderlo.', 'error');
   queueLinking(catalogSync([newItem]));
 });
-function syncAddButton() { const b = $('#add'); if (b) b.textContent = state._editingId ? 'Guardar cambios' : 'Agregar al lote'; }
+function syncAddButton() { const b = $('#add'); if (b) b.textContent = state._editingId ? 'Guardar cambios' : 'Agregar a Productos'; }
 $('#clear').addEventListener('click', async () => {
   if (isDirty() && hasAny(CATS[state.cat])) {
-    const ok = await confirmDialog({ title: '¿Limpiar el formulario?', message: state._editingId ? 'Perderás los cambios sin guardar. El producto conserva su versión anterior en el lote.' : 'Perderás lo capturado, que todavía no está en el lote.', confirmLabel: 'Limpiar', danger: true });
+    const ok = await confirmDialog({ title: '¿Limpiar el formulario?', message: state._editingId ? 'Perderás los cambios sin guardar. El producto conserva su versión anterior en Productos.' : 'Perderás lo capturado, que todavía no está en Productos.', confirmLabel: 'Limpiar', danger: true });
     if (!ok) return;
   }
   state.v = {}; state.sku = ''; state.img = ''; state.mtShort = false; state.aiFlags = {}; state.aiSuggest = []; state._editingId = null; state._editingProvenance = null;
@@ -1088,21 +1088,21 @@ $('#clear').addEventListener('click', async () => {
   notify('Formulario limpio.', 'ok');
 });
 $('#lote-clear').addEventListener('click', async () => {
-  if (!state.lote.length) { notify('El lote ya está vacío.', 'warn'); return; }
+  if (!state.lote.length) { notify('Ya no hay productos.', 'warn'); return; }
   const n = state.lote.length;
-  const ok = await confirmDialog({ title: '¿Vaciar todo el lote?', message: `Se eliminarán ${n} producto(s). Esta acción no se puede deshacer. Si quieres conservarlos, descarga antes un respaldo.`, confirmLabel: 'Vaciar lote', danger: true });
+  const ok = await confirmDialog({ title: '¿Vaciar todos los productos?', message: `Se eliminarán ${n} producto(s). Esta acción no se puede deshacer. Si quieres conservarlos, descarga antes un respaldo.`, confirmLabel: 'Vaciar productos', danger: true });
   if (!ok) return;
   state.lote = []; state.loteOpen.clear();
   state.audit.push(Anomalies.event('lote_vaciado', null, { count: n })); state.audit = state.audit.slice(-500);
   persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
   if (state._editingId) { state._editingId = null; state._editingProvenance = null; syncAddButton(); resetTracking(); }
   renderLote(); renderOutputs();
-  notify('Lote vaciado.', 'ok');
+  notify('Productos vaciados.', 'ok');
 });
 $('#lote-copy').addEventListener('click', e => withBusy(e.currentTarget, async () => {
-  if (!state.lote.length) { notify('El lote está vacío.', 'warn'); return; }
-  await copyText(toSheet(exportRows(), '\t'), 'Lote copiado. Pégalo en tu hoja de cálculo.');
-}, 'copiar el lote'));
+  if (!state.lote.length) { notify('No hay productos.', 'warn'); return; }
+  await copyText(toSheet(exportRows(), '\t'), 'Productos copiados. Pégalos en tu hoja de cálculo.');
+}, 'copiar los productos'));
 
 /* Descarga de archivos (sin dependencias: Blob y un enlace temporal) */
 async function saveFile(filename, data, mime) {
@@ -1145,7 +1145,7 @@ async function saveFile(filename, data, mime) {
   }
 }
 $('#lote-dl').addEventListener('click', e => withBusy(e.currentTarget, async () => {
-  if (!state.lote.length) { notify('El lote está vacío.', 'warn'); return; }
+  if (!state.lote.length) { notify('No hay productos.', 'warn'); return; }
   await saveFile('fichas-catalogo.csv', '\uFEFF' + toSheet(exportRows(), ','));
 }, 'descargar el CSV'));
 
@@ -1189,7 +1189,7 @@ $('#extract').addEventListener('click', () => {
 $('#dic-pos').checked = !!state.dic.pos;
 $('#dic-pos').addEventListener('change', e => { state.dic.pos = e.target.checked; saveDic(); });
 $('#dic-learn').addEventListener('click', () => {
-  if (!state.lote.length) { toast('El lote está vacío.'); return; }
+  if (!state.lote.length) { toast('No hay productos.'); return; }
   const keep = keepSet(), add = { marcas: new Set(), principios: new Set(), labs: new Set() };
   state.lote.forEach(it => {
     const v = computeFor(it.cat, it.v, keep).vt.v;
@@ -1278,7 +1278,7 @@ function renderBulk() {
     <div class="actions">
       ${aiCand.length && !b.running ? `<button class="btn btn--ai" data-bulk="ai">🤖 Completar ${aiCand.length} filas con IA (≈${Math.ceil(aiCand.length / AI.BATCH)} llamadas)</button>` : ''}
       ${b.running ? `<button class="btn" data-bulk="cancel">Detener</button>` : ''}
-      <button class="btn btn--primary" data-bulk="add" ${ready.length && !b.running ? '' : 'disabled'}>Agregar ${ready.length} al lote</button>
+      <button class="btn btn--primary" data-bulk="add" ${ready.length && !b.running ? '' : 'disabled'}>Agregar ${ready.length} a Productos</button>
       <button class="btn btn--quiet" data-bulk="discard" ${b.running ? 'disabled' : ''}>Descartar archivo</button>
     </div>`;
 }
@@ -1467,7 +1467,7 @@ function currentBatch() { return magentoBatch(state.lote, keepSet(), state.meta,
 function renderExport(assessed) {
   if (state.plat === 'mc') renderMc();
   const box = $('#exp-summary'), dl = $('#exp-dl'), cp = $('#exp-copy');
-  if (!state.lote.length) { box.innerHTML = `<div class="empty-state"><p><strong>No hay productos listos para exportar.</strong></p><p class="hint">Agrega productos al lote y aquí verás cuántos están listos, con advertencias o bloqueados.</p><div class="actions"><button type="button" class="btn" data-nav-go="captura">Agregar producto</button></div></div>`; dl.disabled = true; cp.disabled = true; return; }
+  if (!state.lote.length) { box.innerHTML = `<div class="empty-state"><p><strong>No hay productos listos para exportar.</strong></p><p class="hint">Agrega productos y aquí verás cuántos están listos, con advertencias o bloqueados.</p><div class="actions"><button type="button" class="btn" data-nav-go="captura">Agregar producto</button></div></div>`; dl.disabled = true; cp.disabled = true; return; }
   const ex = currentBatch(), e = ex.excluded, reasons = [], notes = [];
   if (ex.contract && !ex.contract.ok) reasons.push(`El contrato CSV de Magento no es válido: ${ex.contract.errors.slice(0, 3).join(' | ')}`);
   else notes.push(`Contrato Magento: ${ex.header.length} columnas por fila; coma solo como separador de columnas en los campos de texto generados.`);
@@ -1475,7 +1475,7 @@ function renderExport(assessed) {
   if (e.bloqueadas) reasons.push(`${e.bloqueadas} con la descripción de Magento bloqueada, por ejemplo sin declarar receta.`);
   if (e.faltantes) reasons.push(`${e.faltantes} con datos faltantes. Activa "Incluir filas con datos faltantes" si quieres exportarlas.`);
   if (e.lenguaje) reasons.push(`${e.lenguaje} con avisos de lenguaje.`);
-  if (e.ia) reasons.push(`${e.ia} con datos de IA sin confirmar (sugeridos o leídos de fotos). Confírmalos en el lote o activa la opción para incluirlos.`);
+  if (e.ia) reasons.push(`${e.ia} con datos de IA sin confirmar (sugeridos o leídos de fotos). Confírmalos en Productos o activa la opción para incluirlos.`);
   if (e.duplicadas) reasons.push(`${e.duplicadas} SKU repetidos. Se exporta el último de cada uno.`);
   if (ex.relations && state.exp.incRel !== false) { const r = ex.relations; if (r.upsell + r.related + r.crosssell) notes.push(`Relacionados en el CSV: ${r.upsell} con alternativas (upsell_skus), ${r.related} con relacionados (related_skus) y ${r.crosssell} con compatibles (crosssell_skus). Solo apuntan a SKU que se exportan en este mismo archivo.`); }
   if (e.sinMeta) notes.push(`${e.sinMeta} van sin meta title, meta description ni short_description porque la estructura de su categoría no está confirmada.`);
@@ -1491,8 +1491,8 @@ function renderExport(assessed) {
   /* Las métricas (Health/SEO/Contenido/Magento/Score 360°) ya se muestran completas en Lote (#h-lote),
      con los mismos números (ass.magSum / ass.s360Sum). Aquí solo se referencian, no se repiten. */
   const readiness = `<div class="exp-compact">`
-    + `<p>${ass.magSum.blocked ? `<strong>${esc(ass.magSum.blocked)}</strong> bloqueado(s) para Magento. ` : ''}Mismas métricas de Health, SEO, Contenido, Magento y Score 360° que en Lote.</p>`
-    + `<a href="#h-lote">Ver resumen completo en Lote ↑</a>`
+    + `<p>${ass.magSum.blocked ? `<strong>${esc(ass.magSum.blocked)}</strong> bloqueado(s) para Magento. ` : ''}Mismas métricas de Health, SEO, Contenido, Magento y Score 360° que en Productos.</p>`
+    + `<a href="#h-lote">Ver resumen completo en Productos ↑</a>`
     + `</div>`;
   box.innerHTML = readiness + `<p><strong>${ex.rows.length} de ${ex.total}</strong> productos se exportan.${ex.rows.length ? '' : ' No hay productos listos para exportar.'}</p>`
     + (reasons.length ? `<div class="note note--warn"><p><strong>No se exportan</strong> <button class="linkbtn why" data-why="exportreasons">¿Por qué?</button></p><ul>${reasons.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '')
@@ -1503,7 +1503,7 @@ function renderExport(assessed) {
 function renderMetaPreview() {
   const id = state.metaEditCat, box = $('#meta-prev');
   const smp = (state.cat === id && hasAny(CATS[id])) ? state.v : (state.lote.find(x => x.cat === id) || {}).v;
-  if (!smp) { box.innerHTML = `<p class="hint">Para ver la vista previa, captura un producto de esta categoría en el formulario o agrégalo al lote.</p>`; return; }
+  if (!smp) { box.innerHTML = `<p class="hint">Para ver la vista previa, captura un producto de esta categoría en el formulario o agrégalo a Productos.</p>`; return; }
   const r = computeFor(id, smp, keepSet(), state.meta);
   box.innerHTML = `<h3>Vista previa con un producto de ${esc(CATS[id].name)}</h3>` + metaWarns(r.meta)
     + metaBlock('Meta title', r.meta.mt, 'mt', false) + metaBlock('Meta description', r.meta.md, 'md', false) + metaBlock('Alt de la imagen principal', r.meta.alt, 'alt', false);
@@ -1577,12 +1577,12 @@ function renderMc() {
   const box = $('#mc-summary'); if (!box) return;
   const dl = $('#mc-dl'), cp = $('#mc-copy');
   $('#mc-incf').checked = !!state.mc.incF; $('#mc-ia').checked = !!state.mc.incIA; $('#mc-fmt').value = state.mc.fmt;
-  if (!state.lote.length) { box.innerHTML = '<div class="empty-state"><p><strong>No hay productos listos para exportar.</strong></p><p class="hint">Agrega productos al lote y aquí verás cuántos salen en el archivo.</p></div>'; dl.disabled = cp.disabled = true; return; }
+  if (!state.lote.length) { box.innerHTML = '<div class="empty-state"><p><strong>No hay productos listos para exportar.</strong></p><p class="hint">Agrega productos y aquí verás cuántos salen en el archivo.</p></div>'; dl.disabled = cp.disabled = true; return; }
   const f = mcFeed(), e = f.excluded, why = [], notes = [];
   if (e.sinSku) why.push(`${e.sinSku} sin SKU. Merchant Center necesita el id para ubicar el producto.`);
   if (e.faltantes) why.push(`${e.faltantes} con datos faltantes. Activa «Incluir filas con datos faltantes» si quieres exportarlas.`);
   if (e.sinDescripcion) why.push(`${e.sinDescripcion} sin título o sin descripción de Merchant Center.`);
-  if (e.ia) why.push(`${e.ia} con datos de IA sin confirmar. Confírmalos en el lote o activa la opción para incluirlos.`);
+  if (e.ia) why.push(`${e.ia} con datos de IA sin confirmar. Confírmalos en Productos o activa la opción para incluirlos.`);
   if (e.duplicadas) why.push(`${e.duplicadas} SKU repetidos. Se exporta el último de cada uno.`);
   if (e.tituloLargo) notes.push(`${e.tituloLargo} título(s) pasan de ${TITLE_MAX} caracteres y Merchant Center los puede cortar.`);
   if (e.descLarga) notes.push(`${e.descLarga} descripción(es) pasan de ${MC_DESC_MAX} caracteres.`);
@@ -1679,7 +1679,7 @@ async function runConnector(importToBatch=false) {
     }
     persist('fichas.lote.v1',state.lote); state.audit.push({action:'integration_import',sku:'',at:new Date().toISOString(),meta:{source:cfg.sourceId,count:added}}); state.audit=state.audit.slice(-500); persist('fichas.audit.v1',state.audit); renderLote();
     learn(fromConnector,{source:'connector'});
-    toast(`${added} registro(s) agregados al lote para revisión.`);
+    toast(`${added} registro(s) agregados a Productos para revisión.`);
     return records;
   } catch(e) { connectorStatus(UX.friendlyError(e, 'conectar con la fuente').message,'note--bad'); return []; }
 }
@@ -1870,7 +1870,7 @@ function renderImgReview() {
   if (!r) { box.innerHTML = ''; return; }
   if (!r.campos.length) { box.innerHTML = '<div class="note note--info"><p>La IA no encontró datos legibles en las fotos. Prueba con una foto más nítida y de frente.</p></div>'; return; }
   const c = CATS[r.cat];
-  box.innerHTML = `<div class="note note--warn"><p><strong>Datos leídos de la foto.</strong> Compáralos con la imagen y corrige lo necesario. Al aplicarlos quedan como «IA sin confirmar» y no se exportan a Magento hasta confirmarlos en el lote.</p></div>
+  box.innerHTML = `<div class="note note--warn"><p><strong>Datos leídos de la foto.</strong> Compáralos con la imagen y corrige lo necesario. Al aplicarlos quedan como «IA sin confirmar» y no se exportan a Magento hasta confirmarlos en Productos.</p></div>
     <div class="review">${r.campos.map((x, i) => `<div class="review-row">
       <label class="check"><input type="checkbox" data-imgon="${i}" ${x.existente ? '' : 'checked'}><span><b>${esc(labelOf(c, x.campo))}</b>${x.numeros ? ' <span class="ai-badge ai-badge--sug">Revisa los números</span>' : ''}${x.existente ? `<span class="ai-why">Ya tiene un dato: ${esc(x.existente)}</span>` : ''}</span></label>
       ${VERBATIM_KEYS.includes(x.campo) ? `<textarea data-imgval="${i}" rows="${x.campo === 'nutrimental' ? 8 : 3}">${esc(x.valor)}</textarea>` : `<input type="text" data-imgval="${i}" value="${esc(x.valor)}" autocomplete="off">`}
@@ -1987,7 +1987,7 @@ function assistantContext() {
     if (s.lint.check.length) L.push(`Avisos de datos: ${s.lint.check.join(' ')}`);
     L.push(`Estructura de meta de esta categoría confirmada: ${s.metaConfirmed ? 'sí' : 'no'}`);
   }
-  L.push(`Productos en el lote: ${s.lote.n}`);
+  L.push(`Productos en Productos: ${s.lote.n}`);
   if (s.lote.exp) { const e = s.lote.exp.excluded; L.push(`Exportables ahora: ${s.lote.exp.rows} de ${s.lote.exp.total}. Excluidos: sin SKU ${e.sinSku}, descripción bloqueada ${e.bloqueadas}, datos faltantes ${e.faltantes}, avisos de lenguaje ${e.lenguaje}, IA sin confirmar ${e.ia}`); }
   if (state.bulk) L.push(`Carga masiva abierta con ${state.bulk.rows.length} filas`);
   return L.join('\n');
@@ -2299,7 +2299,7 @@ async function runLoteKnowledge() {
       kLoteSig.set(it.id, sig);
       if (++n % 20 === 0) await new Promise(r => setTimeout(r, 0));
     }
-    /* Correcciones que la aplicación hizo sola (reglas seguras o equivalencias confirmadas) en los productos de este lote. */
+    /* Correcciones que la aplicación hizo sola (reglas seguras o equivalencias confirmadas) en los productos de estos productos. */
     const ids = new Set(state.lote.map(x => x.id));
     const auto = (await Knowledge.listCorrections({ limit: 300 })).filter(c => c.kind === 'auto' && c.status === 'applied' && ids.has(c.itemId));
     const asig = JSON.stringify(auto.map(c => c.id));
@@ -2406,7 +2406,7 @@ async function renderKnowledge() {
     for (const a of aliases) if (state.kOpen.has(a.id)) kWhyCache.set(a.id, await Knowledge.why(a.id));
     if (seq !== kRenderSeq) return;
     if (!rows.length) {
-      $('#k-results').innerHTML = `<p class="empty-state">${st.entities ? 'Ningún conocimiento coincide con tu búsqueda.' : 'Todavía no hay conocimiento. Se genera solo al guardar productos en el lote, o pulsa «Aprender del lote actual».'}</p>`;
+      $('#k-results').innerHTML = `<p class="empty-state">${st.entities ? 'Ningún conocimiento coincide con tu búsqueda.' : 'Todavía no hay conocimiento. Se genera solo al guardar productos, o pulsa «Aprender de los productos actuales».'}</p>`;
     } else {
       const ACTIONABLE = new Set(['observed', 'suggested', 'inferred']);
       const highConf = rows.filter(r => ACTIONABLE.has(r.status) && r.confidence >= 0.9);
@@ -2443,11 +2443,11 @@ $('#conocimiento').addEventListener('click', async e => {
 });
 $('#k-auto').addEventListener('change', async e => { try { await Knowledge.setSettings({ autoCorrect: e.target.checked }); notify(e.target.checked ? 'Se aplicarán correcciones seguras al guardar (siempre con el original conservado).' : 'Solo se sugerirá; nada se corregirá solo.', 'ok'); } catch (err) { notify(UX.friendlyError(err, 'guardar el ajuste').message, 'error'); } });
 $('#k-learn').addEventListener('click', ev => withBusy(ev.currentTarget, async () => {
-  if (!state.lote.length) { notify('El lote está vacío: no hay de qué aprender.', 'warn'); return; }
+  if (!state.lote.length) { notify('No hay productos: no hay de qué aprender.', 'warn'); return; }
   const r = await learn(state.lote, { source: 'lote' });
   if (r.ok === false) { notify(r.error, 'error'); return; }
   notify(`Se aprendió de ${r.products} producto(s). Lo que ya se conocía no se duplica.`, 'ok'); await renderKnowledge();
-}, 'aprender del lote'));
+}, 'aprender de los productos'));
 $('#k-integrity').addEventListener('click', ev => withBusy(ev.currentTarget, async () => {
   const r = await Knowledge.integrity();
   notify(r.ok ? `Integridad correcta: ${r.entities} entidades, sin referencias rotas.` : `Se encontraron ${r.total} problema(s) de integridad.`, r.ok ? 'ok' : 'warn');
@@ -2458,7 +2458,7 @@ $('#k-dict-add').addEventListener('click', ev => withBusy(ev.currentTarget, asyn
   if (r.skipped) notify('Ese diccionario ya se había importado.', 'warn'); else { notify(`${r.count} equivalencia(s) importadas como confirmadas.`, 'ok'); $('#k-dict-text').value = ''; state.kRev++; await renderKnowledge(); }
 }, 'importar el diccionario'));
 $('#k-reset').addEventListener('click', async () => {
-  const ok = await confirmDialog({ title: '¿Reiniciar el conocimiento?', message: 'Se borrará todo lo que la aplicación aprendió (entidades, alias, relaciones, evidencia y correcciones). Tu lote y tus productos no se tocan. Descarga antes un respaldo si quieres conservarlo.', confirmLabel: 'Reiniciar', danger: true });
+  const ok = await confirmDialog({ title: '¿Reiniciar el conocimiento?', message: 'Se borrará todo lo que la aplicación aprendió (entidades, alias, relaciones, evidencia y correcciones). Tus productos no se tocan. Descarga antes un respaldo si quieres conservarlo.', confirmLabel: 'Reiniciar', danger: true });
   if (!ok) return;
   try { await Knowledge.reset(); kIssues.clear(); kLoteSig.clear(); state.kA = null; state.kRev++; await renderKnowledge(); renderOutputs(); renderLote(); notify('Conocimiento reiniciado.', 'ok'); }
   catch (e) { if (window.console) console.error(e); notify(UX.friendlyError(e, 'reiniciar el conocimiento').message, 'error'); }
@@ -2588,7 +2588,7 @@ const cloneClasif = () => JSON.parse(JSON.stringify(state.clasif));
 function renderClasif() {
   const box = $('#cl-body'); if (!box) return;
   const rows = state.clasif.rows;
-  if (!rows.length) { box.innerHTML = '<div class="empty-state"><p><strong>El diccionario está vacío.</strong></p><p class="hint">Agrega filas a mano, importa un CSV o descarga la plantilla con los principios activos de tu lote.</p></div>'; return; }
+  if (!rows.length) { box.innerHTML = '<div class="empty-state"><p><strong>El diccionario está vacío.</strong></p><p class="hint">Agrega filas a mano, importa un CSV o descarga la plantilla con los principios activos de tus productos.</p></div>'; return; }
   const ver = rows.filter(r => r.estado === 'verificado').length;
   box.innerHTML = `<p class="hint"><strong>${rows.length}</strong> fila(s) · <strong>${ver}</strong> verificada(s) · ${rows.length - ver} sin verificar.</p>`
     + rows.slice().sort((a, b) => a.principio.localeCompare(b.principio)).map(r => {
@@ -2610,7 +2610,7 @@ $('#cl-export').addEventListener('click', e => withBusy(e.currentTarget, async (
 }, 'exportar el diccionario'));
 $('#cl-tpl').addEventListener('click', e => withBusy(e.currentTarget, async () => {
   const faltan = Clasif.missing(state.clasif, state.lote.filter(it => it.cat === 'med').map(it => it.v && it.v.principio));
-  if (!faltan.length) { clStatus('Todos los principios activos del lote ya están en el diccionario.'); return; }
+  if (!faltan.length) { clStatus('Todos los principios activos de Productos ya están en el diccionario.'); return; }
   const tmp = Clasif.empty(); faltan.forEach(p => Clasif.upsert(tmp, { principio: p, fuente: 'Pendiente de verificar en el índice ATC de la OMS' }));
   await saveFile('plantilla-clasificacion.csv', '﻿' + Clasif.toCsv(tmp), 'text/csv;charset=utf-8');
   clStatus(`Plantilla con ${faltan.length} principio(s) activo(s). Llena el código ATC, verifícalo y súbela con «Importar CSV».`);
@@ -2648,7 +2648,7 @@ $('#cl-body').addEventListener('click', async e => {
 });
 
 /* ---------- Catálogo interno y complementos ----------
- * Los productos guardados quedan en un catálogo aparte del lote (vaciar el lote no lo borra). Un complemento sin producto
+ * Los productos guardados quedan en un catálogo aparte de Productos (vaciar los productos no lo borra). Un complemento sin producto
  * principal queda «esperando» (estado interno, no se exporta). La IA solo propone; cada vínculo lo confirma una persona. */
 const saveCatalog = () => persist('fichas.catalog.v1', state.catalog);
 const catalogNow = () => new Date().toISOString();
@@ -2782,7 +2782,7 @@ function renderCatalog() {
   renderBell();
   const box = $('#cat-body'); if (!box) return;
   const c = state.catalog, L = Catalog.STATUS_LABEL;
-  if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en el lote se agregan aquí solos. Vaciar el lote no los borra.</p></div>'; renderCatDrawer(); return; }
+  if (!c.entries.length) { box.innerHTML = '<div class="empty-state"><p><strong>El catálogo todavía está vacío.</strong></p><p class="hint">Los productos con SKU que guardes en Productos se agregan aquí solos. Vaciar los productos no los borra.</p></div>'; renderCatDrawer(); return; }
   const lk = Catalog.lk, eff = Catalog.effectiveRels(c);
   const nameOf = sku => { const x = Catalog.find(c, sku); return x ? x.nombre : sku; };
   const stOf = e => Catalog.status(c, e);
@@ -2947,14 +2947,14 @@ document.addEventListener('click', async e => {
   }
   if (t.dataset.catDel) {
     const x = Catalog.find(c, t.dataset.catDel); if (!x) return;
-    const ok = await confirmDialog({ title: '¿Quitar del catálogo?', message: `Se quitará «${x.nombre}» del catálogo interno y sus vínculos. El producto del lote no se borra.`, confirmLabel: 'Quitar', danger: true });
+    const ok = await confirmDialog({ title: '¿Quitar del catálogo?', message: `Se quitará «${x.nombre}» del catálogo interno y sus vínculos. El producto de Productos no se borra.`, confirmLabel: 'Quitar', danger: true });
     if (ok) { Catalog.remove(c, x.sku); saveCatalog(); renderCatalog(); toast('Quitado del catálogo.'); }
   }
 });
 
 
 
-/* ---------- Detalle del lote en un panel lateral ----------
+/* ---------- Detalle de Productos en un panel lateral ----------
  * En pantallas anchas «Ver» abre un panel a la derecha, sin empujar la lista; en angostas se abre debajo de la fila, como siempre. */
 const drawerMode = () => !!(window.matchMedia && window.matchMedia('(min-width:721px)').matches);
 function renderLoteDrawer(all) {
@@ -3075,10 +3075,10 @@ async function applyRestore(d, choice) {
       state.lote = valid; state.loteOpen.clear(); state.sel.clear(); state.loteDrawer = '';
       if (Array.isArray(lote.audit) && lote.audit.length) state.audit = lote.audit;
       if (state._editingId && !state.lote.some(x => x.id === state._editingId)) { state._editingId = null; state._editingProvenance = null; syncAddButton(); }
-      done.push(`lote reemplazado (${valid.length})`);
+      done.push(`productos reemplazados (${valid.length})`);
     } else {
       const r = Backup.mergeLote(state.lote, valid);
-      state.lote = r.items; done.push(`lote: ${r.added} agregados, ${r.skipped} ya estaban`);
+      state.lote = r.items; done.push(`productos: ${r.added} agregados, ${r.skipped} ya estaban`);
     }
     state.audit.push(Anomalies.event('respaldo_cargado', null, { parte: 'lote', modo: choice.lote })); state.audit = state.audit.slice(-500);
     persist('fichas.lote.v1', state.lote); persist('fichas.audit.v1', state.audit);
@@ -3186,7 +3186,7 @@ document.addEventListener('click', async e => {
   }
 });
 
-/* ---------- Cambios masivos del lote ----------
+/* ---------- Cambios masivos de Productos ----------
  * Panel de resumen con correcciones sugeridas (Conocimiento y el propio lote) y cambios que elige la persona.
  * Lo regulatorio (vía y receta) nunca se aplica sin que la persona marque producto por producto y confirme. */
 function bulkGroups() {
@@ -3210,9 +3210,9 @@ function bulkPanelHtml(all) {
   const autoRows = (() => { const m = new Map(); state.kAuto.forEach(c => { const k = `${c.field}|${c.original}|${c.corrected}`; m.set(k, (m.get(k) || { c, n: 0 })); m.get(k).n++; }); return [...m.values()]; })();
   const autoHtml = autoRows.length ? `<details class="plain"><summary>Se corrigieron solas (${state.kAuto.length})</summary><div class="tablewrap"><table class="lote-table"><thead><tr><th scope="col">Campo</th><th scope="col">Antes</th><th scope="col">Después</th><th scope="col">Productos</th></tr></thead><tbody>${autoRows.slice(0, 15).map(r => `<tr><td data-label="Campo">${esc(((Object.values(CATS).map(c => c.fields.find(x => x.key === r.c.field)).find(Boolean)) || { label: r.c.field }).label)}</td><td data-label="Antes"><code>${esc(r.c.original)}</code></td><td data-label="Después"><code>${esc(r.c.corrected)}</code></td><td data-label="Productos">${r.n}</td></tr>`).join('')}</tbody></table></div><p class="hint">Reglas seguras y equivalencias que ya confirmaste. Se pueden revertir desde la pestaña Conocimiento.</p></details>` : '';
   const undo = state.bulkUndo ? `<p class="hint">Último cambio masivo: ${esc(state.bulkUndo.label)}. <button type="button" class="linkbtn" data-bk="undo">Deshacer</button></p>` : '';
-  return `<details class="plain bulk-box" open><summary>Resumen del lote y correcciones</summary>`
+  return `<details class="plain bulk-box" open><summary>Resumen de productos y correcciones</summary>`
     + `<p class="mag-line"><strong>${n.bloqueado}</strong> bloqueado(s) · <strong>${n.revisar}</strong> por revisar · <strong>${n.listo}</strong> listos para aprobar · <strong>${n.aprobado}</strong> aprobado(s) · <strong>${falta}</strong> con datos faltantes</p>`
-    + (groups.length ? `<h3>Correcciones sugeridas (${groups.length})</h3><p class="hint">Salen de lo que Conocimiento sabe y de los demás productos de este lote. Nada se aplica solo: tú eliges.</p><div class="fixes">${rows}</div>` : '<p class="hint">Conocimiento no tiene correcciones sugeridas para este lote.</p>')
+    + (groups.length ? `<h3>Correcciones sugeridas (${groups.length})</h3><p class="hint">Salen de lo que Conocimiento sabe y de los demás productos de estos productos. Nada se aplica solo: tú eliges.</p><div class="fixes">${rows}</div>` : '<p class="hint">Conocimiento no tiene correcciones sugeridas para estos productos.</p>')
     + autoHtml + undo + `</details>`;
 }
 function bulkBarHtml(rows) {
@@ -3329,7 +3329,7 @@ function openBulk(o) {
     if (d.reg && !q('c').checked) { err.textContent = 'Confirma que revisaste los productos contra su ficha.'; return; }
     const n = await commitBulk(key, pick, v, o.source || 'manual');
     close();
-    toast(n ? `Cambiado en ${n} producto(s). Puedes deshacerlo desde el resumen del lote.` : 'No había nada que cambiar.');
+    toast(n ? `Cambiado en ${n} producto(s). Puedes deshacerlo desde el resumen de Productos.` : 'No había nada que cambiar.');
   });
   buildValue(); refresh();
   const first = scrim.querySelector(o.mode === 'replace' ? `#${id}-f` : `#${id}-v`); if (first) first.focus();
@@ -3352,10 +3352,10 @@ $('#lote-body').addEventListener('click', e => {
   if (act === 'clearsel') { state.sel.clear(); return renderLote(); }
   if (act === 'selfilt') { const a = assessLote(); a.all.filter(x => passFilter(x.e, state.loteFilter)).forEach(x => state.sel.add(x.it.id)); return renderLote(); }
   if (act === 'change') return openBulk({ ids: [...state.sel], title: 'Cambiar un campo', intro: `Se aplica a los ${state.sel.size} producto(s) marcados. Verás el antes y el después antes de aplicar.` });
-  if (act === 'replace') return openBulk({ mode: 'replace', ids: [], title: 'Buscar y reemplazar', intro: 'Cambia un valor exacto en todo el lote.' });
+  if (act === 'replace') return openBulk({ mode: 'replace', ids: [], title: 'Buscar y reemplazar', intro: 'Cambia un valor exacto en todos los productos.' });
   if (act === 'dismiss' && g) { state.bulkDismissed.add(g.id); return renderLote(); }
   if (act === 'list' && g) { const def = Bulk.byKey(g.key); return openBulk({ key: g.key, value: g.to, locked: true, ids: g.ids, preChecked: !def.reg, title: `${def.label}: ${g.ids.length} producto(s)`, intro: (g.evidence && g.evidence.length ? g.evidence.join('. ') + '.' : g.why) || '', source: 'sugerencia' }); }
-  if (act === 'apply' && g) { commitBulk(g.key, g.ids, g.to, 'sugerencia').then(n => toast(`Aplicado a ${n} producto(s). Puedes deshacerlo desde el resumen del lote.`)); }
+  if (act === 'apply' && g) { commitBulk(g.key, g.ids, g.to, 'sugerencia').then(n => toast(`Aplicado a ${n} producto(s). Puedes deshacerlo desde el resumen de Productos.`)); }
 });
 
 /* Inicio */

@@ -1,6 +1,6 @@
 /*
  * Catálogo interno: los productos que ya se optimizaron y guardaron, con sus complementos.
- * - Vive aparte del lote: vaciar el lote no borra el catálogo.
+ * - Vive aparte de Productos: vaciar el lote no borra el catálogo.
  * - Un producto principal puede tener complementos; un complemento puede esperar a que exista su principal.
  * - Un medicamento con receta, de alta especialidad o sin declarar nunca puede ser complemento (F.complementEligible).
  * - Todo vínculo lo confirma una persona. La IA solo propone (ver ai.js: aiComplements).
@@ -49,7 +49,7 @@ function status(cat, e) {
 }
 const STATUS_LABEL = { no_aplica: 'No puede ser complemento', vinculado: 'Complemento vinculado', esperando: 'Esperando producto principal', independiente: 'No es complemento', sin_evaluar: 'Sin evaluar' };
 
-/* Crea o actualiza la ficha del catálogo a partir de un producto del lote. `title` es el título generado. */
+/* Crea o actualiza la ficha del catálogo a partir de un producto de Productos. `title` es el título generado. */
 /* Nombre corto para mostrar: marca, producto o tipo y concentración o contenido. El título completo se conserva aparte. */
 const shortName = (catId, v) => {
   v = v || {};

@@ -1,5 +1,5 @@
 'use strict';
-/* Cambios masivos del lote, ejecutando la interfaz en jsdom. */
+/* Cambios masivos de Productos, ejecutando la interfaz en jsdom. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { boot, skip, wait } = require('./helpers/boot');
@@ -17,7 +17,7 @@ const setup = async () => {
 };
 const click = (a, sel) => a.d.querySelector(sel).click();
 
-test('masivo: el resumen propone la vía con la evidencia del lote y exige confirmar el dato regulatorio', { skip }, async () => {
+test('masivo: el resumen propone la vía con la evidencia de Productos y exige confirmar el dato regulatorio', { skip }, async () => {
   const a = await setup();
   assert.ok(a.d.querySelector('#lote-body .bulk-box'), 'aparece el resumen');
   assert.match(a.text('#lote-body .bulk-box'), /2 producto\(s\) sin vía de administración/);

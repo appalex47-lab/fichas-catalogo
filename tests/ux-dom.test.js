@@ -9,7 +9,7 @@ const BAD = /\bundefined\b|\bNaN\b|\[object Object\]|\bnull\b/;
 test('UX: al abrir la app se ve dónde estoy, qué producto y qué hacer', { skip }, () => {
   const a = boot();
   const nav = [...a.d.querySelectorAll('#mainnav [data-nav]')].map(b => b.querySelector('.mnav-t').textContent);
-  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Lote', 'Exportar']);
+  assert.deepEqual(nav, ['Captura', 'Validación', 'Contenido', 'Productos', 'Exportar']);
   assert.ok(a.d.querySelector('.railutil [data-nav="conocimiento"]'), 'Conocimiento vive en la bandeja de utilidades');
   assert.equal(a.d.querySelector('#mainnav [aria-current="true"]').dataset.nav, 'captura');
   assert.match(a.text('#prod-bar'), /PRODUCTO/);
@@ -78,7 +78,7 @@ test('UX: el estado de guardado cambia de «sin guardar» a «Guardado» y el pr
   a.fillMed('Tempra', '30', 'A1');
   assert.match(a.text('#save-state'), /Cambios sin guardar/);
   a.d.getElementById('add').click();
-  assert.match(a.toast(), /Producto guardado en el lote/);
+  assert.match(a.toast(), /Producto guardado\./);
   await wait(30);
   assert.match(a.text('#save-state'), /Guardado/);
   assert.match(a.text('#lote-body tbody tr .status'), /LISTO PARA APROBACIÓN/);
@@ -86,7 +86,7 @@ test('UX: el estado de guardado cambia de «sin guardar» a «Guardado» y el pr
   assert.deepEqual(a.errors, []);
 });
 
-test('UX: producto bloqueado en el lote queda BLOQUEADO, cuenta como error y no se puede aprobar', { skip }, () => {
+test('UX: producto bloqueado en Productos queda BLOQUEADO, cuenta como error y no se puede aprobar', { skip }, () => {
   const a = boot();
   a.addMed('', 'Tempra', '30');                     // sin SKU
   a.d.querySelector('[data-edit]').click();
@@ -142,14 +142,14 @@ test('UX: vaciar lote pide confirmación', { skip }, async () => {
   const a = boot();
   a.addMed('A1', 'Tempra', '30'); a.addMed('A2', 'Dolofin', '20');
   a.d.getElementById('lote-clear').click();
-  assert.match(a.text('#confirm-dlg h3'), /Vaciar todo el lote/);
+  assert.match(a.text('#confirm-dlg h3'), /Vaciar todos los productos/);
   await a.confirm(false);
   assert.equal(a.count(), '2');
   a.d.getElementById('lote-clear').click();
   await a.confirm(true);
   assert.equal(a.count(), '0');
-  assert.match(a.text('#lote-body'), /Todavía no hay productos en el lote/);
-  assert.match(a.toast(), /Lote vaciado/);
+  assert.match(a.text('#lote-body'), /Todavía no hay productos/);
+  assert.match(a.toast(), /Productos vaciados/);
 });
 
 test('UX: limpiar el formulario con cambios sin guardar pide confirmación', { skip }, async () => {
@@ -165,9 +165,9 @@ test('UX: limpiar el formulario con cambios sin guardar pide confirmación', { s
   assert.match(a.toast(), /Formulario limpio/);
 });
 
-test('UX: estados vacíos útiles y botones del lote deshabilitados', { skip }, () => {
+test('UX: estados vacíos útiles y botones de Productos deshabilitados', { skip }, () => {
   const a = boot();
-  assert.match(a.text('#lote-body'), /Todavía no hay productos en el lote/);
+  assert.match(a.text('#lote-body'), /Todavía no hay productos/);
   assert.ok(a.d.querySelector('#lote-body [data-nav-go="captura"]'), 'CTA Agregar producto');
   assert.match(a.text('#exp-summary'), /No hay productos listos para exportar/);
   for (const id of ['lote-copy', 'lote-dl', 'lote-clear']) assert.equal(a.d.getElementById(id).disabled, true, id);
@@ -230,7 +230,7 @@ test('UX: el lote muestra cada eje y es una tabla accesible que se vuelve tarjet
   const labels = [...a.d.querySelectorAll('#lote-body tbody tr td[data-label]')].map(t => t.dataset.label);
   assert.deepEqual(labels, ['SKU', 'Categoría', 'Título', 'Estado', 'Evaluación', 'Avisos']);
   for (const b of a.d.querySelectorAll('#lote-body tbody button')) assert.equal(b.getAttribute('type'), 'button');
-  assert.match(a.text('.exp-compact'), /Mismas métricas de Health, SEO, Contenido, Magento y Score 360° que en Lote/);
+  assert.match(a.text('.exp-compact'), /Mismas métricas de Health, SEO, Contenido, Magento y Score 360° que en Productos/);
   assert.equal(a.d.querySelector('.exp-compact a').getAttribute('href'), '#h-lote');
 });
 
@@ -242,7 +242,7 @@ test('UX: copiar muestra feedback y evita el doble clic', { skip }, async () => 
   assert.equal(btn.getAttribute('aria-busy'), 'true');
   await wait(60);
   assert.equal(a.copied.length, 1, 'solo una copia a pesar del doble clic');
-  assert.match(a.toast(), /Lote copiado/);
+  assert.match(a.toast(), /Productos copiados/);
   assert.equal(btn.getAttribute('aria-busy'), null);
 });
 
@@ -302,9 +302,9 @@ test('UX: Validación, Contenido y Exportación se deshabilitan sin datos y se h
   a.fillMed('Tempra', '30', 'A1');
   assert.equal(val.disabled, false, 'al capturar datos del producto, Validación se habilita');
   assert.equal(con.disabled, false, 'al capturar datos del producto, Contenido se habilita');
-  assert.equal(exp.disabled, true, 'Exportación sigue deshabilitada: todavía no hay nada en el lote');
+  assert.equal(exp.disabled, true, 'Exportación sigue deshabilitada: todavía no hay nada en Productos');
   a.d.getElementById('add').click();
-  assert.equal(exp.disabled, false, 'al agregar el producto al lote, Exportación se habilita');
+  assert.equal(exp.disabled, false, 'al agregar el producto a Productos, Exportación se habilita');
   a.d.getElementById('clear').click();
   assert.equal(val.disabled, true, 'al limpiar el formulario, Validación vuelve a deshabilitarse');
   assert.equal(con.disabled, true, 'al limpiar el formulario, Contenido vuelve a deshabilitarse');
@@ -395,7 +395,7 @@ test('UX: campos con nombre accesible, botones con tipo y región en vivo', { sk
   assert.equal(a.d.querySelector('.skip').getAttribute('href'), '#h-prod');
 });
 
-test('relacionados: la opción de exportar viene activa y el detalle del lote muestra las alternativas', { skip }, async () => {
+test('relacionados: la opción de exportar viene activa y el detalle de Productos muestra las alternativas', { skip }, async () => {
   const a = boot();
   assert.equal(a.d.getElementById('exp-rel').checked, true);
   a.addMed('TEM-20', 'Tempra', 'Caja con 20 tabletas');

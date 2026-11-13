@@ -94,7 +94,7 @@ test('clasificación: cambiar el ATC de una fila verificada la devuelve a sin ve
   assert.equal(dicc(a).rows[0].atc, 'N02BA01');
 });
 
-test('clasificación: la plantilla toma los principios activos del lote que faltan', { skip }, async () => {
+test('clasificación: la plantilla toma los principios activos de Productos que faltan', { skip }, async () => {
   const a = boot();
   a.addMed('TEM-1', 'Tempra', '20');
   await wait(30);

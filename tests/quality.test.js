@@ -33,7 +33,7 @@ test('calidad: valores peligrosos se ponen en cuarentena sin perder el original'
   assert.deepEqual(r.quarantined.fields, ['fps']);
 });
 
-test('calidad: opción inválida se rechaza y se puede resumir un lote', () => {
+test('calidad: opción inválida se rechaza y se puede resumir un conjunto de productos', () => {
   const a = Q.audit('med', { ...med, receta: 'quizá' });
   const b = Q.audit('med', { ...med, principio: '' });
   assert.ok(a.issues.some(x => x.code === 'invalid-option'));

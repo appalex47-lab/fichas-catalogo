@@ -212,7 +212,7 @@ function buildRulesDoc(opts) {
     ${AI ? table(['Función', 'Qué puede hacer', 'Qué no puede hacer', 'Verificación y estado'], [
       ['Completar datos crudos', `Extraer del texto: ${labs(AI.AI_EXTRACT)}.`, 'Concentración, volumen, forma, presentación, vía y receta: los procesan reglas de código.', 'Cada dato debe aparecer literalmente en el texto; si no, se descarta.'],
       ['Sugerencias', `Sugerir, aunque no estén en el texto: ${labs(AI.AI_SUGGEST)}.`, 'Nunca principio activo, receta ni concentración.', 'Se aplican solo si la persona las acepta. Quedan como «IA sin confirmar» y no se exportan hasta confirmarlas.'],
-      ['Fotos del empaque', `Leer: ${labs(AI.IMG_FIELDS)}.`, 'Nunca indicar si requiere receta. No completar ni adivinar lo ilegible.', 'Se compara con la transcripción; ingredientes, modo de uso y precauciones deben ser copia literal. La persona revisa con la foto, y lo aplicado queda sin confirmar hasta confirmarlo en el lote.'],
+      ['Fotos del empaque', `Leer: ${labs(AI.IMG_FIELDS)}.`, 'Nunca indicar si requiere receta. No completar ni adivinar lo ilegible.', 'Se compara con la transcripción; ingredientes, modo de uso y precauciones deben ser copia literal. La persona revisa con la foto, y lo aplicado queda sin confirmar hasta confirmarlo en Productos.'],
       ['Asistente de uso', 'Explicar la herramienta y los avisos.', 'No da asesoría regulatoria ni cambia textos. Sus acciones son de una lista cerrada.', 'Lo que depende de la pantalla se responde con los datos de la herramienta, sin IA.']
     ]) : '<p class="muted">Módulo de IA no disponible al generar este documento.</p>'}`;
 

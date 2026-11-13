@@ -294,7 +294,7 @@ test('ux: alertas contextuales «Hay N problemas en SEO» y «Magento bloqueado�
   assert.deepEqual(U.contextAlerts(assess(complete), ctxOf(complete)).filter(x => x.axis === 'magento'), []);
 });
 
-/* ---------- Filtros del lote ---------- */
+/* ---------- Filtros de Productos ---------- */
 test('ux: filtros principales con datos reales detrás', () => {
   assert.deepEqual(Object.values(U.PRIMARY_FILTERS), ['Todos', 'Bloqueados', 'Por revisar', 'Listos para aprobar', 'Aprobados']);
   assert.deepEqual(Object.values(U.MORE_FILTERS), ['SEO', 'Contenido', 'Magento', 'Health', 'Score crítico']);
@@ -374,7 +374,7 @@ test('accesibilidad: foco visible, salto al contenido, reducción de movimiento 
 test('navegación: las secciones principales (las seis de la Fase 10 + Conocimiento de la Fase 11) existen y apuntan a una sección real', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const nav = [...html.matchAll(/data-nav="(\w+)"[^>]*>[\s\S]*?<span class="mnav-t">([^<]+)</g)].map(m => [m[1], m[2]]);
-  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportar'], ['catalogo', 'Catálogo'], ['categorias', 'Categorías'], ['conocimiento', 'Conocimiento'], ['respaldo', 'Respaldo']]);
+  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Productos'], ['exportacion', 'Exportar'], ['catalogo', 'Vínculos'], ['categorias', 'Categorías'], ['conocimiento', 'Conocimiento'], ['respaldo', 'Respaldo']]);
   assert.match(html, /id="rules-open"/); assert.match(html, /id="set-open"/); assert.match(html, /href="#masiva"/);
   for (const id of ['h-prod', 'h-out', 'lote', 'exportar', 'prod-bar', 'prod-metrics', 'prod-guide', 'live', 'panel-eval', 'catalogo']) assert.match(html, new RegExp(`id="${id}"`), id);
 });
@@ -424,14 +424,14 @@ test('botones: copiar y descargar usan protección de doble clic y confirmación
   const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
   for (const id of ['lote-copy', 'lote-dl', 'bk-dl', 'exp-copy', 'exp-dl', 'mc-dl', 'mc-copy']) assert.match(app, new RegExp(`\\$\\('#${id}'\\)\\.addEventListener\\('click', e => withBusy`), id);
   assert.match(app, /function confirmDialog/);
-  for (const t of ['¿Eliminar este producto?', '¿Vaciar todo el lote?', '¿Limpiar el formulario?']) assert.ok(app.includes(t), t);
+  for (const t of ['¿Eliminar este producto?', '¿Vaciar todos los productos?', '¿Limpiar el formulario?']) assert.ok(app.includes(t), t);
   assert.doesNotMatch(app, /toast\(e\.message\)/, 'no se muestran mensajes técnicos crudos');
 });
 
 test('botones: el lote deshabilita las acciones cuando está vacío y muestra estados vacíos útiles', () => {
   const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
   assert.match(app, /function syncLoteButtons/);
-  for (const t of ['Todavía no hay productos en el lote.', 'No hay productos listos para exportar.', 'No hay conexiones configuradas.']) assert.ok(app.includes(t), t);
+  for (const t of ['Todavía no hay productos.', 'No hay productos listos para exportar.', 'No hay conexiones configuradas.']) assert.ok(app.includes(t), t);
 });
 
 /* ---------- Móvil ---------- */

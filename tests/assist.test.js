@@ -13,7 +13,7 @@ const base = {
 const withLote = (rows, total, excluded) => ({ ...base, lote: { n: total, aiUnconfirmed: 0, exp: { rows, total, excluded } } });
 
 test('acciones: solo la lista cerrada y campos de la categoría actual', () => {
-  assert.equal(S.parseAction('ir:lote', 'med').label, 'Ir al Lote');
+  assert.equal(S.parseAction('ir:lote', 'med').label, 'Ir a Productos');
   assert.equal(S.parseAction('campo:receta', 'med').label, 'Ir al campo: ¿Requiere receta médica?');
   assert.equal(S.parseAction('campo:receta', 'cos'), null, 'la receta no existe en cosméticos');
   assert.equal(S.parseAction('borrar:lote', 'med'), null);
@@ -41,7 +41,7 @@ test('«qué falta para exportar» y «por qué no se exportan»', () => {
   const r2 = S.localAnswer('¿Por qué no se exportan algunas filas?', snap);
   assert.match(r2.text, /Quedan fuera/);
   assert.match(S.localAnswer('¿Ya puedo exportar?', withLote(4, 4, {})).text, /Todo listo: los 4 productos/);
-  assert.match(S.localAnswer('qué falta para exportar', base).text, /Aún no hay productos en el lote/);
+  assert.match(S.localAnswer('qué falta para exportar', base).text, /Aún no hay productos/);
   assert.match(S.localAnswer('qué falta para exportar', withLote(0, 3, { sinSku: 3 })).text, /Todavía no se puede exportar ninguno/);
 });
 

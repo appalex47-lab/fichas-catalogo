@@ -139,14 +139,14 @@ test('título incompleto: TIT-002 avisa y nombra lo que falta', () => {
   assert.equal(f.bloquea, true);
 });
 
-test('título duplicado dentro del lote: TIT-005', () => {
+test('título duplicado dentro de Productos: TIT-005', () => {
   const a = { cat: 'med', v: med, sku: 'A', img: IMG }, b = { cat: 'med', v: { ...med }, sku: 'B', img: IMG }, c = { cat: 'cos', v: cos, sku: 'C', img: IMG };
   const out = S.evaluateBatch([a, b, c], { keep, metaCfg: F.defMeta() });
   assert.equal(rule(out.items[0], 'TIT-005').estado, 'pendiente');
   assert.equal(rule(out.items[1], 'TIT-005').estado, 'pendiente');
   assert.equal(rule(out.items[2], 'TIT-005').estado, 'cumple');
   assert.equal(rule(out.items[0], 'MT-008').estado, 'pendiente', 'meta title repetido');
-  // fuera de un lote no se evalúa
+  // fuera de un conjunto de productos no se evalúa
   assert.equal(rule(ev({ cat: 'med', v: med }), 'TIT-005').estado, 'no_aplica');
 });
 

@@ -20,12 +20,12 @@ const STATIC_ACTIONS = {
   'ajustes:ia': 'Abrir Ajustes, pestaña IA',
   'ajustes:magento': 'Abrir Ajustes, pestaña Magento',
   'ir:masiva': 'Ir a Carga masiva',
-  'ir:lote': 'Ir al Lote',
+  'ir:lote': 'Ir a Productos',
   'ir:exportar': 'Ir a Exportar',
-  'filtro:faltantes': 'Ver en el lote: con datos faltantes',
-  'filtro:bloqueados': 'Ver en el lote: Magento bloqueado',
-  'filtro:lenguaje': 'Ver en el lote: revisar lenguaje',
-  'filtro:ia': 'Ver en el lote: IA sin confirmar',
+  'filtro:faltantes': 'Ver en Productos: con datos faltantes',
+  'filtro:bloqueados': 'Ver en Productos: Magento bloqueado',
+  'filtro:lenguaje': 'Ver en Productos: revisar lenguaje',
+  'filtro:ia': 'Ver en Productos: IA sin confirmar',
   'pestana:titulo': 'Ver la pestaña Título',
   'pestana:mc': 'Ver la pestaña Merchant Center',
   'pestana:mg': 'Ver la pestaña Magento',
@@ -62,7 +62,7 @@ function exportParts(snap) {
   if (N(e.bloqueadas)) { lines.push(`${e.bloqueadas} con la descripción de Magento bloqueada, por ejemplo por no declarar la receta.`); acts.push('filtro:bloqueados'); }
   if (N(e.faltantes)) { lines.push(`${e.faltantes} con datos faltantes. Puedes activar «Incluir filas con datos faltantes» en Exportar.`); acts.push('filtro:faltantes'); }
   if (N(e.lenguaje)) { lines.push(`${e.lenguaje} con avisos de lenguaje, porque activaste «Excluir filas con avisos de lenguaje».`); acts.push('filtro:lenguaje'); }
-  if (N(e.ia)) { lines.push(`${e.ia} con datos de IA sin confirmar (sugeridos o leídos de fotos). Confírmalos en el lote o activa la opción en Exportar.`); acts.push('filtro:ia'); }
+  if (N(e.ia)) { lines.push(`${e.ia} con datos de IA sin confirmar (sugeridos o leídos de fotos). Confírmalos en Productos o activa la opción en Exportar.`); acts.push('filtro:ia'); }
   if (N(e.duplicadas)) lines.push(`${e.duplicadas} con SKU repetido. Se exporta el último de cada uno.`);
   if (N(e.sinMeta)) { notes.push(`${e.sinMeta} van sin meta title, meta description ni short_description, porque la estructura de meta de su categoría no está confirmada.`); acts.push('ajustes:magento'); }
   if (N(e.sinImagen)) notes.push(`${e.sinImagen} van sin archivo de imagen (base_image). El alt viaja solo en base_image_label.`);
@@ -72,9 +72,9 @@ function exportParts(snap) {
 
 function exportAnswer(snap, mode) {
   const lote = snap.lote || { n: 0 };
-  if (!N(lote.n)) return { text: 'Aún no hay productos en el lote. Agrégalos desde el formulario o con la carga masiva.', actions: ['ir:masiva'] };
+  if (!N(lote.n)) return { text: 'Aún no hay productos. Agrégalos desde el formulario o con la carga masiva.', actions: ['ir:masiva'] };
   const exp = lote.exp, p = exportParts(snap);
-  const head = exp.rows === exp.total ? `Todo listo: los ${exp.total} productos del lote se exportan.` : exp.rows === 0 ? 'Todavía no se puede exportar ninguno.' : `Se exportan ${exp.rows} de ${exp.total} productos.`;
+  const head = exp.rows === exp.total ? `Todo listo: los ${exp.total} productos de Productos se exportan.` : exp.rows === 0 ? 'Todavía no se puede exportar ninguno.' : `Se exportan ${exp.rows} de ${exp.total} productos.`;
   const body = [head];
   if (p.lines.length) body.push(mode === 'status' ? 'Lo que falta resolver:' : 'Quedan fuera:', ...p.lines.map(x => '• ' + x));
   if (p.notes.length) body.push('Ten en cuenta:', ...p.notes.map(x => '• ' + x));
@@ -133,7 +133,7 @@ const metaAnswer = snap => ({
 });
 const aiUnconfAnswer = snap => {
   const n = N(snap.lote && snap.lote.aiUnconfirmed);
-  return { text: n ? `Hay ${n} productos con datos de IA sin confirmar (sugeridos o leídos de fotos). No se exportan a Magento hasta que los revises y pulses «Confirmar IA» en el lote, o actives la opción de incluirlos en Exportar.` : 'No hay productos con datos de IA sin confirmar. Lo que la IA sugiere o lee de una foto queda marcado y no se exporta hasta que lo confirmes en el lote.', actions: n ? ['filtro:ia', 'ir:exportar'] : [] };
+  return { text: n ? `Hay ${n} productos con datos de IA sin confirmar (sugeridos o leídos de fotos). No se exportan a Magento hasta que los revises y pulses «Confirmar IA» en Productos, o actives la opción de incluirlos en Exportar.` : 'No hay productos con datos de IA sin confirmar. Lo que la IA sugiere o lee de una foto queda marcado y no se exporta hasta que lo confirmes en Productos.', actions: n ? ['filtro:ia', 'ir:exportar'] : [] };
 };
 function quotaAnswer(snap) {
   const c = snap.calls || {}, used = N(c.extract) + N(c.vision) + N(c.asst), lim = N(snap.limit);
@@ -155,8 +155,8 @@ const INTENTS = [
   ['titleMissing', q => /(que|cuales|cuantos).*(falta|faltan)|datos faltantes|campos (faltantes|requeridos|obligatorios)|falta para el titulo/.test(q), titleMissingAnswer],
   ['quota', q => /(cuota|llamadas|limite|consumo|cuanto (llevo|he usado|gaste))/.test(q), quotaAnswer],
   ['apiKey', q => /(llave|api key|apikey|token|cohere)/.test(q), s => ({ text: s.keyPresent ? 'Ya hay una llave de Cohere guardada en este navegador. Solo la ve quien use este navegador y nunca va en el código. La puedes cambiar o borrar en Ajustes, pestaña IA.' : 'Falta la llave de Cohere. Pégala en Ajustes, pestaña IA. Se guarda solo en tu navegador y nunca va en el código.', actions: ['ajustes:ia'] })],
-  ['dictionary', q => /diccionario/.test(q), () => ({ text: 'Los diccionarios enseñan a las reglas a reconocer marcas, principios activos y laboratorios en los datos crudos. Se escriben uno por línea, con «Alias=Nombre» si el texto crudo usa otra forma. El botón «Agregar al diccionario los valores del lote» aprende de lo que ya capturaste.', actions: ['ajustes:dic'] })],
-  ['bulk', q => /(carga masiva|masiva|plantilla)|((cargar|cargo|subir|subo|importar|importo).*(muchos|varios|csv|archivo|productos))/.test(q), () => ({ text: ['Para cargar muchos productos:', '1. En Carga masiva descarga la plantilla de la categoría.', '2. Llénala con una fila por producto. Si solo tienes el SKU sucio, ponlo en «Datos crudos».', '3. Súbela: la herramienta muestra qué filas están completas, cuáles tienen faltantes y cuáles no se pueden generar.', '4. Pulsa «Agregar al lote» y luego exporta.'].join('\n'), actions: ['ir:masiva'] })],
+  ['dictionary', q => /diccionario/.test(q), () => ({ text: 'Los diccionarios enseñan a las reglas a reconocer marcas, principios activos y laboratorios en los datos crudos. Se escriben uno por línea, con «Alias=Nombre» si el texto crudo usa otra forma. El botón «Agregar al diccionario los valores de los productos» aprende de lo que ya capturaste.', actions: ['ajustes:dic'] })],
+  ['bulk', q => /(carga masiva|masiva|plantilla)|((cargar|cargo|subir|subo|importar|importo).*(muchos|varios|csv|archivo|productos))/.test(q), () => ({ text: ['Para cargar muchos productos:', '1. En Carga masiva descarga la plantilla de la categoría.', '2. Llénala con una fila por producto. Si solo tienes el SKU sucio, ponlo en «Datos crudos».', '3. Súbela: la herramienta muestra qué filas están completas, cuáles tienen faltantes y cuáles no se pueden generar.', '4. Pulsa «Agregar a Productos» y luego exporta.'].join('\n'), actions: ['ir:masiva'] })],
   ['capabilities', q => /(que puedes|que haces|para que sirves|ayuda|hola|buenas|buenos dias)/.test(q), () => ({ text: 'Puedo explicarte cómo usar la herramienta, por qué se bloquea Magento, qué falta para el título o para exportar, qué significa cada aviso y dónde está cada ajuste. Lo que depende de tu pantalla lo respondo directo, sin usar la IA. Lo demás lo consulto al manual con IA.', actions: [] })]
 ];
 

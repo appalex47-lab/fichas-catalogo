@@ -175,7 +175,7 @@ test('conocimiento UI: un respaldo sin conocimiento reconstruye lo aprendido des
   assert.equal(b.count(), '1');
 });
 
-test('conocimiento UI: un respaldo del lote de versiones anteriores se sigue reconociendo', { skip }, async () => {
+test('conocimiento UI: un respaldo de Productos de versiones anteriores se sigue reconociendo', { skip }, async () => {
   const a = boot(); a.addMed('B1', 'Tempra', '30'); await wait(100);
   const old = { schema: 'fichas.lote-backup.v1', createdAt: new Date().toISOString(), lote: JSON.parse(a.w.localStorage.getItem('fichas.lote.v1')), audit: [], catalog: { v: 1, entries: [], links: [] } };
   const b = boot(); await b.restore(old, {}, { wait: 500 });
@@ -220,10 +220,10 @@ test('conocimiento UI: Cohere sin llave explica qué hacer y la integridad se pu
   a.d.getElementById('k-integrity').click(); await until(() => /Integridad correcta/.test(lastToast(a)));
 });
 
-test('conocimiento UI: «Aprender del lote actual» no duplica y vacío muestra un estado útil', { skip }, async () => {
+test('conocimiento UI: «Aprender de los productos actuales» no duplica y vacío muestra un estado útil', { skip }, async () => {
   const a = boot(); await nav(a);
   assert.match(a.text('#k-results'), /Todavía no hay conocimiento/);
-  a.d.getElementById('k-learn').click(); await until(() => /El lote está vacío/.test(lastToast(a)));
+  a.d.getElementById('k-learn').click(); await until(() => /No hay productos/.test(lastToast(a)));
   a.addMed('B1', 'Tempra', '30'); await learned(a, 1);
   const before = (await eng(a).stats()).evidence;
   a.d.getElementById('k-learn').click(); await until(() => /Se aprendió de 1 producto/.test(lastToast(a)));

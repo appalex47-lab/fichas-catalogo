@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles/styles.css?v=34.0">
+<link rel="stylesheet" href="styles/styles.css?v=35.0">
 </head>
 <body>
 <a class="skip" href="#h-prod">Saltar al contenido</a>
@@ -34,12 +34,12 @@
       <button class="mnav" data-nav="captura" aria-current="true"><span class="mnav-ico" aria-hidden="true">✎</span><span class="mnav-t">Captura</span></button>
       <button class="mnav" data-nav="validacion"><span class="mnav-ico" aria-hidden="true">✓</span><span class="mnav-t">Validación</span></button>
       <button class="mnav" data-nav="contenido"><span class="mnav-ico" aria-hidden="true">¶</span><span class="mnav-t">Contenido</span></button>
-      <button class="mnav" data-nav="lote"><span class="mnav-ico" aria-hidden="true">▤</span><span class="mnav-t">Lote</span> <span class="mnav-count" id="lote-count" aria-label="productos en el lote">0</span></button>
+      <button class="mnav" data-nav="lote"><span class="mnav-ico" aria-hidden="true">▤</span><span class="mnav-t">Productos</span> <span class="mnav-count" id="lote-count" aria-label="productos">0</span></button>
       <button class="mnav" data-nav="exportacion"><span class="mnav-ico" aria-hidden="true">⇩</span><span class="mnav-t">Exportar</span></button>
     </nav>
     <nav class="railutil" aria-label="Utilidades">
       <a class="mnav" href="#masiva"><span class="mnav-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg></span><span class="mnav-t">Carga masiva</span></a>
-      <button class="mnav" type="button" data-nav="catalogo"><span class="mnav-ico" aria-hidden="true">⌘</span><span class="mnav-t">Catálogo</span></button>
+      <button class="mnav" type="button" data-nav="catalogo"><span class="mnav-ico" aria-hidden="true">⌘</span><span class="mnav-t">Vínculos</span></button>
       <button class="mnav" type="button" data-nav="categorias"><span class="mnav-ico" aria-hidden="true">▦</span><span class="mnav-t">Categorías</span></button>
       <button class="mnav" type="button" data-nav="conocimiento"><span class="mnav-ico" aria-hidden="true">✦</span><span class="mnav-t">Conocimiento</span></button>
       <button class="mnav" type="button" data-nav="respaldo"><span class="mnav-ico" aria-hidden="true">⛁</span><span class="mnav-t">Respaldo</span></button>
@@ -55,7 +55,7 @@
   <details class="help" id="help-uso">
     <summary>¿Cómo se usa esta herramienta?</summary>
     <div class="help-body">
-      <p><b>1.</b> Elige la categoría. <b>2.</b> Captura los datos, o pega el SKU sucio en «Rellenar desde datos crudos». <b>3.</b> Revisa las pestañas Título, Merchant Center, Magento y Meta y alt. <b>4.</b> Pulsa «Agregar al lote». <b>5.</b> Exporta el CSV para Magento.</p>
+      <p><b>1.</b> Elige la categoría. <b>2.</b> Captura los datos, o pega el SKU sucio en «Rellenar desde datos crudos». <b>3.</b> Revisa las pestañas Título, Merchant Center, Magento y Meta y alt. <b>4.</b> Pulsa «Agregar a Productos». <b>5.</b> Exporta el CSV para Magento.</p>
       <p>Abajo a la derecha tienes el botón <b>🤖 Asistente</b> para resolver dudas de uso. Junto a cada aviso, el botón <b>¿Por qué?</b> te lo explica al momento, sin usar la IA. El botón <b>Reglas</b> (libro, junto al engrane) abre el documento con las reglas de construcción de las fichas, para Regulatorio. La IA necesita tu llave de Cohere, que se agrega en el engrane de arriba a la derecha (Ajustes, pestaña IA).</p>
     </div>
   </details>
@@ -93,8 +93,8 @@
           <summary>¿Cómo funciona la extracción?</summary>
           <div class="help-body">
             <p><b>Reglas y diccionarios:</b> encuentran dosis, forma, presentación, vía y receta cuando aparecen en el texto, y reconocen las marcas, principios activos y laboratorios que guardaste en Ajustes, pestaña Diccionarios.</p>
-            <p><b>Fotos:</b> la IA lee el empaque y propone marca, producto, tipo, contenido, fabricante y, en cosméticos, ingredientes, modo de uso, precauciones y FPS, y en suplementos la tabla nutrimental, los ingredientes, los alérgenos y las advertencias. Lo ves junto a lo que transcribió, corriges y aplicas solo lo que coincide con la foto. Queda marcado como «IA sin confirmar» y no se exporta hasta confirmarlo en el lote. Nunca indica si el producto requiere receta.</p>
-            <p><b>IA:</b> solo completa marca, principio activo (si está en el texto), laboratorio, producto y tipo. La herramienta verifica cada dato contra el texto. Lo que la IA sugiere sin que esté en el texto (marca, laboratorio o tipo) lo aplicas tú, queda marcado y no se exporta a Magento hasta que lo confirmes en el lote. Nunca sugiere principio activo, receta ni concentración.</p>
+            <p><b>Fotos:</b> la IA lee el empaque y propone marca, producto, tipo, contenido, fabricante y, en cosméticos, ingredientes, modo de uso, precauciones y FPS, y en suplementos la tabla nutrimental, los ingredientes, los alérgenos y las advertencias. Lo ves junto a lo que transcribió, corriges y aplicas solo lo que coincide con la foto. Queda marcado como «IA sin confirmar» y no se exporta hasta confirmarlo en Productos. Nunca indica si el producto requiere receta.</p>
+            <p><b>IA:</b> solo completa marca, principio activo (si está en el texto), laboratorio, producto y tipo. La herramienta verifica cada dato contra el texto. Lo que la IA sugiere sin que esté en el texto (marca, laboratorio o tipo) lo aplicas tú, queda marcado y no se exporta a Magento hasta que lo confirmes en Productos. Nunca sugiere principio activo, receta ni concentración.</p>
           </div>
         </details>
       </details>
@@ -125,7 +125,7 @@
       <div id="live" class="live-box" aria-label="Qué se genera con los datos capturados"></div>
 
       <div class="actions">
-        <button class="btn btn--primary" id="add">Agregar al lote</button>
+        <button class="btn btn--primary" id="add">Agregar a Productos</button>
         <button class="btn btn--quiet" id="clear">Limpiar formulario</button>
       </div>
     </section>
@@ -172,17 +172,17 @@
 
   <section class="panel lote" id="lote" aria-labelledby="h-lote">
     <div class="lote-head">
-      <h2 id="h-lote"><span class="section-num">4</span> Lote</h2>
+      <h2 id="h-lote"><span class="section-num">4</span> Productos</h2>
       <div class="actions" style="margin:0">
-        <button class="btn btn--quiet" type="button" data-navto="respaldo">Respaldo y hoja de cálculo →</button><button class="btn btn--risk" id="lote-clear">Vaciar lote</button>
+        <button class="btn btn--quiet" type="button" data-navto="respaldo">Respaldo y hoja de cálculo →</button><button class="btn btn--risk" id="lote-clear">Vaciar productos</button>
       </div>
     </div>
     <div id="persistence-status" class="hint persistence-status" role="status"></div><div id="lote-body"></div>
   </section>
 
   <section class="panel" id="catalogo" aria-labelledby="h-cat">
-    <h2 id="h-cat">Catálogo interno y complementos</h2>
-    <p class="sub" style="margin:0 0 12px">Aquí quedan los productos que ya guardaste, aunque vacíes el lote. Cuando guardas un complemento (por ejemplo, un suero), la app propone de qué productos principales lo es. Si todavía no hay principal, queda esperando y se te pregunta cuando guardes uno. Los medicamentos con receta o de alta especialidad nunca son complemento.</p>
+    <h2 id="h-cat">Vínculos entre productos</h2>
+    <p class="sub" style="margin:0 0 12px">Aquí quedan los productos que ya guardaste, aunque vacíes la lista de productos. Cuando guardas un complemento (por ejemplo, un suero), la app propone de qué productos principales lo es. Si todavía no hay principal, queda esperando y se te pregunta cuando guardes uno. Los medicamentos con receta o de alta especialidad nunca son complemento.</p>
     <p class="hint">Para respaldar o compartir el catálogo (y unir el de otra persona), usa <button type="button" class="linkbtn" data-navto="respaldo">Respaldo</button>.</p>
     <div id="cat-body"></div>
   </section>
@@ -201,7 +201,7 @@
       <div>
         <h3 style="margin-top:0">Cómo se llena cada fila</h3>
         <dl class="comp">
-          <dt>sku</dt><dd>SKU del lote</dd>
+          <dt>sku</dt><dd>SKU del producto</dd>
           <dt>description</dt><dd>HTML de Magento</dd>
           <dt>meta_title</dt><dd>Meta title</dd>
           <dt>meta_description</dt><dd>Meta description</dd>
@@ -234,7 +234,7 @@
         <div>
           <h3 style="margin-top:0">Cómo se llena cada fila</h3>
           <dl class="comp">
-            <dt>id</dt><dd>SKU del lote</dd>
+            <dt>id</dt><dd>SKU del producto</dd>
             <dt>title</dt><dd>Título optimizado (Google permite hasta 150 caracteres)</dd>
             <dt>description</dt><dd>Descripción de Merchant Center (hasta 5,000 caracteres)</dd>
           </dl>
@@ -280,7 +280,7 @@
       <div class="actions"><button type="button" class="btn" id="k-dict-add">Importar</button></div>
     </details>
     <div class="actions">
-      <button type="button" class="btn btn--quiet" id="k-learn">Aprender del lote actual</button>
+      <button type="button" class="btn btn--quiet" id="k-learn">Aprender de los productos actuales</button>
       <button type="button" class="btn btn--ai" id="k-ai">Pedir alias a la IA</button>
       <button type="button" class="btn btn--quiet" id="k-integrity">Verificar integridad</button>
       <button type="button" class="btn btn--quiet" data-navto="respaldo">Respaldar o compartir lo aprendido</button>
@@ -299,12 +299,12 @@
         <p class="hint" id="bk-sum" role="status"></p>
         <div class="actions"><button class="btn btn--primary" id="bk-dl">Descargar respaldo</button></div>
         <p class="hint">Para trabajar en equipo, marca solo «Catálogo interno» y pasa el archivo: quien lo reciba lo une con el suyo. Las llaves de IA nunca van en el archivo.</p>
-        <h3>Lote como hoja de cálculo</h3>
+        <h3>Productos como hoja de cálculo</h3>
         <div class="actions"><button class="btn btn--primary" id="lote-dl">Descargar CSV</button><button class="btn btn--quiet" id="lote-copy">Copiar para hoja de cálculo</button></div>
       </div>
       <div>
         <h3 style="margin-top:0">Cargar respaldo</h3>
-        <p class="hint">Elige un archivo de respaldo. Acepta el formato nuevo y también los archivos anteriores: respaldo del lote, catálogo para compartir y respaldo de conocimiento. Antes de aplicar verás qué trae y qué tienes tú, parte por parte.</p>
+        <p class="hint">Elige un archivo de respaldo. Acepta el formato nuevo y también los archivos anteriores: respaldo de Productos, catálogo para compartir y respaldo de conocimiento. Antes de aplicar verás qué trae y qué tienes tú, parte por parte.</p>
         <div class="actions"><button class="btn" id="bk-pick">Elegir archivo…</button><input type="file" id="bk-file" accept="application/json,.json" hidden></div>
         <p class="hint" id="bk-status" role="status" aria-live="polite"></p>
       </div>
@@ -384,7 +384,7 @@
         <p class="hint">Si el alias aparece en el texto crudo, se copia el nombre de la derecha.</p>
       </div>
       <label class="check"><input type="checkbox" id="dic-pos"><span>Sugerir como marca el texto que aparece antes de la primera dosis</span></label>
-      <div class="actions"><button class="btn" id="dic-learn">Agregar al diccionario los valores del lote</button></div>
+      <div class="actions"><button class="btn" id="dic-learn">Agregar al diccionario los valores de los productos</button></div>
     </section>
     <section data-setpanel="clasif" hidden>
       <p class="sub" style="margin-bottom:12px">Relaciona cada principio activo con su código ATC. Es un dato interno: no sale en la ficha, en el CSV ni en Magento. Se guarda solo en este navegador.</p>
@@ -435,7 +435,7 @@
       </details>
     </section>
     <section data-setpanel="conexiones" hidden>
-      <p class="sub" style="margin-bottom:12px">Conecta fuentes externas sin sobrescribir automáticamente tus fichas. La lectura crea propuestas que entran al lote para validación.</p>
+      <p class="sub" style="margin-bottom:12px">Conecta fuentes externas sin sobrescribir automáticamente tus fichas. La lectura crea propuestas que entran a Productos para validación.</p>
       <div class="field"><label for="conn-source">Fuente</label><select id="conn-source"><option value="google-sheets">Google Sheets</option><option value="rest-api">REST API</option></select></div>
       <div id="conn-google">
         <div class="field"><label for="conn-sheet-id">ID o URL de la hoja</label><input id="conn-sheet-id" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/..." /></div>
@@ -452,9 +452,9 @@
         <div class="field"><label for="conn-cat">Categoría por defecto</label><select id="conn-cat"></select></div>
         <div class="field"><label for="conn-map">Mapeo JSON</label><textarea id="conn-map" rows="4" spellcheck="false" placeholder='{"SKU":"sku","marca":"brand"}'></textarea></div>
       </div>
-      <div class="actions"><button class="btn" id="conn-test">Probar conexión</button><button class="btn btn--primary" id="conn-import">Leer e importar al lote</button></div>
+      <div class="actions"><button class="btn" id="conn-test">Probar conexión</button><button class="btn btn--primary" id="conn-import">Leer e importar a Productos</button></div>
       <div id="conn-status" class="note note--info" hidden></div>
-      <details class="help" style="margin-top:12px"><summary>Seguridad y funcionamiento</summary><div class="help-body"><p>La fuente externa nunca modifica directamente una ficha. Primero se normaliza, se compara y se incorpora como propuesta al lote; después pasan las validaciones de calidad, anomalías y revisión humana.</p><p>Google Sheets usa la API v4. Para hojas privadas necesitas autorización de Google; para una aplicación web en producción Google recomienda OAuth con PKCE.</p></div></details>
+      <details class="help" style="margin-top:12px"><summary>Seguridad y funcionamiento</summary><div class="help-body"><p>La fuente externa nunca modifica directamente una ficha. Primero se normaliza, se compara y se incorpora como propuesta a Productos; después pasan las validaciones de calidad, anomalías y revisión humana.</p><p>Google Sheets usa la API v4. Para hojas privadas necesitas autorización de Google; para una aplicación web en producción Google recomienda OAuth con PKCE.</p></div></details>
     </section>
     <section data-setpanel="magento" hidden>
       <p class="sub" style="margin-bottom:12px">Cómo se arma el CSV de Magento y la estructura de metas y alt.</p>
@@ -491,30 +491,30 @@
   <div class="asst-form"><textarea id="asst-in" placeholder="Pregunta cómo usar la herramienta" aria-label="Pregunta"></textarea><button class="btn btn--primary" id="asst-send">Enviar</button></div>
   <p class="asst-note">Las respuestas de IA pueden fallar. Para temas regulatorios, consulta a Regulatorio.</p>
 </aside>
-<script src="js/logic.js?v=34.0"></script>
-<script src="js/catalog.js?v=34.0"></script>
-<script src="js/clasif.js?v=34.0"></script>
-<script src="js/quality.js?v=34.0"></script>
-<script src="js/normalization.js?v=34.0"></script>
-<script src="js/anomalies.js?v=34.0"></script>
-<script src="js/canonical.js?v=34.0"></script>
-<script src="js/health.js?v=34.0"></script>
-<script src="js/integration.js?v=34.0"></script>
-<script src="js/sync.js?v=34.0"></script>
-<script src="js/connector.js?v=34.0"></script>
-<script src="js/assist.js?v=34.0"></script>
-<script src="js/ai.js?v=34.0"></script>
-<script src="js/rules.js?v=34.0"></script>
-<script src="js/seo.js?v=34.0"></script>
-<script src="js/content.js?v=34.0"></script>
-<script src="js/magento-readiness.js?v=34.0"></script>
-<script src="js/score360.js?v=34.0"></script>
-<script src="js/knowledge-db.js?v=34.0"></script>
-<script src="js/knowledge.js?v=34.0"></script>
-<script src="js/bulk.js?v=34.0"></script>
-<script src="js/backup.js?v=34.0"></script>
-<script src="js/categorias.js?v=34.0"></script>
-<script src="js/ux.js?v=34.0"></script>
-<script src="js/app.js?v=34.0"></script>
+<script src="js/logic.js?v=35.0"></script>
+<script src="js/catalog.js?v=35.0"></script>
+<script src="js/clasif.js?v=35.0"></script>
+<script src="js/quality.js?v=35.0"></script>
+<script src="js/normalization.js?v=35.0"></script>
+<script src="js/anomalies.js?v=35.0"></script>
+<script src="js/canonical.js?v=35.0"></script>
+<script src="js/health.js?v=35.0"></script>
+<script src="js/integration.js?v=35.0"></script>
+<script src="js/sync.js?v=35.0"></script>
+<script src="js/connector.js?v=35.0"></script>
+<script src="js/assist.js?v=35.0"></script>
+<script src="js/ai.js?v=35.0"></script>
+<script src="js/rules.js?v=35.0"></script>
+<script src="js/seo.js?v=35.0"></script>
+<script src="js/content.js?v=35.0"></script>
+<script src="js/magento-readiness.js?v=35.0"></script>
+<script src="js/score360.js?v=35.0"></script>
+<script src="js/knowledge-db.js?v=35.0"></script>
+<script src="js/knowledge.js?v=35.0"></script>
+<script src="js/bulk.js?v=35.0"></script>
+<script src="js/backup.js?v=35.0"></script>
+<script src="js/categorias.js?v=35.0"></script>
+<script src="js/ux.js?v=35.0"></script>
+<script src="js/app.js?v=35.0"></script>
 </body>
 </html>

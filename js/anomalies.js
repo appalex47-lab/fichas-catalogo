@@ -63,8 +63,8 @@ function detectBatch(items, evaluations) {
     if (tk) { const arr = groups.get('title:'+tk) || []; arr.push(i); groups.set('title:'+tk, arr); }
   });
   for (const [key, indexes] of groups) {
-    if (key.startsWith('sku:')) addGroup('duplicate-sku', key.slice(4), indexes, 'SKU repetido dentro del lote.', 'error');
-    else addGroup('duplicate-title', key.slice(6), indexes, 'Título normalizado repetido dentro del lote.', 'warning');
+    if (key.startsWith('sku:')) addGroup('duplicate-sku', key.slice(4), indexes, 'SKU repetido dentro de Productos.', 'error');
+    else addGroup('duplicate-title', key.slice(6), indexes, 'Título normalizado repetido dentro de Productos.', 'warning');
   }
   if (N) {
     const nearTitles = N.detectNearDuplicates(list, (it, i) => evals[i]?.res?.title?.title || '', { threshold: 0.92, minLength: 8 });

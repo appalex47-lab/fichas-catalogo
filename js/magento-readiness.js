@@ -42,7 +42,7 @@ const CHECKS = {
   'MR-001': { grupo: 'identidad', nombre: 'El producto tiene SKU', accion: 'Captura el SKU exacto de Magento: sin SKU el producto no sale en el archivo.', clase: 'faltante' },
   'MR-002': { grupo: 'requeridos', nombre: 'Datos regulatorios requeridos completos', accion: 'Captura los datos que bloquean la descripción (en medicamentos, la receta y el principio activo).', clase: 'faltante' },
   'MR-003': { grupo: 'requeridos', nombre: 'Datos del título completos', accion: 'Completa los datos del título o activa «Incluir filas con datos faltantes» al exportar.', clase: 'faltante' },
-  'MR-004': { grupo: 'requeridos', nombre: 'Datos de IA confirmados', accion: 'Confirma los datos de IA en el lote o activa su inclusión al exportar.', clase: 'faltante' },
+  'MR-004': { grupo: 'requeridos', nombre: 'Datos de IA confirmados', accion: 'Confirma los datos de IA en Productos o activa su inclusión al exportar.', clase: 'faltante' },
   'MR-005': { grupo: 'requeridos', nombre: 'Lenguaje revisado', accion: 'Corrige el lenguaje señalado en la ficha o desactiva la exclusión por lenguaje al exportar.', clase: 'contenido' },
   'MR-006': { grupo: 'contrato', nombre: 'Formato Batch de 104 columnas', accion: 'No se corrige desde la ficha: revisa la definición de columnas del contrato Magento.', clase: 'bloqueo' },
   'MR-007': { grupo: 'serializacion', nombre: 'El CSV se serializa y se vuelve a leer con 104 columnas', accion: 'Corrige el texto que rompe el CSV (comillas, saltos de línea) o revisa el contrato.', clase: 'bloqueo' },
@@ -51,8 +51,8 @@ const CHECKS = {
   'MR-010': { grupo: 'contenido', nombre: 'Meta title, meta description y short_description se generan', accion: 'Confirma la estructura de meta de la categoría en Ajustes, pestaña Magento.', clase: 'faltante' },
   'MR-011': { grupo: 'contenido', nombre: 'El alt de la imagen existe y no excede el límite', accion: 'Captura los datos que alimentan el alt o acórtalo.', clase: 'faltante' },
   'MR-012': { grupo: 'contenido', nombre: 'Hay ruta de imagen principal', accion: 'Agrega la ruta de la imagen principal (base_image).', clase: 'faltante' },
-  'MR-013': { grupo: 'lote', nombre: 'El SKU es único dentro del lote', accion: 'Corrige el SKU repetido: Magento conserva solo el último del lote.', clase: 'error' },
-  'MR-014': { grupo: 'lote', nombre: 'No hay SKU casi idénticos en el lote', accion: 'Verifica si es un error de captura del SKU.', clase: 'mejora' }
+  'MR-013': { grupo: 'lote', nombre: 'El SKU es único dentro de Productos', accion: 'Corrige el SKU repetido: Magento conserva solo el último de Productos.', clase: 'error' },
+  'MR-014': { grupo: 'lote', nombre: 'No hay SKU casi idénticos en Productos', accion: 'Verifica si es un error de captura del SKU.', clase: 'mejora' }
 };
 const ruleIds = Object.keys(CHECKS);
 
@@ -151,10 +151,10 @@ function evaluate(item, o) {
 
   /* 5) Lote. */
   const dup = o.dup;
-  checks.push(!dup ? na('MR-013', 'Solo se evalúa dentro de un lote.') : !sku ? na('MR-013', 'Sin SKU.') : dup.count > 1
-    ? (dup.isLast ? warn('MR-013', `El SKU está repetido ${dup.count} veces en el lote; este es el último y es el que se exporta.`) : block('MR-013', `El SKU está repetido ${dup.count} veces en el lote; Magento conserva solo el último, así que este no se exporta.`))
+  checks.push(!dup ? na('MR-013', 'Solo se evalúa dentro de un conjunto de productos.') : !sku ? na('MR-013', 'Sin SKU.') : dup.count > 1
+    ? (dup.isLast ? warn('MR-013', `El SKU está repetido ${dup.count} veces en Productos; este es el último y es el que se exporta.`) : block('MR-013', `El SKU está repetido ${dup.count} veces en Productos; Magento conserva solo el último, así que este no se exporta.`))
     : ok('MR-013'));
-  checks.push(!o.anomalyTypes ? na('MR-014', 'Solo se evalúa dentro de un lote.') : o.anomalyTypes.has('near-duplicate-sku') ? warn('MR-014', 'Hay otro SKU muy parecido en el lote.') : ok('MR-014'));
+  checks.push(!o.anomalyTypes ? na('MR-014', 'Solo se evalúa dentro de un conjunto de productos.') : o.anomalyTypes.has('near-duplicate-sku') ? warn('MR-014', 'Hay otro SKU muy parecido en Productos.') : ok('MR-014'));
 
   const blockers = checks.filter(c => c.estado === 'bloqueo');
   const warnings = checks.filter(c => c.estado === 'advertencia');
@@ -180,7 +180,7 @@ function explain(state, score, blockers, warnings) {
   return `Magento: Listo. Se exporta sin advertencias; score diagnóstico ${score}/100.`;
 }
 
-/* Evalúa un lote. Detecta SKU repetidos igual que el exportador: se exporta el último de cada SKU. */
+/* Evalúa un conjunto de productos. Detecta SKU repetidos igual que el exportador: se exporta el último de cada SKU. */
 function evaluateBatch(items, o) {
   o = o || {};
   const list = Array.isArray(items) ? items : [];
