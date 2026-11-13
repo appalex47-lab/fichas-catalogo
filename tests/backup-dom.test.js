@@ -13,7 +13,7 @@ test('respaldo: hay una sola sección para respaldar y ya no hay botones sueltos
   assert.equal(a.text('[data-nav="respaldo"] .mnav-t'), 'Respaldo');
   assert.ok(a.d.getElementById('lote-clear'), '«Vaciar lote» se queda en el lote');
   a.d.querySelector('[data-nav="respaldo"]').click(); await wait(200);
-  assert.deepEqual([...a.d.querySelectorAll('#bk-parts input')].map(c => c.dataset.bkpart), ['lote', 'catalogo', 'conocimiento', 'clasif', 'ajustes']);
+  assert.deepEqual([...a.d.querySelectorAll('#bk-parts input')].map(c => c.dataset.bkpart), ['lote', 'catalogo', 'conocimiento', 'clasif', 'categorias', 'ajustes']);
 });
 
 test('respaldo: descarga solo las partes marcadas y nunca incluye llaves de IA', { skip }, async () => {

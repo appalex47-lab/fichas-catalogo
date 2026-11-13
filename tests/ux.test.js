@@ -374,7 +374,7 @@ test('accesibilidad: foco visible, salto al contenido, reducción de movimiento 
 test('navegación: las secciones principales (las seis de la Fase 10 + Conocimiento de la Fase 11) existen y apuntan a una sección real', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const nav = [...html.matchAll(/data-nav="(\w+)"[^>]*>[\s\S]*?<span class="mnav-t">([^<]+)</g)].map(m => [m[1], m[2]]);
-  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportar'], ['catalogo', 'Catálogo'], ['conocimiento', 'Conocimiento'], ['respaldo', 'Respaldo']]);
+  assert.deepEqual(nav, [['captura', 'Captura'], ['validacion', 'Validación'], ['contenido', 'Contenido'], ['lote', 'Lote'], ['exportacion', 'Exportar'], ['catalogo', 'Catálogo'], ['categorias', 'Categorías'], ['conocimiento', 'Conocimiento'], ['respaldo', 'Respaldo']]);
   assert.match(html, /id="rules-open"/); assert.match(html, /id="set-open"/); assert.match(html, /href="#masiva"/);
   for (const id of ['h-prod', 'h-out', 'lote', 'exportar', 'prod-bar', 'prod-metrics', 'prod-guide', 'live', 'panel-eval', 'catalogo']) assert.match(html, new RegExp(`id="${id}"`), id);
 });

@@ -7,13 +7,14 @@
 'use strict';
 
 const SCHEMA = 'fichas.backup.v2';
-const PARTS = Object.freeze(['lote', 'catalogo', 'conocimiento', 'clasif', 'ajustes']);
-const LABEL = Object.freeze({ lote: 'Lote', catalogo: 'Catálogo interno', conocimiento: 'Conocimiento aprendido', clasif: 'Diccionario ATC', ajustes: 'Ajustes' });
+const PARTS = Object.freeze(['lote', 'catalogo', 'conocimiento', 'clasif', 'categorias', 'ajustes']);
+const LABEL = Object.freeze({ lote: 'Lote', catalogo: 'Catálogo interno', conocimiento: 'Conocimiento aprendido', clasif: 'Diccionario ATC', categorias: 'Categorías de la tienda', ajustes: 'Ajustes' });
 const HINT = Object.freeze({
   lote: 'Productos, trazabilidad y aprobaciones',
   catalogo: 'Productos, vínculos y alternativas a mano',
   conocimiento: 'Marcas, laboratorios, alias, relaciones y correcciones',
   clasif: 'Principios activos con su código y verificación',
+  categorias: 'Las categorías que has optimizado, con sus datos',
   ajustes: 'Estructuras de meta, marcas protegidas y opciones de exportación. Sin llaves de IA.'
 });
 
@@ -36,6 +37,7 @@ function detect(data) {
     if (isObj(p.catalogo) && Array.isArray(p.catalogo.entries)) parts.catalogo = p.catalogo;
     if (isObj(p.conocimiento) && isObj(p.conocimiento.stores)) parts.conocimiento = p.conocimiento;
     if (isObj(p.clasif) && Array.isArray(p.clasif.rows)) parts.clasif = p.clasif;
+    if (isObj(p.categorias) && Array.isArray(p.categorias.items)) parts.categorias = p.categorias;
     if (isObj(p.ajustes)) parts.ajustes = p.ajustes;
     return Object.keys(parts).length ? { kind: 'v2', createdAt: data.createdAt || '', parts } : null;
   }
@@ -56,6 +58,7 @@ function count(part, data) {
   if (part === 'lote') return (data.items || []).length;
   if (part === 'catalogo') return (data.entries || []).length;
   if (part === 'clasif') return (data.rows || []).length;
+  if (part === 'categorias') return (data.items || []).length;
   if (part === 'conocimiento') return ((data.stores || {}).entities || []).length;
   if (part === 'ajustes') return 1;
   return 0;
@@ -77,6 +80,14 @@ function mergeLote(mine, incoming) {
   return { items, added, skipped };
 }
 
-const api = { SCHEMA, PARTS, LABEL, HINT, build, detect, count, mergeLote };
+/* Unir las categorías: se agregan las que no tengo (misma clave de nombre y padre). Nunca se pisa una mía. */
+function mergeCategorias(mine, incoming, keyOf) {
+  const keys = new Set(mine.map(keyOf)), items = [...mine];
+  let added = 0, skipped = 0;
+  incoming.forEach(c => { const k = keyOf(c); if (keys.has(k)) { skipped++; return; } keys.add(k); items.push(c); added++; });
+  return { items, added, skipped };
+}
+
+const api = { mergeCategorias, SCHEMA, PARTS, LABEL, HINT, build, detect, count, mergeLote };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FichasBackup = api;
 })(typeof self !== 'undefined' ? self : this);
