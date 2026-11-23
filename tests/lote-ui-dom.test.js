@@ -51,7 +51,7 @@ test('lote: en pantallas anchas «Ver» abre el detalle en un panel lateral sin 
   a.d.querySelector('#lote-body [data-toggle]').click();
   const box = a.d.getElementById('lote-drawer');
   assert.ok(box && !box.hidden, 'el panel está visible');
-  assert.match(box.textContent, /S000/);
+  assert.match(box.textContent, /S002/, 'el primero de la lista es el más nuevo');
   assert.equal(a.d.querySelectorAll('#lote-body .lrow-detail').length, 0, 'la lista no se empuja');
   box.querySelector('[data-ldclose]').click();
   assert.equal(a.d.getElementById('lote-drawer').hidden, true);
@@ -74,4 +74,53 @@ test('lote: «Agrupar por estado» arma un grupo por estado y abre solo los que 
   a.d.querySelector('#lote-body [data-group]').click();
   assert.equal(a.d.querySelectorAll('#lote-body details.lgroup').length, 0, 'se vuelve a la tabla');
   assert.deepEqual(a.errors, []);
+});
+
+test('productos: el buscador filtra por SKU o por nombre, sin importar mayúsculas ni acentos', { skip }, async () => {
+  const items = JSON.parse(many(12));
+  items[3].v.marca = 'Ñandú Pro'; items[7].v.marca = 'Acción Rápida';
+  const a = boot({ 'fichas.lote.v1': JSON.stringify(items) });
+  await wait(400);
+  const q = a.d.getElementById('lote-q'); assert.ok(q, 'hay buscador');
+  const type = v => { const el = a.d.getElementById('lote-q'); el.value = v; el.dispatchEvent(new a.w.Event('input', { bubbles: true })); };
+  const skus = () => [...a.d.querySelectorAll('#lote-body .lote-table tbody tr[data-id] td:first-child')].map(td => td.textContent.trim());
+  assert.equal(skus().length, 12);
+  type('s003'); assert.deepEqual(skus(), ['S003'], 'por SKU, sin importar mayúsculas');
+  type('NANDU'); assert.deepEqual(skus(), ['S003'], 'por nombre, sin importar acentos ni la ñ');
+  type('accion rapida'); assert.deepEqual(skus(), ['S007'], 'varias palabras, todas deben aparecer');
+  assert.match(a.text('#lote-live'), /Mostrando 1 de 12/);
+  assert.equal(a.d.getElementById('lote-q').value, 'accion rapida', 'el texto escrito se conserva al redibujar');
+  type('zzzz'); assert.match(a.text('#lote-body .empty-state'), /Ningún producto coincide con «zzzz»/);
+  a.d.querySelector('#lote-body [data-lqclear]').click();
+  assert.equal(skus().length, 12);
+  assert.deepEqual(a.errors, []);
+});
+
+test('productos: el orden por defecto es del más nuevo al más antiguo y se puede cambiar', { skip }, async () => {
+  const items = JSON.parse(many(5));
+  items[0].v.marca = 'Zeta'; items[1].v.marca = 'Alfa'; items[2].v.marca = 'Mu'; items[3].v.marca = 'Beta'; items[4].v.marca = 'Omega';
+  const a = boot({ 'fichas.lote.v1': JSON.stringify(items) });
+  await wait(400);
+  const skus = () => [...a.d.querySelectorAll('#lote-body .lote-table tbody tr[data-id] td:first-child')].map(td => td.textContent.trim());
+  const sort = v => { const z = a.d.getElementById('lote-sort'); z.value = v; z.dispatchEvent(new a.w.Event('change', { bubbles: true })); };
+  assert.deepEqual(skus(), ['S004', 'S003', 'S002', 'S001', 'S000'], 'más nuevos primero');
+  sort('antiguos'); assert.deepEqual(skus(), ['S000', 'S001', 'S002', 'S003', 'S004']);
+  sort('az'); assert.deepEqual(skus(), ['S001', 'S003', 'S002', 'S004', 'S000'], 'por nombre de A a Z: Alfa, Beta, Mu, Omega, Zeta');
+  sort('za'); assert.deepEqual(skus(), ['S000', 'S004', 'S002', 'S003', 'S001']);
+  sort('sku'); assert.deepEqual(skus(), ['S000', 'S001', 'S002', 'S003', 'S004']);
+  assert.equal(a.w.localStorage.getItem('fichas.sort'), 'sku', 'el orden elegido se recuerda');
+  a.d.querySelector('#lote-body [data-bk="selfilt"]').click();
+  assert.match(a.text('#bk-count'), /5 marcado/);
+});
+
+test('productos: «Marcar los filtrados» respeta la búsqueda', { skip }, async () => {
+  const a = boot({ 'fichas.lote.v1': many(10) });
+  await wait(400);
+  const el = a.d.getElementById('lote-q'); el.value = 'S00'; el.dispatchEvent(new a.w.Event('input', { bubbles: true }));
+  a.d.querySelector('#lote-body [data-bk="selfilt"]').click();
+  assert.match(a.text('#bk-count'), /10 marcado/);
+  a.d.querySelector('#lote-body [data-bk="clearsel"]').click();
+  const e2 = a.d.getElementById('lote-q'); e2.value = 'S005'; e2.dispatchEvent(new a.w.Event('input', { bubbles: true }));
+  a.d.querySelector('#lote-body [data-bk="selfilt"]').click();
+  assert.match(a.text('#bk-count'), /1 marcado/);
 });
