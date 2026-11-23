@@ -618,3 +618,8 @@ tr.cat-detail td{background:var(--surface-2,#f4f6f6);white-space:normal}
 .cg-editor[hidden]{display:none}
 .cg-editor.lote-drawer{margin:0;border-radius:0}
 .cg-editor .ld-body{padding-bottom:40px}
+
+.lote-search{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}.lote-search input[type=search]{flex:1 1 260px;max-width:420px;margin:0}.lote-search select{margin:0}
+
+.lote-drawer.off-view{display:none!important}
+.lote-search select{width:auto;min-width:190px}

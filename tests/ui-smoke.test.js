@@ -85,8 +85,8 @@ test('presentación: 1 va en singular y 30 en plural en título y lote', { skip 
   const a = boot();
   a.addMed('P1', 'Tempra', '1'); a.addMed('P2', 'Dolofin', '30');
   const t = a.titles();
-  assert.match(t[0], /\| 1 tableta(?!s) \|/);
-  assert.match(t[1], /\| 30 tabletas \|/);
+  assert.match(t[1], /\| 1 tableta(?!s) \|/, 'el más nuevo va primero');
+  assert.match(t[0], /\| 30 tabletas \|/);
 });
 
 test('editar: el producto no sale de Productos hasta guardar y no se pierde al recargar o limpiar', { skip }, () => {
@@ -105,7 +105,7 @@ test('editar: el producto no sale de Productos hasta guardar y no se pierde al r
 });
 
 test('editar: guardar cambios reemplaza el producto en su misma posición, sin duplicarlo', { skip }, () => {
-  const a = boot();
+  const a = boot({ 'fichas.sort': 'antiguos' });
   a.addMed('E1', 'Tempra', '30'); a.addMed('E2', 'Dolofin', '20');
   a.d.querySelector('[data-edit]').click();
   a.fill('f-marca', 'Tempra Forte');

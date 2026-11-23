@@ -135,7 +135,7 @@ async function hydratePersistentState(){
   renderPersistenceStatus();
 }
 const state = {
-  sel: new Set(), loteGroup: false, loteGroupOpen: {}, catFilter: 'todos', catQ: '', catPage: 0, catOpen: new Set(), catDrawer: '', catInboxAll: false, lotePage: 0, lotePageSize: 25, loteDrawer: '', dens: (() => { try { return localStorage.getItem('fichas.dens') || 'compact'; } catch (_) { return 'compact'; } })(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
+  sel: new Set(), offView: {}, loteQ: '', loteSort: (() => { try { return localStorage.getItem('fichas.sort') || 'nuevos'; } catch (_) { return 'nuevos'; } })(), loteGroup: false, loteGroupOpen: {}, catFilter: 'todos', catQ: '', catPage: 0, catOpen: new Set(), catDrawer: '', catInboxAll: false, lotePage: 0, lotePageSize: 25, loteDrawer: '', dens: (() => { try { return localStorage.getItem('fichas.dens') || 'compact'; } catch (_) { return 'compact'; } })(), bellTab: '', kAuto: [], kAutoSig: '', bulkUndo: null, bulkDismissed: new Set(), ksugById: new Map(),
   cat: 'med', v: {}, sku: '', img: '', tab: 'titulo', mgView: 'preview',
   lote: store.get('fichas.lote.v1', []),
   catalog: Catalog.normalize(store.get('fichas.catalog.v1', null)),
@@ -441,6 +441,24 @@ function evalItem(it, keep, resIn) {
   return { res, tag: statusOf(res), lang: langCount(L), ia: unconfirmed(it.ai), quality, canonical, health };
 }
 const tagsHTML = e => `<span class="tag tag--${e.tag[0]}">${esc(e.tag[1])}</span>` + (e.quality.status !== 'listo' ? ` <span class="tag tag--${e.quality.status === 'critico' ? 'bad' : 'warn'}">Calidad: ${e.quality.counts.error} errores / ${e.quality.counts.warning} avisos</span>` : '') + (e.lang ? ` <span class="tag tag--warn">Revisar lenguaje</span>` : '') + (e.ia ? ` <span class="tag tag--ai">IA sin confirmar</span>` : '') + (e.canonical?.schema ? ` <span class="tag tag--quiet" title="Modelo canónico ${esc(e.canonical.version || '')}">Modelo canónico</span>` : '');
+/* Productos que se ven: el filtro de estado, la búsqueda por SKU o nombre (sin importar mayúsculas ni acentos) y el orden elegido.
+ * «Más nuevos» es el orden en que se agregaron: el último agregado va primero. */
+const loteFold = t => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const LOTE_SORTS = { nuevos: 'Más nuevos primero', antiguos: 'Más antiguos primero', az: 'Nombre A–Z', za: 'Nombre Z–A', sku: 'SKU A–Z' };
+function visibleRows(all) {
+  const words = loteFold(state.loteQ).trim().split(/\s+/).filter(Boolean);
+  let rows = all.filter(x => passFilter(x.e, state.loteFilter));
+  if (words.length) rows = rows.filter(x => { const v = x.it.v || {}, t = loteFold([x.it.sku, x.e.res.title.title, v.marca, v.producto, v.tipo, v.componente, v.modelo, v.principio].filter(Boolean).join(' ')); return words.every(w => t.includes(w)); });
+  const pos = new Map(state.lote.map((it, i) => [it.id, i])), name = x => loteFold(x.e.res.title.title || x.it.sku), cmp = (a, b) => a.localeCompare(b, 'es');
+  const by = {
+    nuevos: (a, b) => pos.get(b.it.id) - pos.get(a.it.id),
+    antiguos: (a, b) => pos.get(a.it.id) - pos.get(b.it.id),
+    az: (a, b) => cmp(name(a), name(b)) || pos.get(b.it.id) - pos.get(a.it.id),
+    za: (a, b) => cmp(name(b), name(a)) || pos.get(b.it.id) - pos.get(a.it.id),
+    sku: (a, b) => cmp(loteFold(a.it.sku), loteFold(b.it.sku)) || pos.get(b.it.id) - pos.get(a.it.id)
+  };
+  return rows.slice().sort(by[state.loteSort] || by.nuevos);
+}
 const passFilter = (e, f) => f === 'todos' || (UX.isUxFilter(f) && UX.passUx(e, f)) || (f === 'completos' && !e.res.title.missing.length) || (f === 'faltantes' && e.res.title.missing.length) || (f === 'bloqueados' && e.res.mg.blocked) || (f === 'lenguaje' && e.lang) || (f === 'calidad' && e.quality.status !== 'listo') || (f === 'anomalías' && state.anomalies.some(a => a.indexes.includes(e.__index))) || (f === 'ia' && e.ia) || (f === 'seo_critico' && e.seo && e.seo.status === 'critico') || (f === 'seo_revisar' && e.seo && e.seo.status === 'revisar') || (f === 'seo_pendiente' && e.seo && e.seo.status === 'pendiente') || (f === 'seo_sin_evaluar' && (!e.seo || e.seo.status === 'sin_evaluar')) || (f === 'c360_critico' && Score360.isCritical360(e.s360)) || (f === 'contenido_critico' && e.content && e.content.status === 'critico') || (f === 'mag_bloqueado' && e.magento && e.magento.state === 'BLOCKED') || (f === 'mag_listo' && e.magento && e.magento.state === 'READY') || (f === 'mag_advertencias' && e.magento && e.magento.state === 'READY_WITH_WARNINGS');
 
 /* Fase 9: Content, Magento Readiness y Score 360. Solo combinan resultados; no vuelven a validar los datos. */
@@ -545,7 +563,7 @@ function renderLote() {
   const seoSum = assessed.seoSum;
   const { contentSum, magSum, s360Sum } = assessed;
   const cnt = {}; [...Object.keys(FILTERS), ...Object.keys(UX.PRIMARY_FILTERS), ...Object.keys(UX.MORE_FILTERS)].forEach(k => { cnt[k] = all.filter(x => passFilter(x.e, k)).length; });
-  const rows = all.filter(x => passFilter(x.e, state.loteFilter));
+  const rows = visibleRows(all);
   const pages = Math.max(1, Math.ceil(rows.length / state.lotePageSize));
   if (state.lotePage >= pages) state.lotePage = pages - 1;
   const from = state.lotePage * state.lotePageSize, shown = rows.slice(from, from + state.lotePageSize);
@@ -630,11 +648,12 @@ function renderLote() {
     `<details class="plain audit-box"><summary>Trazabilidad de los productos (${state.audit.length} eventos guardados)</summary><p class="hint">La trazabilidad registra cambios relevantes sin almacenar valores sensibles adicionales.</p>${auditRows ? `<ul>${auditRows}</ul>` : '<p class="hint">Todavía no hay eventos.</p>'}</details>` +
     summaryPanel +
     bulkPanelHtml(all) +
+    `<div class="lote-search"><label class="sr-only" for="lote-q">Buscar por SKU o nombre de producto</label><input type="search" id="lote-q" placeholder="Buscar por SKU o nombre de producto" value="${esc(state.loteQ)}" autocomplete="off"><label class="hint" for="lote-sort">Ordenar</label><select id="lote-sort">${Object.entries(LOTE_SORTS).map(([k, l]) => `<option value="${k}"${state.loteSort === k ? ' selected' : ''}>${l}</option>`).join('')}</select></div>` +
     `<div class="filters" role="group" aria-label="Filtrar productos">${primary}</div>` +
     `<details class="filters-more"${legacyActive ? ' open' : ''}><summary>Más filtros</summary><div class="filters" role="group" aria-label="Más filtros de productos">${legacy}</div></details>` +
     `<p class="sr-only" id="lote-live" role="status" aria-live="polite">Mostrando ${rows.length} de ${all.length} producto(s)${state.loteFilter !== 'todos' ? `. Filtro: ${esc(filterLabel(state.loteFilter))}` : ''}.</p>` +
     bulkBarHtml(rows) +
-    (!rows.length ? `<p class="empty-state">Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button></p>`
+    (!rows.length ? `<p class="empty-state">${state.loteQ.trim() ? `Ningún producto coincide con «${esc(state.loteQ.trim())}». <button type="button" class="linkbtn" data-lqclear="1">Limpiar la búsqueda</button>` : 'Ningún producto coincide con este filtro. <button type="button" class="linkbtn" data-filter="todos">Ver todos</button>'}</p>`
       : state.loteGroup ? groupedHTML(rows) : tableFor(shown)) +
     (!state.loteGroup && (rows.length > state.lotePageSize || state.lotePage) ? `<div class="pager" role="navigation" aria-label="Páginas de productos"><span class="hint">Mostrando ${from + 1}–${from + shown.length} de ${rows.length}</span><span class="spacer"></span><label class="hint">Filas <select id="lote-size" aria-label="Filas por página">${[25, 50, 100].map(n => `<option value="${n}"${n === state.lotePageSize ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="btn btn--quiet" data-page="-1"${state.lotePage ? '' : ' disabled'} aria-label="Página anterior">‹</button><span class="hint">${state.lotePage + 1} / ${pages}</span><button type="button" class="btn btn--quiet" data-page="1"${state.lotePage + 1 < pages ? '' : ' disabled'} aria-label="Página siguiente">›</button></div>` : '');
   renderLoteDrawer(all); scheduleBackup();
@@ -2851,7 +2870,7 @@ function renderCatDrawer() {
   if (!box) { box = document.createElement('aside'); box.id = 'cat-drawer'; box.className = 'lote-drawer'; box.setAttribute('aria-label', 'Detalle del producto del catálogo'); box.hidden = true; document.body.appendChild(box); }
   const e = drawerMode() && state.catDrawer ? Catalog.find(state.catalog, state.catDrawer) : null;
   if (!e) { box.hidden = true; box.innerHTML = ''; return; }
-  box.hidden = false;
+  box.hidden = false; box.classList.toggle('off-view', !!state.offView.catalogo);
   box.innerHTML = `<div class="ld-head"><div><b>${esc(e.sku)}</b><div class="hint">${esc(e.nombre)}</div></div><button type="button" class="btn btn--quiet" data-catclose="1" aria-label="Cerrar el detalle">✕</button></div><div class="ld-body">${catDetailHtml(e)}</div>`;
 }
 document.addEventListener('click', e => {
@@ -2962,7 +2981,7 @@ function renderLoteDrawer(all) {
   if (!box) { box = document.createElement('aside'); box.id = 'lote-drawer'; box.className = 'lote-drawer'; box.setAttribute('aria-label', 'Detalle del producto'); box.hidden = true; document.body.appendChild(box); }
   const x = drawerMode() && state.loteDrawer ? all.find(y => y.it.id === state.loteDrawer) : null;
   if (!x) { box.hidden = true; box.innerHTML = ''; if (state.loteDrawer && !drawerMode()) state.loteDrawer = ''; return; }
-  box.hidden = false;
+  box.hidden = false; box.classList.toggle('off-view', !!state.offView.lote);
   box.innerHTML = `<div class="ld-head"><div><b>${esc(x.it.sku || 'sin SKU')}</b><div class="hint">${esc(x.e.res.title.title)}</div></div><button type="button" class="btn btn--quiet" data-ldclose="1" aria-label="Cerrar el detalle">✕</button></div><div class="ld-body">${state._detailBody(x)}</div>`;
 }
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-ldclose]')) { state.loteDrawer = ''; renderLote(); } });
@@ -3128,7 +3147,7 @@ const saveCats = () => store.set('fichas.categorias.v1', state.cats);
 function cgInit() {
   if (!Cat) return;
   $('#cg-tipo').innerHTML = Object.entries(Cat.TIPOS).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join('');
-  state.cgOpen = !state.cats.length;
+  state.cgOpen = !state.cats.length && !drawerMode();
   cgFill(); renderCgList(); renderCgEditor(); renderCgOut();
 }
 function cgFill() {
@@ -3150,6 +3169,7 @@ function renderCgEditor() {
   const box = $('#cg-editor'); if (!box) return;
   box.hidden = !state.cgOpen;
   box.classList.toggle('lote-drawer', drawerMode());
+  box.classList.toggle('off-view', !!state.offView.categorias);
   const saved = state.cg.id && state.cats.find(x => x.id === state.cg.id);
   $('#cg-title').textContent = state.cg.nombre.trim() || 'Nueva categoría';
   $('#cg-done').checked = !!(saved && saved.cargada && saved.cargadaSig === cgSig(saved));
@@ -3229,6 +3249,33 @@ document.addEventListener('change', e => {
   notify(want ? `«${item.nombre}» marcada como cargada a Magento.` : `«${item.nombre}» ya no está marcada como cargada.`, 'ok');
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.cgOpen && drawerMode() && !document.querySelector('.cdlg-scrim') && e.target.closest && e.target.closest('#cg-editor')) { state.cgOpen = false; renderCgEditor(); renderCgList(); } });
+
+
+document.addEventListener('input', e => {
+  const q = e.target.closest && e.target.closest('#lote-q'); if (!q) return;
+  const pos = q.selectionStart; state.loteQ = q.value; state.lotePage = 0; renderLote();
+  const n = $('#lote-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (_) {} }
+});
+document.addEventListener('change', e => {
+  const z = e.target.closest && e.target.closest('#lote-sort'); if (!z) return;
+  state.loteSort = z.value; state.lotePage = 0; try { localStorage.setItem('fichas.sort', state.loteSort); } catch (_) {}
+  renderLote();
+});
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-lqclear]')) { state.loteQ = ''; state.lotePage = 0; renderLote(); const n = $('#lote-q'); if (n) n.focus(); } });
+
+
+/* Los paneles laterales (detalle de producto, de vínculos y editor de categorías) solo se muestran mientras su sección está a la vista. */
+if (typeof IntersectionObserver !== 'undefined') {
+  try {
+    const map = { lote: ['#lote', 'lote-drawer'], catalogo: ['#catalogo', 'cat-drawer'], categorias: ['#categorias', 'cg-editor'] };
+    const io = new IntersectionObserver(entries => entries.forEach(en => {
+      const name = en.target.dataset.drawerFor, el = document.getElementById(map[name][1]);
+      state.offView[name] = !en.isIntersecting;
+      if (el) el.classList.toggle('off-view', !en.isIntersecting);
+    }), { threshold: [0, 0.05] });
+    Object.entries(map).forEach(([name, [sel]]) => { const el = document.querySelector(sel); if (el) { el.dataset.drawerFor = name; io.observe(el); } });
+  } catch (_) { /* sin observador: los paneles se quedan visibles */ }
+}
 
 /* ---------- Cambios masivos de Productos ----------
  * Panel de resumen con correcciones sugeridas (Conocimiento y el propio lote) y cambios que elige la persona.
@@ -3394,7 +3441,7 @@ $('#lote-body').addEventListener('click', e => {
   const act = t.dataset.bk, g = t.dataset.g ? bulkGroups().find(x => x.id === t.dataset.g) : null;
   if (act === 'undo') return undoBulk();
   if (act === 'clearsel') { state.sel.clear(); return renderLote(); }
-  if (act === 'selfilt') { const a = assessLote(); a.all.filter(x => passFilter(x.e, state.loteFilter)).forEach(x => state.sel.add(x.it.id)); return renderLote(); }
+  if (act === 'selfilt') { const a = assessLote(); visibleRows(a.all).forEach(x => state.sel.add(x.it.id)); return renderLote(); }
   if (act === 'change') return openBulk({ ids: [...state.sel], title: 'Cambiar un campo', intro: `Se aplica a los ${state.sel.size} producto(s) marcados. Verás el antes y el después antes de aplicar.` });
   if (act === 'replace') return openBulk({ mode: 'replace', ids: [], title: 'Buscar y reemplazar', intro: 'Cambia un valor exacto en todos los productos.' });
   if (act === 'dismiss' && g) { state.bulkDismissed.add(g.id); return renderLote(); }
